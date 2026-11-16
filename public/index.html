@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Stellar Lyric Studio</title>
+<meta name="description" content="Turn a song into a lyric video for social media. Upload the track and the lyrics write and time themselves.">
+<meta name="theme-color" content="#0010da">
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="icon" type="image/png" href="img/favicon.png">
+<link rel="apple-touch-icon" href="img/icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<script>
+/* pick the theme before the first paint so there is no flash */
+(function(){ var t = null; try { t = localStorage.getItem("sls-theme"); } catch(e){}
+  if(t !== "light" && t !== "dark") t = window.matchMedia && matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+  document.documentElement.dataset.theme = t; })();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:ital,wdth,wght@1,125,800&family=Archivo+Black&family=Archivo+Narrow:wght@500;600&family=Barlow+Condensed:ital,wght@0,800;1,800&family=Bebas+Neue&family=Big+Shoulders+Display:wght@800&family=Do+Hyeon&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,600&family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@300&family=JetBrains+Mono:wght@400;600&family=Oswald:wght@600&family=Playfair+Display:ital,wght@1,500&family=Poppins:wght@700&family=Six+Caps&family=Unbounded:wght@600;800&display=swap">
+<link rel="stylesheet" href="css/studio.css">
+<link rel="stylesheet" href="css/sls.css">
+</head>
+<body data-step="song">
+
+<!-- ============ intro splash ============ -->
+<div class="splash" id="splash" aria-hidden="true">
+  <div class="splash-sky" id="splashSky"></div>
+  <div class="splash-center">
+    <div class="logo-anim">
+      <img class="lg lg-orbit" src="img/logo-orbit.webp" alt="" draggable="false">
+      <img class="lg lg-letters" src="img/logo-letters.webp" alt="" draggable="false">
+      <img class="lg lg-star" src="img/logo-star.webp" alt="" draggable="false">
+      <i class="lg-flare"></i>
+    </div>
+    <div class="splash-name">Stellar Lyric Studio</div>
+  </div>
+</div>
+
+<!-- ============ start screen: drop a song ============ -->
+<section class="home" id="home" aria-label="Start">
+  <div class="home-bar">
+    <div class="brand"><img class="brand-tile" src="img/icon-180.png" alt="" width="34" height="34"><span class="brand-name"><b>Stellar</b> Lyric Studio</span></div>
+    <div class="home-bar-r">
+      <button class="btn ghost small" id="homeBack" hidden>Back to my project</button>
+      <button class="icon-btn" data-theme-toggle aria-label="Switch between light and dark"></button>
+    </div>
+  </div>
+
+  <div class="home-main">
+    <div class="home-copy">
+      <h1>Your song in.<br><em>Lyric video out.</em></h1>
+      <p>Drop a track and Stellar listens to it, writes the lyrics and times every word. You check them, pick a look and export a video ready for Instagram, TikTok and Shorts.</p>
+    </div>
+
+    <!-- state 1: waiting for a song -->
+    <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose a song file">
+      <div class="drop-orbit" aria-hidden="true"><i></i><b></b></div>
+      <svg class="drop-ico" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 34V11l19-4v23"/><circle cx="13" cy="34" r="6"/><circle cx="32" cy="30" r="6"/></svg>
+      <div class="drop-title">Drop your song here</div>
+      <div class="drop-sub">or <span class="drop-link">choose a file</span></div>
+      <div class="drop-note">MP3, WAV, M4A or FLAC · lyrics in any language</div>
+      <input id="homeFile" type="file" accept="audio/*,.mp3,.wav,.m4a,.flac,.ogg,.aac" hidden>
+    </div>
+    <div class="home-opts" id="homeOpts">
+      <label class="lang"><span>Song language</span><select id="langSel" aria-label="Song language"></select></label>
+      <button class="link-btn" id="demoBtn">No song handy? Open the demo</button>
+    </div>
+
+    <!-- state 2: working on it -->
+    <div class="work" id="work" hidden>
+      <div class="work-orbit" aria-hidden="true"><i></i><b></b></div>
+      <div class="work-song" id="workSong"></div>
+      <div class="work-step" id="workStep" role="status" aria-live="polite">Reading your song</div>
+      <div class="bar"><i id="workBar"></i></div>
+      <ol class="work-list" id="workList">
+        <li data-k="read">Read the song</li>
+        <li data-k="listen">Listen for the words</li>
+        <li data-k="check">Listen again to double-check</li>
+        <li data-k="time">Time every word</li>
+      </ol>
+      <button class="btn ghost small" id="workCancel">Cancel</button>
+    </div>
+
+    <!-- state 3: something went wrong -->
+    <div class="oops" id="oops" hidden>
+      <div class="oops-title" id="oopsTitle">That didn't work</div>
+      <p id="oopsText"></p>
+      <div class="row" style="justify-content:center">
+        <button class="btn primary" id="oopsRetry">Try again</button>
+        <button class="btn" id="oopsManual">Type the lyrics myself</button>
+        <button class="btn ghost" id="oopsOther">Pick another song</button>
+      </div>
+    </div>
+
+    <ol class="how">
+      <li><b>1</b><span><strong>Upload</strong> the song. Nothing else is needed.</span></li>
+      <li><b>2</b><span><strong>Check the lyrics.</strong> Words the AI wasn't sure about are marked for you.</span></li>
+      <li><b>3</b><span><strong>Pick a style</strong> and export the video.</span></li>
+    </ol>
+  </div>
+</section>
+
+<!-- ============ passcode ============ -->
+<div class="modal" id="passModal" hidden>
+  <form class="dialog" id="passForm" role="dialog" aria-labelledby="passTitle" autocomplete="off">
+    <h2 id="passTitle">Studio passcode</h2>
+    <div class="hint">The lyric AI is private to your team. Enter the passcode once and this browser remembers it.</div>
+    <input type="password" id="passInput" placeholder="Passcode" aria-label="Passcode" autocomplete="current-password">
+    <div class="hint err" id="passErr" hidden></div>
+    <div class="row"><button class="btn primary" type="submit" id="passOk">Unlock</button><button class="btn ghost" type="button" id="passCancel">Cancel</button></div>
+  </form>
+</div>
+
+<!-- ============ paste lyrics ============ -->
+<div class="modal" id="pasteModal" hidden>
+  <div class="dialog" role="dialog" aria-labelledby="pasteTitle" style="width:min(560px,100%)">
+    <h2 id="pasteTitle">Paste the lyrics</h2>
+    <div class="hint">One line per lyric line. If the number of words stays the same, the timing you already have is kept. Otherwise the words are spread across the song and you can fine-tune them on the timeline.</div>
+    <textarea id="pasteText" spellcheck="false" style="min-height:240px"></textarea>
+    <div class="row"><button class="btn primary" id="pasteOk">Use these lyrics</button><button class="btn ghost" id="pasteCancel">Cancel</button></div>
+  </div>
+</div>
+
+<div class="app">
+  <header class="top">
+    <button class="brand" id="brandBtn" title="Start screen"><img class="brand-tile" src="img/icon-180.png" alt="" width="30" height="30"><span class="brand-name"><b>Stellar</b> Lyric Studio</span></button>
+    <nav class="steps" id="steps" aria-label="Steps">
+      <button data-go="song"><i>1</i><span>Song</span></button>
+      <button data-go="lyrics"><i>2</i><span>Lyrics</span></button>
+      <button data-go="design"><i>3</i><span>Design</span></button>
+      <button data-go="export"><i>4</i><span>Export</span></button>
+    </nav>
+    <div class="song">
+      <span class="name" id="songName">Demo track</span>
+      <span class="meta" id="songMeta"></span>
+      <label class="btn small ghost file" title="Load a different audio file (mp3, wav, m4a)">Change song<input id="songFile" type="file" accept="audio/*"></label>
+      <div class="seg" id="vocalMode" title="Vocals"><button data-v="on" aria-pressed="true">Vocals on</button><button data-v="reduced">Reduced</button><button data-v="inst">Instrumental</button></div>
+      <input id="instFile" type="file" accept="audio/*" hidden>
+    </div>
+    <button class="icon-btn" data-theme-toggle aria-label="Switch between light and dark"></button>
+    <button class="btn primary" id="exportBtn"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 2v8M4.5 6.5 8 10l3.5-3.5M3 13h10"/></svg>Export<span class="wide">&nbsp;video</span></button>
+  </header>
+
+  <div class="main">
+    <!-- STEP 2: check the lyrics -->
+    <section class="lystep" id="lyStep" aria-label="Lyrics">
+      <header class="ly-head">
+        <div class="ly-title">
+          <h2>Check the lyrics</h2>
+          <p class="hint" id="lySub">Click any word to fix it. Press a line's time to hear it.</p>
+        </div>
+        <div class="ly-actions">
+          <button class="btn small ghost" id="lyRedo" title="Run the lyric AI on this song again">Listen again</button>
+          <div class="tmenu-wrap">
+            <button class="btn small ghost" id="lyMore" aria-haspopup="menu" aria-expanded="false">More</button>
+            <div class="tmenu ly-menu" id="lyMenu" role="menu" hidden>
+              <button role="menuitem" data-act="paste">Paste lyrics</button>
+              <button role="menuitem" data-act="import">Import LRC or SRT file</button>
+              <button role="menuitem" data-act="lrc">Download as LRC</button>
+              <button role="menuitem" data-act="srt">Download as SRT</button>
+              <button role="menuitem" data-act="clear">Clear all lyrics</button>
+            </div>
+          </div>
+        </div>
+      </header>
+      <div class="ly-review" id="lyReview" hidden>
+        <span class="ly-review-dot" aria-hidden="true"></span>
+        <span class="ly-review-txt" id="lyReviewTxt"></span>
+        <span class="ly-review-btns">
+          <button class="btn small" id="lyNextU">Review next</button>
+          <button class="btn small ghost" id="lyAcceptAll">Accept all</button>
+        </span>
+      </div>
+      <div class="ly-list" id="lyList"></div>
+      <footer class="ly-foot">
+        <span class="hint" id="lyStat"></span>
+        <button class="btn primary" id="lyNext">Continue to design<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h10M9 4l4 4-4 4"/></svg></button>
+      </footer>
+    </section>
+
+    <!-- LEFT: lyrics / clips / templates -->
+    <aside class="side">
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" aria-selected="true" data-tab="lyrics">Lyrics</button>
+        <button class="tab" role="tab" aria-selected="false" data-tab="clips">Clips</button>
+        <button class="tab" role="tab" aria-selected="false" data-tab="templates">Templates</button>
+        <button class="tab mobile-only" role="tab" aria-selected="false" data-tab="style">Style</button>
+      </div>
+
+      <section class="pane" data-pane="lyrics">
+        <div class="card">
+          <div class="label">Lyric editor</div>
+          <div class="hint">Fix words, split lines and review the ones the AI wasn't sure about.</div>
+          <div class="row"><button class="btn small" id="openLyEd">Open the lyric editor</button></div>
+        </div>
+        <div class="field">
+          <label class="label" for="lyricsText">Lyrics for this section</label>
+          <textarea id="lyricsText" spellcheck="false"></textarea>
+          <div class="row">
+            <button class="btn small" id="applyLyrics">Apply lyrics</button>
+            <button class="btn small ghost" id="autoSpace">Spread across beats</button>
+            <button class="btn small ghost" id="selAll">Select all words</button>
+          </div>
+          <div class="hint">One line per lyric line. Apply keeps your timings when the word count is unchanged.</div>
+          <div class="row"><label class="btn small file">Import LRC / SRT<input id="lrcFile" type="file" accept=".lrc,.srt,.txt"></label><button class="btn small ghost" id="lrcOut">Export LRC</button><button class="btn small ghost" id="srtOut">Export SRT</button></div>
+          <div class="row"><span class="hint">Shift all words</span><button class="btn small ghost" data-shift="-0.1">−0.1s</button><button class="btn small ghost" data-shift="-0.02">−0.02s</button><button class="btn small ghost" data-shift="0.02">+0.02s</button><button class="btn small ghost" data-shift="0.1">+0.1s</button></div>
+        </div>
+
+        <div class="card" id="vidCard">
+          <div class="label">Timing from a video</div>
+          <div class="hint" id="vidHint">Load a lyric video of this song with the words on screen. Claude reads the text frame by frame and places every word, in any language. Load the song first so the timing lines up with it.</div>
+          <label class="btn file" id="vidBtn">Import timing from video<input id="vidFile" type="file" accept="video/*"></label>
+          <div id="vidRun" class="field" hidden>
+            <div class="bar"><i id="vidBar"></i></div>
+            <div class="hint" id="vidStatus"></div>
+            <div class="row"><button class="btn small ghost" id="vidStop">Stop</button></div>
+          </div>
+        </div>
+
+        <div class="tappad" id="tapPad">
+          <div class="label" id="tapLabel">Tap sync</div>
+          <div class="next" id="tapNext">Press start, then tap each word</div>
+          <div class="after" id="tapAfter">Space bar or tap here as each word is sung</div>
+          <div class="row" style="justify-content:center">
+            <button class="btn small" id="tapStart">Start tap sync</button>
+            <button class="btn small ghost" id="tapCancel" hidden>Cancel</button>
+          </div>
+        </div>
+
+        <div class="card" id="wordCard" hidden>
+          <div class="label" id="wMultiLbl">Selected word</div>
+          <div id="wSingle" class="field">
+            <input type="text" id="wText" aria-label="Word text">
+            <div class="grid2">
+              <label class="field"><span class="hint">Start (s)</span><input type="number" id="wStart" step="0.01"></label>
+              <label class="field"><span class="hint">Length (s)</span><input type="number" id="wDur" step="0.01" min="0.05"></label>
+            </div>
+          </div>
+          <div class="row"><button class="btn small" id="wDelete">Delete</button><button class="btn small ghost" id="wNone">Deselect</button></div>
+          <span class="hint">Drag any selected word to move them together. Arrow keys nudge (Shift for a quarter beat). Shift-click adds words.</span>
+        </div>
+      </section>
+
+      <section class="pane" data-pane="clips" hidden>
+        <div class="row" style="justify-content:space-between">
+          <span class="label">Footage pool</span>
+          <label class="btn small file">+ Import<input id="clipFiles" type="file" accept="image/*,video/*" multiple></label>
+        </div>
+        <div class="clips" id="clipGrid"></div>
+        <div class="hint">Tap a tile to include or leave it out of the shuffle. Imported clips stay in this browser session.</div>
+        <div class="field">
+          <span class="label">How cuts are chosen</span>
+          <div class="seg" id="cutMode"><button data-v="beat">On the beat</button><button data-v="count">I pick how many</button><button data-v="manual">Custom</button></div>
+          <span class="hint">Drag any cut on the timeline to move it. Moving one switches to Custom.</span>
+        </div>
+        <div class="field" id="cutCountField" hidden>
+          <span class="row" style="justify-content:space-between"><span class="label">Number of clips</span><span class="hint" id="cutCountVal">8</span></span>
+          <input type="range" id="cutCount" min="1" max="40" step="1">
+          <span class="hint">Cuts are spread evenly and nudged onto the nearest beat.</span>
+        </div>
+        <div class="field">
+          <span class="label">Transition between clips</span>
+          <div class="seg" id="cutTrans"><button data-v="none">None</button><button data-v="crossfade">Crossfade</button><button data-v="flash">Flash</button><button data-v="dip">Dip</button></div>
+          <span class="hint">None is a clean, instant cut.</span>
+          <label class="field" id="xfField" hidden><span class="row" style="justify-content:space-between"><span class="hint">Transition length</span><span class="hint" id="xfDurVal">0.35s</span></span><input type="range" id="xfDur" min="0.05" max="2" step="0.05"></label>
+        </div>
+        <div class="field" id="cutManualField" hidden>
+          <div class="row"><button class="btn small" id="cutAdd">Add cut at playhead</button><button class="btn small ghost" id="cutReset">Back to beat cuts</button></div>
+        </div>
+        <div class="field" id="cutEveryField">
+          <span class="label">Cut every</span>
+          <div class="seg" id="cutEvery">
+            <button data-v="1">1 beat</button><button data-v="2">2</button><button data-v="4">1 bar</button><button data-v="8">2 bars</button>
+          </div>
+        </div>
+        <button class="btn" id="shuffleBtn">Shuffle clips</button>
+        <div class="card" id="segCard" hidden>
+          <div class="label" id="segLabel">Cut</div>
+          <select id="segClip" aria-label="Clip for this cut"></select>
+          <div class="field" id="segVid" hidden>
+            <span class="row" style="justify-content:space-between"><span class="label">Part of the video</span><span class="hint" id="segStartVal"></span></span>
+            <input type="range" id="segStart" min="0" max="10" step="0.05">
+            <span class="hint">Slide to choose where in this video the cut starts. The preview jumps to the cut so you can see it.</span>
+          </div>
+          <div class="field">
+            <span class="row" style="justify-content:space-between"><span class="label">Speed</span><span class="hint" id="segSpeedVal">1×</span></span>
+            <input type="range" id="segSpeed" min="0.25" max="4" step="0.05" aria-label="Clip speed">
+            <div class="seg" id="segSpeedP"><button data-v="0.5">0.5×</button><button data-v="1">1×</button><button data-v="1.5">1.5×</button><button data-v="2">2×</button><button data-v="3">3×</button></div>
+          </div>
+          <div class="row"><button class="btn small ghost" id="cutRemove">Delete this clip</button></div>
+          <div class="hint">On the timeline: drag a clip to move it, drag its edges to trim, double-click to swap in the next clip, Delete removes it.</div>
+        </div>
+      </section>
+
+      <section class="pane" data-pane="templates" hidden>
+        <div class="field">
+          <label class="label" for="tplName">Save this section as a template</label>
+          <input type="text" id="tplName" placeholder="e.g. Fuorisede hook, 15s">
+          <button class="btn" id="tplSave">Save template</button>
+          <div class="hint" id="tplWhere">Templates keep the section, lyric timing, beat grid, cuts, style and hook. Footage is not stored, so you can swap visuals for each new version.</div>
+        </div>
+        <div class="label">Stellar templates</div>
+        <div class="tlist" id="builtinList"></div>
+        <div class="hint">Pick a template, then load that song (or load the song first). The studio finds the section in the song by its sound and lines everything up.</div>
+        <div class="label">Saved templates</div>
+        <div class="tlist" id="tplList"></div>
+        <div class="row">
+          <button class="btn small ghost" id="tplDownload">Save as file</button>
+          <label class="btn small ghost file">Open file<input id="tplOpen" type="file" accept=".json,application/json"></label>
+        </div>
+      </section>
+    </aside>
+
+    <!-- CENTER: stage -->
+    <main class="stage">
+      <div class="stagebar">
+        <span class="label">Frame</span>
+        <div class="seg" id="aspect"><button data-v="9:16">9:16</button><button data-v="4:5">4:5</button><button data-v="1:1">1:1</button><button data-v="16:9">16:9</button></div>
+        <span class="label">Length</span>
+        <div class="seg" id="secLen"><button data-v="10">10s</button><button data-v="15">15s</button><button data-v="20">20s</button><button data-v="30">30s</button></div>
+        <label class="row hint" style="gap:6px">or <input type="number" id="secLenIn" min="2" max="60" step="0.5" style="width:74px;padding:5px 8px" aria-label="Soundbite length in seconds"> s</label>
+        <span class="hint" id="stageHint" style="margin-left:auto"></span>
+      </div>
+      <div class="viewport"><canvas id="stage" width="720" height="1280"></canvas></div>
+      <div class="transport">
+        <button class="btn small ghost" id="toStart" title="Back to section start">⏮</button>
+        <button class="play" id="playBtn" aria-label="Play"><svg viewBox="0 0 16 16" fill="currentColor" id="playIcon"><path d="M4 2.5v11l9-5.5z"/></svg></button>
+        <input type="range" class="rv-seek" id="rvSeek" min="0" max="100" step="0.05" value="0" aria-label="Position in the song">
+        <div class="tc" id="tc"><b>0:00.0</b> / 0:15.0</div>
+      </div>
+    </main>
+
+    <!-- RIGHT: style rack -->
+    <aside class="side rack">
+      <div class="tabs"><button class="tab" aria-selected="true" tabindex="-1">Style</button></div>
+      <section class="pane">
+        <div class="shead">
+          <div class="shead-l">
+            <span class="label">Lyric style</span>
+            <b id="styleName">Stack</b>
+            <div class="row" style="gap:6px"><button class="btn small ghost" id="styleFav" aria-pressed="false" title="Add to favourites">☆</button><button class="btn small ghost" id="styleVar" hidden>Variation</button></div>
+          </div>
+          <canvas id="stylePrev" width="300" height="200" aria-label="Animated preview of the selected style"></canvas>
+        </div>
+        <div class="chips" id="styleCats"><button data-v="all">All</button><button data-v="fav">Favourites</button><button data-v="minimal">Minimal</button><button data-v="bold">Bold</button><button data-v="layered">Layered</button></div>
+        <div class="presets" id="presets"></div>
+        <div class="card">
+          <div class="label" id="ssTitle">Stack settings</div>
+          <label class="srow"><span>Primary font</span><select id="sPf"></select></label>
+          <label class="srow" id="sSfRow"><span>Secondary font</span><select id="sSf"></select></label>
+          <label class="srow"><span>Size</span><span class="row" style="gap:8px;flex:1;flex-wrap:nowrap"><input type="range" id="sSize" min="0.5" max="1.8" step="0.05"><span class="hint" id="sizeVal" style="min-width:42px;text-align:right">1.00×</span></span></label>
+          <div class="srow"><span>Highlight</span><div class="swatches" id="hiSw"></div></div>
+          <div class="srow"><span>Text colour</span><div class="swatches"><input type="color" id="sColor" title="Text colour"></div></div>
+          <label class="srow"><span>Case</span><select id="sCase"><option value="auto">Style default</option><option value="as">As typed</option><option value="lower">lowercase</option><option value="upper">UPPERCASE</option></select></label>
+        </div>
+        <div class="card">
+          <div class="field"><span class="row" style="justify-content:space-between"><span class="label">Position</span><button class="btn small ghost" id="sCenter">Center</button></span>
+            <div class="grid2"><label class="field"><span class="hint">Left / right</span><input type="range" id="sX" min="0" max="1" step="0.01"></label>
+            <label class="field"><span class="hint">Up / down</span><input type="range" id="sY" min="0" max="1" step="0.01"></label></div>
+            <span class="hint">Or drag the lyrics on the preview.</span></div>
+          <label class="field"><span class="label">Darken footage</span><input type="range" id="sScrim" min="0" max="0.75" step="0.01"></label>
+        </div>
+        <div class="card">
+          <div class="row" style="justify-content:space-between"><span class="label">Hook text</span>
+            <div class="seg" id="hookSeg"><button data-v="off">Off</button><button data-v="on">On</button></div></div>
+          <span class="hint" id="hOffHint">Optional. Turn it on to show a line like "New single out now" over the first seconds.</span>
+          <div class="field" id="hFields">
+            <input type="text" id="hText" placeholder="New single out now">
+            <div class="chips" id="hLook"><button data-v="pill">Pill</button><button data-v="box">Box</button><button data-v="caption">Caption</button><button data-v="outline">Outline</button><button data-v="sticker">Sticker</button><button data-v="banner">Banner</button></div>
+            <label class="srow"><span>Font</span><select id="hFont"></select></label>
+            <label class="srow"><span>Size</span><input type="range" id="hSize" min="0.6" max="5" step="0.05"></label>
+            <div class="srow"><span>Colours</span><div class="swatches"><input type="color" id="hColor" title="Text colour"><input type="color" id="hBg" title="Background colour"></div></div>
+            <label class="srow"><span>Entrance</span><select id="hAnim"><option value="fade">Fade</option><option value="pop">Pop</option><option value="slide">Slide up</option><option value="type">Type on</option><option value="none">None</option></select></label>
+            <div class="grid2"><label class="field"><span class="hint">Left / right</span><input type="range" id="hX" min="0" max="1" step="0.01"></label>
+              <label class="field"><span class="hint">Up / down</span><input type="range" id="hY" min="0" max="1" step="0.01"></label></div>
+            <span class="hint">Or drag the hook on the preview.</span>
+            <label class="field"><span class="row" style="justify-content:space-between"><span class="hint">Starts after</span><span class="hint" id="hStartVal">0.0s</span></span><input type="range" id="hStart" min="0" max="30" step="0.25"></label>
+            <label class="field"><span class="row" style="justify-content:space-between"><span class="hint">On screen for</span><span class="hint" id="hDurVal">3.0s</span></span><input type="range" id="hDur" min="0.5" max="30" step="0.25"></label>
+          </div>
+        </div>
+        <div class="card" id="textCard">
+          <div class="row" style="justify-content:space-between"><span class="label">Text boxes</span><button class="btn small" id="txtAdd">+ Add text</button></div>
+          <div class="chips" id="txtList"></div>
+          <span class="hint" id="txtEmpty">Add your own text anywhere in the video. It appears at the playhead; drag it on the preview to place it and on the timeline to time it.</span>
+          <div class="field" id="txtEdit" hidden>
+            <textarea id="txtText" rows="3" style="min-height:70px;font:14px/1.4 var(--ui)" placeholder="Type your text"></textarea>
+            <label class="srow"><span>Font</span><select id="txtFont"></select></label>
+            <label class="srow"><span>Font size</span><input type="range" id="txtSize" min="0.5" max="5" step="0.05"></label>
+            <div class="srow"><span>Pattern</span><div class="ib-row"><button class="ib" id="txtB" title="Bold"><b>B</b></button><button class="ib" id="txtU" title="Underline"><u>U</u></button><button class="ib" id="txtI" title="Italic"><i>I</i></button></div></div>
+            <div class="srow"><span>Case</span><div class="ib-row" id="txtCase"><button class="ib" data-v="" title="As typed">Aa</button><button class="ib" data-v="upper" title="Uppercase">TT</button><button class="ib" data-v="lower" title="Lowercase">tt</button><button class="ib" data-v="title" title="Title case">Tt</button></div></div>
+            <div class="srow"><span>Color</span><div class="row" style="gap:6px;flex-wrap:nowrap"><input type="color" id="txtColor" title="Text colour"><span class="hint">Stroke/BG</span><input type="color" id="txtBg" title="Outline or background colour"></div></div>
+            <div class="srow"><span>Character</span><div class="row" style="gap:8px;flex-wrap:nowrap"><input type="number" id="txtLs" step="1" style="width:70px"><span class="hint">Line</span><input type="number" id="txtLsp" step="5" style="width:70px"></div></div>
+            <div class="srow"><span>Alignment</span><div class="ib-row" id="txtAlign"><button class="ib" data-v="left" title="Align left"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 10h10M4 14h16M4 18h10"/></svg></button><button class="ib" data-v="center" title="Centre"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M7 10h10M4 14h16M7 18h10"/></svg></button><button class="ib" data-v="right" title="Align right"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M10 10h10M4 14h16M10 18h10"/></svg></button></div></div>
+            <div class="field"><span class="label">Preset style</span><div class="aa-grid" id="txtPresets"></div></div>
+            <label class="srow"><span>Animation</span><select id="txtAnim"><option value="fade">Fade in</option><option value="pop">Pop</option><option value="slide">Slide up</option><option value="type">Type on</option><option value="none">None</option></select></label>
+            <div class="field"><span class="label">Transform</span>
+              <label class="srow"><span>Scale</span><span class="row" style="gap:8px;flex:1;flex-wrap:nowrap"><input type="range" id="txtScale" min="20" max="400" step="1"><span class="hint" id="txtScaleVal" style="min-width:40px;text-align:right">100%</span></span></label>
+              <div class="srow"><span>Position</span><div class="row" style="gap:6px;flex-wrap:nowrap"><span class="hint">X</span><input type="number" id="txtPX" min="-100" max="100" step="1" style="width:66px"><span class="hint">Y</span><input type="number" id="txtPY" min="-100" max="100" step="1" style="width:66px"></div></div>
+              <label class="srow"><span>Rotation</span><span class="row" style="gap:8px;flex:1;flex-wrap:nowrap"><input type="range" id="txtRot" min="-180" max="180" step="1"><input type="number" id="txtRotN" min="-180" max="180" step="1" style="width:66px"></span></label>
+            </div>
+            <div class="grid2"><label class="field"><span class="hint">Starts at (s)</span><input type="number" id="txtStart" min="0" step="0.05"></label>
+              <label class="field"><span class="hint">Lasts (s)</span><input type="number" id="txtDur" min="0.2" step="0.05"></label></div>
+            <div class="row"><button class="btn small ghost" id="txtDup">Duplicate</button><button class="btn small ghost" id="txtDel">Delete text</button></div>
+          </div>
+        </div>
+      </section>
+    </aside>
+  </div>
+
+  <!-- TIMELINE -->
+  <section class="timeline">
+    <div class="tl-fold"><span class="label">Your clip</span><span class="hint">Drag the highlighted window to choose the part of the song the video uses.</span><button class="btn small ghost" id="tlToggle" aria-expanded="false">Show timeline</button></div>
+    <div class="tlbar">
+      <div class="grp"><span class="label">BPM</span><input type="number" id="bpm" min="40" max="240" step="0.1"></div>
+      <button class="btn small" id="tapTempo">Tap tempo</button>
+      <button class="btn small" id="detectBpm">Detect</button>
+      <button class="btn small" id="setDownbeat" title="Make the playhead position beat 1">Beat 1 here</button>
+      <span class="hint" id="tlHint" style="margin-left:auto"></span>
+    </div>
+    <div class="ov"><span class="label">Song</span><canvas id="overview"></canvas></div>
+    <div class="ov" id="secRow" style="padding-top:0"><span></span><div class="row hint" style="gap:10px">
+      <label class="row" style="gap:6px">Soundbite starts at <input type="number" id="secStartIn" min="0" step="0.1" style="width:84px;padding:4px 8px"> s</label>
+      <label class="row" style="gap:6px">ends at <input type="number" id="secEndIn" min="0" step="0.1" style="width:84px;padding:4px 8px"> s</label>
+      <span>Drag the highlighted window, its edges, or type exact times.</span></div></div>
+    <div class="tltools">
+      <div class="tlt-l">
+        <div class="tmenu-wrap">
+          <button class="tlt tmenu-btn" id="toolBtn" data-tip="Tools" aria-label="Tools" aria-haspopup="menu" aria-expanded="false"><span id="toolIco"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5l12 7.5-5.2 1.6L10.3 18z"/></svg></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m7 15 5-5 5 5"/></svg></button>
+          <div class="tmenu" id="toolMenu" role="menu" hidden>
+            <button role="menuitem" data-tool="select"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5l12 7.5-5.2 1.6L10.3 18z"/></svg><span>Select</span><kbd>A</kbd></button>
+            <button role="menuitem" data-tool="split"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.6"/><circle cx="6" cy="18" r="2.6"/><path d="M8.2 7.6 19 17M8.2 16.4 19 7"/></svg><span>Split</span><kbd>B</kbd></button>
+            <button role="menuitem" data-tool="selLeft"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 7 5 12l5 5"/><path d="M5 12h9"/><path d="M18 5v14"/></svg><span>Select leftward</span><kbd>[</kbd></button>
+            <button role="menuitem" data-tool="selRight"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m14 7 5 5-5 5"/><path d="M19 12h-9"/><path d="M6 5v14"/></svg><span>Select rightward</span><kbd>]</kbd></button>
+          </div>
+        </div>
+        <span class="tlt-sep"></span>
+        <button class="tlt" id="undoBtn" data-tip="Undo (⌘Z)" aria-label="Undo (⌘Z)" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg></button><button class="tlt" id="redoBtn" data-tip="Redo (⇧⌘Z)" aria-label="Redo (⇧⌘Z)" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/></svg></button>
+        <span class="tlt-sep"></span>
+        <button class="tlt" id="splitBtn" data-tip="Split at playhead (⌘B)" aria-label="Split at playhead (⌘B)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5H5v14h3"/><path d="M16 5h3v14h-3"/><path d="M12 3v18"/></svg></button><button class="tlt" id="delLeftBtn" data-tip="Delete the cut left of the playhead (Q)" aria-label="Delete the cut left of the playhead (Q)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 5v14" stroke-dasharray="2 3"/><path d="M15 5h3v14h-3"/><path d="M11 3v18"/></svg></button><button class="tlt" id="delRightBtn" data-tip="Delete the cut right of the playhead (W)" aria-label="Delete the cut right of the playhead (W)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 5v14" stroke-dasharray="2 3"/><path d="M9 5H6v14h3"/><path d="M13 3v18"/></svg></button><button class="tlt" id="deleteBtn" data-tip="Delete selection (⌫)" aria-label="Delete selection (⌫)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="m6 7 1 13h10l1-13"/></svg></button><button class="tlt" id="textBtn" data-tip="Add text (T)" aria-label="Add text (T)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 6V4h14v2"/><path d="M12 4v16"/><path d="M9 20h6"/></svg></button><button class="tlt" id="markerBtn" data-tip="Add marker (M)" aria-label="Add marker (M)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v12l-6 5-6-5z"/></svg></button>
+      </div>
+      <div class="tlt-r">
+        <button class="tlt on" id="snapBtn" data-tip="Turn off auto snapping (N)" aria-label="Turn off auto snapping (N)" aria-pressed="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4v7a6 6 0 0 0 12 0V4"/><path d="M6 8h4M14 8h4"/></svg></button><button class="tlt on" id="overlapBtn" data-tip="Turn off overlap protection" aria-label="Turn off overlap protection" aria-pressed="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="7" height="8" rx="2"/><rect x="14" y="8" width="7" height="8" rx="2"/><path d="M12 5v14"/></svg></button>
+        <span class="tlt-sep"></span>
+        <button class="tlt" id="zoomFit" data-tip="Zoom to fit" aria-label="Zoom to fit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button><button class="tlt" id="zoomOut" data-tip="Zoom out (−)" aria-label="Zoom out (−)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M8 11h6M20 20l-4-4"/></svg></button><input type="range" id="zoom" min="1" max="16" step="0.25" value="1" aria-label="Timeline zoom"><button class="tlt" id="zoomIn" data-tip="Zoom in (+)" aria-label="Zoom in (+)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M8 11h6M11 8v6M20 20l-4-4"/></svg></button>
+      </div>
+    </div>
+    <div class="tlwrap">
+      <div class="tlheads" id="tlHeads"></div>
+      <div class="tmenu trkmenu" id="trackMenu" role="menu" hidden><button data-add="text" role="menuitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 6V4h14v2M12 4v16M9 20h6"/></svg><span>Text track</span><kbd></kbd></button><button data-add="audio" role="menuitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg><span>Audio track</span><kbd>file</kbd></button></div>
+      <div class="auxpop" id="auxPop" hidden></div>
+      <input id="auxFile" type="file" accept="audio/*" hidden>
+      <div class="tlscroll" id="tlScroll"><canvas id="tl"></canvas></div>
+    </div>
+  </section>
+  <nav class="mtools" id="mtools" aria-label="Tools"><button data-sheet="lyrics"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h10M4 18h13"/></svg><span>Lyrics</span></button><button data-sheet="style"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19 12 5l7 14M8 13h8"/></svg><span>Style</span></button><button data-sheet="clips"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m10 9 5 3-5 3z"/></svg><span>Clips</span></button><button data-sheet="text"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 6V4h14v2"/><path d="M12 4v16"/><path d="M9 20h6"/></svg><span>Text</span></button><button data-sheet="hook"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="8" rx="4"/></svg><span>Hook</span></button><button data-sheet="audio"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg><span>Audio</span></button><button data-sheet="format"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="3" width="10" height="18" rx="2"/></svg><span>Format</span></button><button data-sheet="templates"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/></svg><span>Templates</span></button></nav>
+  <div class="msheet" id="msheet" hidden><div class="msheet-h"><b id="msheetTitle"></b><button class="btn small" id="msheetDone">Done</button></div><div class="msheet-b" id="msheetBody"></div></div>
+</div>
+
+<div class="modal" id="exportModal" hidden>
+  <div class="dialog" role="dialog" aria-labelledby="exTitle">
+    <h2 id="exTitle">Export video</h2>
+    <div id="exSetup" class="field">
+      <div class="hint" id="exInfo"></div>
+      <div class="hint">Recording runs in real time, so a 15 second section takes 15 seconds. Keep this tab in front while it records.</div>
+      <div class="row"><button class="btn primary" id="exStart">Start recording</button><button class="btn ghost" id="exClose">Cancel</button></div>
+    </div>
+    <div id="exRun" class="field" hidden>
+      <div class="bar"><i id="exBar"></i></div>
+      <div class="hint" id="exStatus">Recording…</div>
+    </div>
+    <div id="exDone" class="field" hidden>
+      <video id="exVideo" controls playsinline></video>
+      <div class="hint" id="exNote"></div>
+      <div class="row"><button class="btn primary" id="exSave">Save video</button><button class="btn ghost" id="exDone2">Close</button></div>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script src="js/backend.js"></script>
+<script src="js/studio.js"></script>
+<script src="js/transcribe.js"></script>
+<script src="js/lyrics.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

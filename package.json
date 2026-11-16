@@ -1,0 +1,14 @@
+{
+  "name": "stellar-lyric-studio",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Lyric videos for social media from just a song. Static app plus a Cloudflare Worker backend.",
+  "scripts": {
+    "dev": "wrangler dev -c wrangler.dev.jsonc",
+    "deploy": "wrangler deploy -c wrangler.jsonc",
+    "logs": "wrangler tail"
+  },
+  "devDependencies": {
+    "wrangler": "^4.163.0"
+  }
+}

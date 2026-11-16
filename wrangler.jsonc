@@ -1,0 +1,21 @@
+// Cloudflare settings for Stellar Lyric Studio. Docs: https://developers.cloudflare.com/workers/wrangler/configuration/
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "stellar-lyric-studio",
+	// Ana@stellarmusic.dk's Account, where the live site already runs
+	"account_id": "c4e50b96419ff4424c967048ca0ca1e6",
+	"main": "src/worker.js",
+	"compatibility_date": "2026-10-27",
+	"workers_dev": true,
+	"preview_urls": true,
+	// The website itself: everything in ./public is served as-is
+	"assets": { "directory": "./public" },
+	// Workers AI runs Whisper, which listens to the song and writes the lyrics
+	"ai": { "binding": "AI" },
+	// Shared template library for the team. Off for now: creating the storage needs account-level access on
+	// Ana's account. To turn it on, uncomment this line and deploy (the storage is then created automatically).
+	// "kv_namespaces": [{ "binding": "TEMPLATES" }],
+	// A cap of 120 API requests a minute per visitor
+	"ratelimits": [{ "name": "API_LIMIT", "namespace_id": "1001", "simple": { "limit": 120, "period": 60 } }],
+	"observability": { "enabled": true }
+}

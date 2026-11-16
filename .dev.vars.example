@@ -1,0 +1,9 @@
+# Copy this file to .dev.vars for local development (npm run dev).
+# It is the passcode the studio asks for before it uses the lyric AI.
+# The live site uses its own passcode, set with: npx wrangler secret put SLS_PASSCODE
+SLS_PASSCODE=choose-a-long-passcode
+
+# Optional, local only: use the real lyric AI instead of the canned sample.
+# A Cloudflare account ID and an API token that has "Workers AI" access.
+# CF_ACCOUNT_ID=your-cloudflare-account-id
+# CF_API_TOKEN=your-workers-ai-api-token

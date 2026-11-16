@@ -1,601 +1,3 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<style>:root{color-scheme:dark;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
-</head>
-<body>
-<title>Stellar Lyric Studio</title>
-<meta name="claude:viewport-fit-sides" content="cover">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo+Black&family=Archivo+Narrow:wght@500;600&family=Barlow+Condensed:ital,wght@0,800;1,800&family=Bebas+Neue&family=Big+Shoulders+Display:wght@800&family=Do+Hyeon&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,600&family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@300&family=JetBrains+Mono:wght@400;600&family=Oswald:wght@600&family=Playfair+Display:ital,wght@1,500&family=Poppins:wght@700&family=Six+Caps&family=Unbounded:wght@600;800&display=swap">
-<style>
-/* Layout: one-screen studio. Library panel | 9:16 stage | style rack, with a multitrack timeline across the bottom.
-   Track colours encode meaning: lyrics = lilac, cuts/clips = teal, playhead/primary = tape yellow, hook = rose. */
-:root{
-  /* CapCut-like editor: charcoal panels, near-black player, cyan for the active thing, rust text track, teal video, blue audio */
-  --canvas:#1b1b1b; --ink:#2b2b2b; --panel:#232323; --raise:#303030; --line:#333333; --line-2:#454545;
-  --text:#e9e9e9; --muted:#9b9b9b; --dim:#5e5e5e;
-  --tape:#22d3dd; --on-tape:#062a2d; --lyric:#b0573d; --clip:#2b9aa4; --hook:#d98b3a; --audio:#3d7ed6; --danger:#ff6a5a;
-  --ui:"Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --display:"Unbounded", "Instrument Sans", system-ui, sans-serif;
-  --mono:"JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
-  color-scheme:dark;
-}
-html,body{height:100%}
-body{background:var(--panel);color:var(--text);font:14px/1.45 var(--ui);overflow:hidden}
-body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--panel)}
-*{box-sizing:border-box}
-[hidden]{display:none!important}
-button,input,select,textarea{font:inherit;color:inherit}
-button{cursor:pointer}
-:focus-visible{outline:2px solid var(--tape);outline-offset:2px}
-.app{height:100%;display:grid;grid-template-rows:auto minmax(0,1fr) auto;padding-left:max(0px,env(safe-area-inset-left,0px));padding-right:max(0px,env(safe-area-inset-right,0px))}
-
-/* top bar */
-.top{display:flex;align-items:center;gap:12px;padding:10px max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px));border-bottom:1px solid var(--line);min-width:0;flex-wrap:wrap}
-.brand{display:flex;align-items:baseline;gap:8px;white-space:nowrap}
-.brand b{font:800 15px var(--display);letter-spacing:.02em}
-.brand span{font:500 11px var(--mono);color:var(--muted);letter-spacing:.08em;text-transform:uppercase}
-.song{display:flex;align-items:center;gap:8px;min-width:0;flex:1}
-.song .name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
-.song .meta{font:12px var(--mono);color:var(--muted);white-space:nowrap}
-#vocalMode{flex:none} #vocalMode button{flex:none;padding:5px 9px}
-.btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line-2);background:var(--raise);border-radius:8px;padding:7px 12px;font-weight:600;font-size:13px;white-space:nowrap}
-.btn:hover{border-color:var(--muted)}
-.btn.primary{background:var(--tape);color:var(--on-tape);border-color:var(--tape)}
-.btn.primary:hover{filter:brightness(1.06)}
-.btn.ghost{background:transparent}
-.btn.small{padding:4px 9px;font-size:12px;border-radius:6px}
-.btn.on{border-color:var(--tape);color:var(--tape)}
-.btn:disabled{opacity:.45;cursor:not-allowed}
-.btn svg{width:14px;height:14px}
-.file{position:relative;overflow:hidden}
-.file input{position:absolute;inset:0;opacity:0;cursor:pointer}
-
-/* main 3 columns */
-.main{display:grid;grid-template-columns:clamp(220px,22vw,300px) minmax(0,1fr) clamp(220px,22vw,296px);min-height:0}
-.side{border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0;background:var(--panel)}
-.rack{border-left:1px solid var(--line);border-right:0}
-.tabs{display:flex;gap:2px;padding:8px 10px 0;border-bottom:1px solid var(--line)}
-.tab{background:none;border:0;padding:8px 10px 9px;color:var(--muted);font-weight:600;font-size:13px;border-bottom:2px solid transparent;margin-bottom:-1px}
-.tab[aria-selected="true"]{color:var(--text);border-color:var(--tape)}
-.pane{padding:14px;overflow:auto;display:flex;flex-direction:column;gap:14px;min-height:0;flex:1}
-.label{font:600 10.5px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
-.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.hint{font-size:12px;color:var(--muted)}
-textarea,input[type=text],input[type=number],select{background:var(--ink);border:1px solid var(--line-2);border-radius:8px;padding:8px 10px;width:100%;min-width:0}
-textarea{resize:vertical;min-height:150px;font:13px/1.6 var(--mono)}
-input[type=number]{font-family:var(--mono)}
-input[type=range]{width:100%;accent-color:var(--tape)}
-input[type=color]{width:34px;height:28px;border:1px solid var(--line-2);border-radius:6px;background:none;padding:2px}
-.field{display:grid;gap:6px}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.card{border:1px solid var(--line);border-radius:10px;padding:12px;display:grid;gap:10px;background:var(--ink)}
-
-/* tap pad */
-.tappad{border:1px dashed var(--lyric);border-radius:12px;padding:18px 12px;text-align:center;background:color-mix(in srgb,var(--lyric) 8%,transparent);display:grid;gap:6px;user-select:none;touch-action:manipulation}
-.tappad .next{font:700 26px var(--ui);color:var(--lyric);min-height:36px;overflow-wrap:anywhere}
-.tappad .after{font:12px var(--mono);color:var(--muted)}
-
-/* clips */
-.clips{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
-.clipt{position:relative;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--raise);aspect-ratio:3/4;padding:0;text-align:left}
-.clipt img{width:100%;height:100%;object-fit:cover;display:block}
-.clipt .cap{position:absolute;left:0;right:0;bottom:0;padding:6px 7px;font-size:11.5px;font-weight:600;background:linear-gradient(transparent,rgba(10,8,14,.85));display:flex;justify-content:space-between;gap:4px;align-items:end}
-.clipt .kind{font:10px var(--mono);color:var(--clip);text-transform:uppercase}
-.clipt.off{opacity:.38}
-.clipt.off::after{content:"Off";position:absolute;top:6px;left:6px;font:600 10px var(--mono);background:var(--ink);padding:2px 6px;border-radius:4px}
-.clipt .x{position:absolute;top:5px;right:5px;width:22px;height:22px;border-radius:50%;border:0;background:rgba(10,8,14,.75);color:var(--text);font-size:13px;line-height:22px;padding:0}
-.seg{display:flex;gap:4px;background:var(--ink);border:1px solid var(--line-2);border-radius:8px;padding:3px}
-.seg button{flex:1;border:0;background:none;border-radius:6px;padding:5px 8px;font:600 12px var(--mono);color:var(--muted)}
-.seg button[aria-pressed="true"]{background:var(--raise);color:var(--text)}
-
-/* templates */
-.tlist{display:grid;gap:8px}
-.titem{border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:grid;gap:6px;background:var(--ink)}
-.titem b{font-weight:600}
-.titem .sub{font:11.5px var(--mono);color:var(--muted)}
-.empty{border:1px dashed var(--line-2);border-radius:10px;padding:16px;color:var(--muted);font-size:13px;text-align:center}
-
-/* stage */
-.stage{display:flex;flex-direction:column;min-height:0;min-width:0}
-.stagebar{display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid var(--line);flex-wrap:wrap}
-.viewport{flex:1;min-height:0;min-width:0;display:grid;place-items:center;padding:16px;overflow:hidden;background:var(--canvas)}
-#stage{border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,.45),0 0 0 1px var(--line);background:#000;display:block}
-.transport{display:flex;align-items:center;gap:10px;padding:8px 14px;border-top:1px solid var(--line);justify-content:center}
-.play{width:40px;height:40px;border-radius:50%;border:0;background:var(--tape);color:var(--on-tape);display:grid;place-items:center}
-.play svg{width:16px;height:16px}
-.tc{font:600 13px var(--mono);font-variant-numeric:tabular-nums;color:var(--muted);min-width:132px;text-align:center}
-.tc b{color:var(--text)}
-
-/* style rack */
-.presets{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
-.preset{border:1px solid var(--line);border-radius:8px;background:var(--ink);padding:0;overflow:hidden;display:grid}
-.preset canvas{width:100%;aspect-ratio:3/4;display:block}
-.preset span{font:600 11px var(--ui);padding:5px 6px;color:var(--muted);text-align:left}
-.preset[aria-pressed="true"]{border-color:var(--tape);box-shadow:0 0 0 1px var(--tape)}
-.preset[aria-pressed="true"] span{color:var(--text)}
-.swatches{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.sw{width:22px;height:22px;border-radius:50%;border:2px solid var(--line-2);padding:0}
-.sw[aria-pressed="true"]{outline:2px solid var(--text);outline-offset:2px}
-.shead{display:grid;grid-template-columns:minmax(0,1fr) 150px;gap:10px;align-items:center;border:1px solid var(--line);border-radius:12px;padding:10px 10px 10px 14px;background:var(--ink)}
-.shead-l{display:grid;gap:6px;min-width:0}
-.shead b{font:800 22px var(--display);letter-spacing:.01em;text-transform:uppercase;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-#stylePrev{width:150px;height:100px;border-radius:8px;display:block}
-.chips{display:flex;gap:6px;flex-wrap:wrap}
-.chips button{border:1px solid var(--line-2);background:transparent;border-radius:999px;padding:4px 9px;font-weight:600;font-size:12px;color:var(--muted)}
-.chips button[aria-pressed="true"]{border-color:var(--tape);color:var(--text);background:color-mix(in srgb,var(--tape) 16%,transparent)}
-.preset{position:relative}
-.preset .fav{position:absolute;top:4px;right:6px;font-size:11px;color:var(--tape)}
-.srow{display:grid;grid-template-columns:96px minmax(0,1fr);gap:8px;align-items:center;font-size:12.5px;color:var(--muted)}
-.srow select{padding:6px 8px}
-.ib-row{display:flex;gap:2px;max-width:100%;background:var(--ink);border:1px solid var(--line-2);border-radius:8px;padding:3px;width:max-content}
-.ib{min-width:28px;height:28px;border:0;border-radius:6px;background:none;color:var(--muted);font:600 13px var(--ui);display:grid;place-items:center;padding:0 6px}
-.ib svg{width:17px;height:17px}
-.ib[aria-pressed="true"]{background:var(--raise);color:var(--text);box-shadow:0 0 0 1px var(--line-2)}
-.aa-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(40px,1fr));gap:6px}
-.aa{aspect-ratio:1;border:1px solid var(--line-2);border-radius:8px;display:grid;place-items:center;padding:0;font:800 17px "Instrument Sans",system-ui,sans-serif}
-.aa[aria-pressed="true"]{outline:2px solid var(--tape);outline-offset:1px}
-
-/* timeline */
-.timeline{border-top:1px solid var(--line);background:var(--panel);display:grid;gap:0}
-.tlbar{display:flex;align-items:center;gap:10px;padding:8px max(16px,env(safe-area-inset-right,0px)) 8px max(16px,env(safe-area-inset-left,0px));flex-wrap:wrap;border-bottom:1px solid var(--line)}
-.tlbar .grp{display:flex;align-items:center;gap:6px}
-.tlbar input[type=number]{width:70px;padding:5px 8px}
-.tlbar input[type=range]{width:100px}
-.tlbar .sep{width:1px;height:20px;background:var(--line-2)}
-.ov{padding:8px max(16px,env(safe-area-inset-right,0px)) 4px max(16px,env(safe-area-inset-left,0px));display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:center}
-#overview{width:100%;height:34px;display:block;border-radius:6px;cursor:grab;touch-action:none}
-.tlwrap{position:relative;display:grid;grid-template-columns:118px minmax(0,1fr);padding:4px max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px))}
-.tlheads{display:grid;grid-template-rows:20px 22px 34px 40px 40px;align-content:start;gap:0;font:600 10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
-.tlheads div{display:flex;align-items:center;justify-content:space-between;gap:2px;padding-right:6px;min-width:0}
-.tlheads span{overflow:hidden;text-overflow:ellipsis}
-.lk{width:20px;height:20px;padding:2px;border:0;border-radius:5px;background:none;color:var(--dim);display:grid;place-items:center;flex:none}
-.lk svg{width:13px;height:13px}
-.lk:hover{color:var(--text);background:var(--raise)}
-.lk[aria-pressed="true"]{color:var(--tape);background:color-mix(in srgb,var(--tape) 14%,transparent)}
-.tlscroll{overflow-x:auto;overflow-y:hidden;min-width:0;overscroll-behavior-x:contain}
-.tltools{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px max(16px,env(safe-area-inset-right,0px)) 0 max(16px,env(safe-area-inset-left,0px));min-width:0}
-.tlt-r{display:flex;align-items:center;gap:4px;margin-left:auto}
-.tlt-l{display:flex;align-items:center;gap:4px;min-width:0}
-.tlt:disabled{opacity:.35;cursor:default;background:none}
-.tlt{position:relative;display:inline-flex;align-items:center;gap:2px;border:1px solid transparent;background:none;border-radius:7px;padding:5px 6px;color:var(--text);font:600 12px var(--ui);min-width:32px;height:32px;justify-content:center}
-.tlt svg{width:19px;height:19px}
-.tlt[data-tip]:hover::after{content:attr(data-tip);position:absolute;top:calc(100% + 6px);left:50%;transform:translateX(-50%);background:#0f0f0f;color:#fff;font:500 12px var(--ui);padding:5px 9px;border-radius:6px;white-space:nowrap;z-index:40;pointer-events:none;box-shadow:0 4px 14px rgba(0,0,0,.4)}
-.tlt-r .tlt[data-tip]:hover::after{left:auto;right:0;transform:none}
-.tmenu-btn[data-tip]:hover::after{left:0;transform:none}
-.tmenu-btn[aria-expanded="true"]:hover::after{display:none}
-.tmenu-btn svg:last-child{width:12px;height:12px;margin-left:1px}
-.tmenu-wrap{position:relative}
-.tmenu{position:absolute;top:calc(100% + 6px);left:0;z-index:45;background:var(--raise);border:1px solid var(--line-2);border-radius:10px;padding:5px;min-width:230px;box-shadow:0 12px 30px rgba(0,0,0,.5);display:grid;gap:2px}
-.tmenu[hidden]{display:none}
-.tmenu button{display:grid;grid-template-columns:22px 1fr auto;align-items:center;gap:10px;border:0;background:none;color:var(--text);padding:8px 10px;border-radius:7px;font:500 13.5px var(--ui);text-align:left}
-.tmenu button svg{width:19px;height:19px}
-.tmenu button:hover,.tmenu button[aria-checked="true"]{background:color-mix(in srgb,var(--text) 10%,transparent)}
-.tmenu kbd{font:500 12px var(--ui);color:var(--muted)}
-.tlt:hover{background:var(--raise);color:var(--text)}
-.tlt.on{color:var(--tape);background:color-mix(in srgb,var(--tape) 12%,transparent);border-color:color-mix(in srgb,var(--tape) 40%,transparent)}
-.tlt-sep{width:1px;height:18px;background:var(--line-2);margin:0 4px}
-#zoom{width:110px}
-#tl{display:block;height:156px;touch-action:none}
-.tlheads .tb{display:flex;align-items:center;gap:0;flex:none}
-.tlheads .tb .lk{width:18px;height:18px;padding:2px}
-.tlheads .tb .lk svg{width:12px;height:12px}
-.tlheads .lk.off{color:var(--tape)}
-.tlheads .th-aux{color:#7fb0f0}
-.tlheads .th-aux span{font-size:9px;letter-spacing:.02em;text-transform:none}
-.addtrk{display:inline-flex!important;align-items:center;gap:3px;border:1px solid var(--line-2);border-radius:6px;background:none;color:var(--text);font:600 10px var(--ui);padding:1px 6px 1px 4px;height:18px;letter-spacing:0;text-transform:none}
-.addtrk:hover{background:var(--raise)}
-.addtrk svg{width:11px;height:11px}
-.trkmenu{position:absolute;left:16px;top:4px;min-width:210px}
-.auxpop{position:absolute;left:16px;z-index:46;background:var(--raise);border:1px solid var(--line-2);border-radius:10px;padding:10px;width:240px;box-shadow:0 12px 30px rgba(0,0,0,.5);display:grid;gap:8px;font:500 12.5px var(--ui);color:var(--text)}
-.auxpop[hidden]{display:none}
-.auxpop input[type=text]{width:100%;box-sizing:border-box;background:var(--ink);border:1px solid var(--line-2);border-radius:6px;color:var(--text);padding:5px 7px;font:500 12.5px var(--ui)}
-.auxpop label{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center}
-.auxpop .row{display:flex;gap:6px;flex-wrap:wrap}
-
-/* modal */
-.modal{position:fixed;inset:0;background:rgba(8,6,12,.72);display:grid;place-items:center;z-index:20;padding:16px}
-.dialog{background:var(--panel);border:1px solid var(--line-2);border-radius:14px;padding:20px;width:min(440px,100%);display:grid;gap:14px;max-height:100%;overflow:auto}
-.dialog h2{margin:0;font:800 16px var(--display)}
-.bar{height:8px;border-radius:4px;background:var(--ink);overflow:hidden}
-.bar i{display:block;height:100%;width:0;background:var(--tape)}
-.dialog video{width:100%;max-height:50vh;border-radius:8px;background:#000}
-.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--raise);border:1px solid var(--line-2);padding:9px 14px;border-radius:8px;font-weight:600;font-size:13px;z-index:30;max-width:calc(100% - 32px)}
-
-/* narrow screens: stack and scroll */
-.mobile-only{display:none}
-/* phones and tablets: CapCut-style stack. Preview, then the timeline right under it, then one tabbed panel (Lyrics, Clips, Templates, Style) */
-@media (max-width:1050px) and (pointer:coarse), (max-width:760px){
-  body{overflow:auto}
-  .app{display:flex;flex-direction:column;height:auto;min-height:100%}
-  .main{display:contents}
-  .top{order:0}
-  .stage{order:1}
-  .timeline{order:2;border-bottom:1px solid var(--line)}
-  .side{order:3}
-  .rack{order:4}
-  .side,.rack{border:0;border-top:1px solid var(--line)}
-  .pane{overflow:visible}
-  .viewport{height:46vh;padding:10px}
-  .stagebar{padding:6px 12px;gap:6px}
-  .stagebar .label,#stageHint{display:none}
-  .transport{padding:6px 12px}
-  .mobile-only{display:inline-block}
-  .rack > .tabs{display:none}
-  body:not([data-mtab="style"]) .rack{display:none}
-  body[data-mtab="style"] .side [data-pane]{display:none!important}
-  .tlbar{gap:6px;padding-block:6px}
-  .tlbar .sep{display:none}
-  .tlbar .btn.small{padding:4px 8px}
-  .tlwrap{grid-template-columns:96px minmax(0,1fr)}
-  .tlheads div{padding-right:2px}
-  .lk{width:17px;height:17px}
-  .lk svg{width:11px;height:11px}
-  .tlheads{font-size:8.5px;letter-spacing:.04em}
-  .ov{grid-template-columns:62px minmax(0,1fr)}
-  .ov .row.hint{font-size:12px}
-  .song{order:3;flex-basis:100%;flex-wrap:wrap}
-  .song .btn{flex:none}
-  .song .meta{display:none}
-  .brand{flex:1}
-}
-.mtools,.msheet{display:none}
-/* phones: one-screen editor like CapCut. Preview fills the top, timeline under it, tools along the bottom, each tool opens as a sheet */
-@media (max-width:700px) and (pointer:coarse){
-  body{overflow:hidden}
-  .app{display:flex;flex-direction:column;height:100%;min-height:0}
-  .top{padding-block:8px;gap:8px}
-  .brand span,.song .meta,.song .name{display:none}
-  .brand{flex:none}
-  .song{order:0;flex:1;flex-basis:auto;flex-wrap:nowrap}
-  .top #vocalMode{display:none}
-  .side,.rack{display:none!important}
-  .stage{order:1;flex:1;min-height:0}
-  .stage > .stagebar{display:none}
-  .viewport{height:auto;flex:1;padding:8px}
-  .transport{padding:4px 12px}
-  .timeline{order:2;border-bottom:1px solid var(--line)}
-  .timeline > .tlbar,.timeline > #secRow{display:none}
-  .ov{padding-top:6px}
-  #overview{height:26px}
-  .tlwrap{padding-bottom:6px}
-  #zoom{display:none}
-  .tltools{overflow-x:auto;scrollbar-width:none}
-  .tlt{min-width:30px;height:30px;padding:4px}
-  .tlt[data-tip]:hover::after{display:none}
-  .tltools{padding-top:4px}
-  .mtools{order:3;position:relative;z-index:16;display:flex;gap:2px;overflow-x:auto;padding:6px max(8px,env(safe-area-inset-right,0px)) calc(6px + env(safe-area-inset-bottom,0px)) max(8px,env(safe-area-inset-left,0px));background:var(--panel);scrollbar-width:none}
-  .mtools button{flex:1 0 64px;display:grid;justify-items:center;gap:3px;background:none;border:0;border-radius:10px;padding:6px 2px;color:var(--text);font-size:11.5px}
-  .mtools button svg{width:23px;height:23px}
-  .mtools button[aria-pressed="true"]{color:var(--tape);background:var(--raise)}
-  .msheet{display:flex;flex-direction:column;position:fixed;left:0;right:0;bottom:0;max-height:52vh;z-index:15;background:var(--panel);border-top:1px solid var(--line-2);border-radius:16px 16px 0 0;box-shadow:0 -12px 40px rgba(0,0,0,.5)}
-  .msheet[hidden]{display:none!important}
-  .msheet-h{display:flex;justify-content:space-between;align-items:center;padding:12px 16px 8px}
-  .msheet-h b{font:800 14px var(--display);text-transform:uppercase;letter-spacing:.04em}
-  .msheet-b{overflow:auto;padding:0 max(16px,env(safe-area-inset-right,0px)) 16px max(16px,env(safe-area-inset-left,0px));display:grid;gap:14px}
-  .msheet-b .pane{padding:0;overflow:visible}
-  .msheet-b .stagebar{padding:0;border:0}
-  .msheet-b .tlbar{padding:0;border:0}
-  .msheet-b #secRow{padding:0;display:block}
-  .msheet-b #secRow > span:first-child{display:none}
-}
-@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
-</style>
-
-<div class="app">
-  <header class="top">
-    <div class="brand"><b>STELLAR</b><span>Lyric Studio</span></div>
-    <div class="song">
-      <label class="btn file" title="Load an audio file (mp3, wav, m4a)">
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 12V3l7-1.5V10"/><circle cx="4" cy="12" r="2"/><circle cx="11" cy="10" r="2"/></svg>
-        Load song<input id="songFile" type="file" accept="audio/*">
-      </label>
-      <span class="name" id="songName">Demo track</span>
-      <span class="meta" id="songMeta"></span>
-      <div class="seg" id="vocalMode" title="Vocals"><button data-v="on" aria-pressed="true">Vocals on</button><button data-v="reduced">Reduced</button><button data-v="inst">Instrumental</button></div>
-      <input id="instFile" type="file" accept="audio/*" hidden>
-    </div>
-    <button class="btn primary" id="exportBtn"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 2v8M4.5 6.5 8 10l3.5-3.5M3 13h10"/></svg>Export video</button>
-  </header>
-
-  <div class="main">
-    <!-- LEFT: lyrics / clips / templates -->
-    <aside class="side">
-      <div class="tabs" role="tablist">
-        <button class="tab" role="tab" aria-selected="true" data-tab="lyrics">Lyrics</button>
-        <button class="tab" role="tab" aria-selected="false" data-tab="clips">Clips</button>
-        <button class="tab" role="tab" aria-selected="false" data-tab="templates">Templates</button>
-        <button class="tab mobile-only" role="tab" aria-selected="false" data-tab="style">Style</button>
-      </div>
-
-      <section class="pane" data-pane="lyrics">
-        <div class="field">
-          <label class="label" for="lyricsText">Lyrics for this section</label>
-          <textarea id="lyricsText" spellcheck="false"></textarea>
-          <div class="row">
-            <button class="btn small" id="applyLyrics">Apply lyrics</button>
-            <button class="btn small ghost" id="autoSpace">Spread across beats</button>
-            <button class="btn small ghost" id="selAll">Select all words</button>
-          </div>
-          <div class="hint">One line per lyric line. Apply keeps your timings when the word count is unchanged.</div>
-          <div class="row"><label class="btn small file">Import LRC / SRT<input id="lrcFile" type="file" accept=".lrc,.srt,.txt"></label><button class="btn small ghost" id="lrcOut">Export LRC</button><button class="btn small ghost" id="srtOut">Export SRT</button></div>
-          <div class="row"><span class="hint">Shift all words</span><button class="btn small ghost" data-shift="-0.1">−0.1s</button><button class="btn small ghost" data-shift="-0.02">−0.02s</button><button class="btn small ghost" data-shift="0.02">+0.02s</button><button class="btn small ghost" data-shift="0.1">+0.1s</button></div>
-        </div>
-
-        <div class="card" id="vidCard">
-          <div class="label">Timing from a video</div>
-          <div class="hint" id="vidHint">Load a lyric video of this song with the words on screen. Claude reads the text frame by frame and places every word, in any language. Load the song first so the timing lines up with it.</div>
-          <label class="btn file" id="vidBtn">Import timing from video<input id="vidFile" type="file" accept="video/*"></label>
-          <div id="vidRun" class="field" hidden>
-            <div class="bar"><i id="vidBar"></i></div>
-            <div class="hint" id="vidStatus"></div>
-            <div class="row"><button class="btn small ghost" id="vidStop">Stop</button></div>
-          </div>
-        </div>
-
-        <div class="tappad" id="tapPad">
-          <div class="label" id="tapLabel">Tap sync</div>
-          <div class="next" id="tapNext">Press start, then tap each word</div>
-          <div class="after" id="tapAfter">Space bar or tap here as each word is sung</div>
-          <div class="row" style="justify-content:center">
-            <button class="btn small" id="tapStart">Start tap sync</button>
-            <button class="btn small ghost" id="tapCancel" hidden>Cancel</button>
-          </div>
-        </div>
-
-        <div class="card" id="wordCard" hidden>
-          <div class="label" id="wMultiLbl">Selected word</div>
-          <div id="wSingle" class="field">
-            <input type="text" id="wText" aria-label="Word text">
-            <div class="grid2">
-              <label class="field"><span class="hint">Start (s)</span><input type="number" id="wStart" step="0.01"></label>
-              <label class="field"><span class="hint">Length (s)</span><input type="number" id="wDur" step="0.01" min="0.05"></label>
-            </div>
-          </div>
-          <div class="row"><button class="btn small" id="wDelete">Delete</button><button class="btn small ghost" id="wNone">Deselect</button></div>
-          <span class="hint">Drag any selected word to move them together. Arrow keys nudge (Shift for a quarter beat). Shift-click adds words.</span>
-        </div>
-      </section>
-
-      <section class="pane" data-pane="clips" hidden>
-        <div class="row" style="justify-content:space-between">
-          <span class="label">Footage pool</span>
-          <label class="btn small file">+ Import<input id="clipFiles" type="file" accept="image/*,video/*" multiple></label>
-        </div>
-        <div class="clips" id="clipGrid"></div>
-        <div class="hint">Tap a tile to include or leave it out of the shuffle. Imported clips stay in this browser session.</div>
-        <div class="field">
-          <span class="label">How cuts are chosen</span>
-          <div class="seg" id="cutMode"><button data-v="beat">On the beat</button><button data-v="count">I pick how many</button><button data-v="manual">Custom</button></div>
-          <span class="hint">Drag any cut on the timeline to move it. Moving one switches to Custom.</span>
-        </div>
-        <div class="field" id="cutCountField" hidden>
-          <span class="row" style="justify-content:space-between"><span class="label">Number of clips</span><span class="hint" id="cutCountVal">8</span></span>
-          <input type="range" id="cutCount" min="1" max="40" step="1">
-          <span class="hint">Cuts are spread evenly and nudged onto the nearest beat.</span>
-        </div>
-        <div class="field">
-          <span class="label">Transition between clips</span>
-          <div class="seg" id="cutTrans"><button data-v="none">None</button><button data-v="crossfade">Crossfade</button><button data-v="flash">Flash</button><button data-v="dip">Dip</button></div>
-          <span class="hint">None is a clean, instant cut.</span>
-          <label class="field" id="xfField" hidden><span class="row" style="justify-content:space-between"><span class="hint">Transition length</span><span class="hint" id="xfDurVal">0.35s</span></span><input type="range" id="xfDur" min="0.05" max="2" step="0.05"></label>
-        </div>
-        <div class="field" id="cutManualField" hidden>
-          <div class="row"><button class="btn small" id="cutAdd">Add cut at playhead</button><button class="btn small ghost" id="cutReset">Back to beat cuts</button></div>
-        </div>
-        <div class="field" id="cutEveryField">
-          <span class="label">Cut every</span>
-          <div class="seg" id="cutEvery">
-            <button data-v="1">1 beat</button><button data-v="2">2</button><button data-v="4">1 bar</button><button data-v="8">2 bars</button>
-          </div>
-        </div>
-        <button class="btn" id="shuffleBtn">Shuffle clips</button>
-        <div class="card" id="segCard" hidden>
-          <div class="label" id="segLabel">Cut</div>
-          <select id="segClip" aria-label="Clip for this cut"></select>
-          <div class="field" id="segVid" hidden>
-            <span class="row" style="justify-content:space-between"><span class="label">Part of the video</span><span class="hint" id="segStartVal"></span></span>
-            <input type="range" id="segStart" min="0" max="10" step="0.05">
-            <span class="hint">Slide to choose where in this video the cut starts. The preview jumps to the cut so you can see it.</span>
-          </div>
-          <div class="field">
-            <span class="row" style="justify-content:space-between"><span class="label">Speed</span><span class="hint" id="segSpeedVal">1×</span></span>
-            <input type="range" id="segSpeed" min="0.25" max="4" step="0.05" aria-label="Clip speed">
-            <div class="seg" id="segSpeedP"><button data-v="0.5">0.5×</button><button data-v="1">1×</button><button data-v="1.5">1.5×</button><button data-v="2">2×</button><button data-v="3">3×</button></div>
-          </div>
-          <div class="row"><button class="btn small ghost" id="cutRemove">Delete this clip</button></div>
-          <div class="hint">On the timeline: drag a clip to move it, drag its edges to trim, double-click to swap in the next clip, Delete removes it.</div>
-        </div>
-      </section>
-
-      <section class="pane" data-pane="templates" hidden>
-        <div class="field">
-          <label class="label" for="tplName">Save this section as a template</label>
-          <input type="text" id="tplName" placeholder="e.g. Fuorisede hook, 15s">
-          <button class="btn" id="tplSave">Save template</button>
-          <div class="hint" id="tplWhere">Templates keep the section, lyric timing, beat grid, cuts, style and hook. Footage is not stored, so you can swap visuals for each new version.</div>
-        </div>
-        <div class="label">Stellar templates</div>
-        <div class="tlist" id="builtinList"></div>
-        <div class="hint">Pick a template, then load that song (or load the song first). The studio finds the section in the song by its sound and lines everything up.</div>
-        <div class="label">Saved templates</div>
-        <div class="tlist" id="tplList"></div>
-        <div class="row">
-          <button class="btn small ghost" id="tplDownload">Save as file</button>
-          <label class="btn small ghost file">Open file<input id="tplOpen" type="file" accept=".json,application/json"></label>
-        </div>
-      </section>
-    </aside>
-
-    <!-- CENTER: stage -->
-    <main class="stage">
-      <div class="stagebar">
-        <span class="label">Frame</span>
-        <div class="seg" id="aspect"><button data-v="9:16">9:16</button><button data-v="4:5">4:5</button><button data-v="1:1">1:1</button><button data-v="16:9">16:9</button></div>
-        <span class="label">Length</span>
-        <div class="seg" id="secLen"><button data-v="10">10s</button><button data-v="15">15s</button><button data-v="20">20s</button><button data-v="30">30s</button></div>
-        <label class="row hint" style="gap:6px">or <input type="number" id="secLenIn" min="2" max="60" step="0.5" style="width:74px;padding:5px 8px" aria-label="Soundbite length in seconds"> s</label>
-        <span class="hint" id="stageHint" style="margin-left:auto"></span>
-      </div>
-      <div class="viewport"><canvas id="stage" width="720" height="1280"></canvas></div>
-      <div class="transport">
-        <button class="btn small ghost" id="toStart" title="Back to section start">⏮</button>
-        <button class="play" id="playBtn" aria-label="Play"><svg viewBox="0 0 16 16" fill="currentColor" id="playIcon"><path d="M4 2.5v11l9-5.5z"/></svg></button>
-        <div class="tc" id="tc"><b>0:00.0</b> / 0:15.0</div>
-      </div>
-    </main>
-
-    <!-- RIGHT: style rack -->
-    <aside class="side rack">
-      <div class="tabs"><button class="tab" aria-selected="true" tabindex="-1">Style</button></div>
-      <section class="pane">
-        <div class="shead">
-          <div class="shead-l">
-            <span class="label">Lyric style</span>
-            <b id="styleName">Stack</b>
-            <div class="row" style="gap:6px"><button class="btn small ghost" id="styleFav" aria-pressed="false" title="Add to favourites">☆</button><button class="btn small ghost" id="styleVar" hidden>Variation</button></div>
-          </div>
-          <canvas id="stylePrev" width="300" height="200" aria-label="Animated preview of the selected style"></canvas>
-        </div>
-        <div class="chips" id="styleCats"><button data-v="all">All</button><button data-v="fav">Favourites</button><button data-v="minimal">Minimal</button><button data-v="bold">Bold</button><button data-v="layered">Layered</button></div>
-        <div class="presets" id="presets"></div>
-        <div class="card">
-          <div class="label" id="ssTitle">Stack settings</div>
-          <label class="srow"><span>Primary font</span><select id="sPf"></select></label>
-          <label class="srow" id="sSfRow"><span>Secondary font</span><select id="sSf"></select></label>
-          <label class="srow"><span>Size</span><span class="row" style="gap:8px;flex:1;flex-wrap:nowrap"><input type="range" id="sSize" min="0.5" max="1.8" step="0.05"><span class="hint" id="sizeVal" style="min-width:42px;text-align:right">1.00×</span></span></label>
-          <div class="srow"><span>Highlight</span><div class="swatches" id="hiSw"></div></div>
-          <div class="srow"><span>Text colour</span><div class="swatches"><input type="color" id="sColor" title="Text colour"></div></div>
-          <label class="srow"><span>Case</span><select id="sCase"><option value="auto">Style default</option><option value="as">As typed</option><option value="lower">lowercase</option><option value="upper">UPPERCASE</option></select></label>
-        </div>
-        <div class="card">
-          <div class="field"><span class="row" style="justify-content:space-between"><span class="label">Position</span><button class="btn small ghost" id="sCenter">Center</button></span>
-            <div class="grid2"><label class="field"><span class="hint">Left / right</span><input type="range" id="sX" min="0" max="1" step="0.01"></label>
-            <label class="field"><span class="hint">Up / down</span><input type="range" id="sY" min="0" max="1" step="0.01"></label></div>
-            <span class="hint">Or drag the lyrics on the preview.</span></div>
-          <label class="field"><span class="label">Darken footage</span><input type="range" id="sScrim" min="0" max="0.75" step="0.01"></label>
-        </div>
-        <div class="card">
-          <div class="row" style="justify-content:space-between"><span class="label">Hook text</span>
-            <div class="seg" id="hookSeg"><button data-v="off">Off</button><button data-v="on">On</button></div></div>
-          <span class="hint" id="hOffHint">Optional. Turn it on to show a line like "New single out now" over the first seconds.</span>
-          <div class="field" id="hFields">
-            <input type="text" id="hText" placeholder="New single out now">
-            <div class="chips" id="hLook"><button data-v="pill">Pill</button><button data-v="box">Box</button><button data-v="caption">Caption</button><button data-v="outline">Outline</button><button data-v="sticker">Sticker</button><button data-v="banner">Banner</button></div>
-            <label class="srow"><span>Font</span><select id="hFont"></select></label>
-            <label class="srow"><span>Size</span><input type="range" id="hSize" min="0.6" max="5" step="0.05"></label>
-            <div class="srow"><span>Colours</span><div class="swatches"><input type="color" id="hColor" title="Text colour"><input type="color" id="hBg" title="Background colour"></div></div>
-            <label class="srow"><span>Entrance</span><select id="hAnim"><option value="fade">Fade</option><option value="pop">Pop</option><option value="slide">Slide up</option><option value="type">Type on</option><option value="none">None</option></select></label>
-            <div class="grid2"><label class="field"><span class="hint">Left / right</span><input type="range" id="hX" min="0" max="1" step="0.01"></label>
-              <label class="field"><span class="hint">Up / down</span><input type="range" id="hY" min="0" max="1" step="0.01"></label></div>
-            <span class="hint">Or drag the hook on the preview.</span>
-            <label class="field"><span class="row" style="justify-content:space-between"><span class="hint">Starts after</span><span class="hint" id="hStartVal">0.0s</span></span><input type="range" id="hStart" min="0" max="30" step="0.25"></label>
-            <label class="field"><span class="row" style="justify-content:space-between"><span class="hint">On screen for</span><span class="hint" id="hDurVal">3.0s</span></span><input type="range" id="hDur" min="0.5" max="30" step="0.25"></label>
-          </div>
-        </div>
-        <div class="card" id="textCard">
-          <div class="row" style="justify-content:space-between"><span class="label">Text boxes</span><button class="btn small" id="txtAdd">+ Add text</button></div>
-          <div class="chips" id="txtList"></div>
-          <span class="hint" id="txtEmpty">Add your own text anywhere in the video. It appears at the playhead; drag it on the preview to place it and on the timeline to time it.</span>
-          <div class="field" id="txtEdit" hidden>
-            <textarea id="txtText" rows="3" style="min-height:70px;font:14px/1.4 var(--ui)" placeholder="Type your text"></textarea>
-            <label class="srow"><span>Font</span><select id="txtFont"></select></label>
-            <label class="srow"><span>Font size</span><input type="range" id="txtSize" min="0.5" max="5" step="0.05"></label>
-            <div class="srow"><span>Pattern</span><div class="ib-row"><button class="ib" id="txtB" title="Bold"><b>B</b></button><button class="ib" id="txtU" title="Underline"><u>U</u></button><button class="ib" id="txtI" title="Italic"><i>I</i></button></div></div>
-            <div class="srow"><span>Case</span><div class="ib-row" id="txtCase"><button class="ib" data-v="" title="As typed">Aa</button><button class="ib" data-v="upper" title="Uppercase">TT</button><button class="ib" data-v="lower" title="Lowercase">tt</button><button class="ib" data-v="title" title="Title case">Tt</button></div></div>
-            <div class="srow"><span>Color</span><div class="row" style="gap:6px;flex-wrap:nowrap"><input type="color" id="txtColor" title="Text colour"><span class="hint">Stroke/BG</span><input type="color" id="txtBg" title="Outline or background colour"></div></div>
-            <div class="srow"><span>Character</span><div class="row" style="gap:8px;flex-wrap:nowrap"><input type="number" id="txtLs" step="1" style="width:70px"><span class="hint">Line</span><input type="number" id="txtLsp" step="5" style="width:70px"></div></div>
-            <div class="srow"><span>Alignment</span><div class="ib-row" id="txtAlign"><button class="ib" data-v="left" title="Align left"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 10h10M4 14h16M4 18h10"/></svg></button><button class="ib" data-v="center" title="Centre"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M7 10h10M4 14h16M7 18h10"/></svg></button><button class="ib" data-v="right" title="Align right"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M10 10h10M4 14h16M10 18h10"/></svg></button></div></div>
-            <div class="field"><span class="label">Preset style</span><div class="aa-grid" id="txtPresets"></div></div>
-            <label class="srow"><span>Animation</span><select id="txtAnim"><option value="fade">Fade in</option><option value="pop">Pop</option><option value="slide">Slide up</option><option value="type">Type on</option><option value="none">None</option></select></label>
-            <div class="field"><span class="label">Transform</span>
-              <label class="srow"><span>Scale</span><span class="row" style="gap:8px;flex:1;flex-wrap:nowrap"><input type="range" id="txtScale" min="20" max="400" step="1"><span class="hint" id="txtScaleVal" style="min-width:40px;text-align:right">100%</span></span></label>
-              <div class="srow"><span>Position</span><div class="row" style="gap:6px;flex-wrap:nowrap"><span class="hint">X</span><input type="number" id="txtPX" min="-100" max="100" step="1" style="width:66px"><span class="hint">Y</span><input type="number" id="txtPY" min="-100" max="100" step="1" style="width:66px"></div></div>
-              <label class="srow"><span>Rotation</span><span class="row" style="gap:8px;flex:1;flex-wrap:nowrap"><input type="range" id="txtRot" min="-180" max="180" step="1"><input type="number" id="txtRotN" min="-180" max="180" step="1" style="width:66px"></span></label>
-            </div>
-            <div class="grid2"><label class="field"><span class="hint">Starts at (s)</span><input type="number" id="txtStart" min="0" step="0.05"></label>
-              <label class="field"><span class="hint">Lasts (s)</span><input type="number" id="txtDur" min="0.2" step="0.05"></label></div>
-            <div class="row"><button class="btn small ghost" id="txtDup">Duplicate</button><button class="btn small ghost" id="txtDel">Delete text</button></div>
-          </div>
-        </div>
-      </section>
-    </aside>
-  </div>
-
-  <!-- TIMELINE -->
-  <section class="timeline">
-    <div class="tlbar">
-      <div class="grp"><span class="label">BPM</span><input type="number" id="bpm" min="40" max="240" step="0.1"></div>
-      <button class="btn small" id="tapTempo">Tap tempo</button>
-      <button class="btn small" id="detectBpm">Detect</button>
-      <button class="btn small" id="setDownbeat" title="Make the playhead position beat 1">Beat 1 here</button>
-      <span class="hint" id="tlHint" style="margin-left:auto"></span>
-    </div>
-    <div class="ov"><span class="label">Song</span><canvas id="overview"></canvas></div>
-    <div class="ov" id="secRow" style="padding-top:0"><span></span><div class="row hint" style="gap:10px">
-      <label class="row" style="gap:6px">Soundbite starts at <input type="number" id="secStartIn" min="0" step="0.1" style="width:84px;padding:4px 8px"> s</label>
-      <label class="row" style="gap:6px">ends at <input type="number" id="secEndIn" min="0" step="0.1" style="width:84px;padding:4px 8px"> s</label>
-      <span>Drag the highlighted window, its edges, or type exact times.</span></div></div>
-    <div class="tltools">
-      <div class="tlt-l">
-        <div class="tmenu-wrap">
-          <button class="tlt tmenu-btn" id="toolBtn" data-tip="Tools" aria-label="Tools" aria-haspopup="menu" aria-expanded="false"><span id="toolIco"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5l12 7.5-5.2 1.6L10.3 18z"/></svg></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m7 15 5-5 5 5"/></svg></button>
-          <div class="tmenu" id="toolMenu" role="menu" hidden>
-            <button role="menuitem" data-tool="select"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5l12 7.5-5.2 1.6L10.3 18z"/></svg><span>Select</span><kbd>A</kbd></button>
-            <button role="menuitem" data-tool="split"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.6"/><circle cx="6" cy="18" r="2.6"/><path d="M8.2 7.6 19 17M8.2 16.4 19 7"/></svg><span>Split</span><kbd>B</kbd></button>
-            <button role="menuitem" data-tool="selLeft"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 7 5 12l5 5"/><path d="M5 12h9"/><path d="M18 5v14"/></svg><span>Select leftward</span><kbd>[</kbd></button>
-            <button role="menuitem" data-tool="selRight"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m14 7 5 5-5 5"/><path d="M19 12h-9"/><path d="M6 5v14"/></svg><span>Select rightward</span><kbd>]</kbd></button>
-          </div>
-        </div>
-        <span class="tlt-sep"></span>
-        <button class="tlt" id="undoBtn" data-tip="Undo (⌘Z)" aria-label="Undo (⌘Z)" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg></button><button class="tlt" id="redoBtn" data-tip="Redo (⇧⌘Z)" aria-label="Redo (⇧⌘Z)" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/></svg></button>
-        <span class="tlt-sep"></span>
-        <button class="tlt" id="splitBtn" data-tip="Split at playhead (⌘B)" aria-label="Split at playhead (⌘B)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5H5v14h3"/><path d="M16 5h3v14h-3"/><path d="M12 3v18"/></svg></button><button class="tlt" id="delLeftBtn" data-tip="Delete the cut left of the playhead (Q)" aria-label="Delete the cut left of the playhead (Q)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 5v14" stroke-dasharray="2 3"/><path d="M15 5h3v14h-3"/><path d="M11 3v18"/></svg></button><button class="tlt" id="delRightBtn" data-tip="Delete the cut right of the playhead (W)" aria-label="Delete the cut right of the playhead (W)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 5v14" stroke-dasharray="2 3"/><path d="M9 5H6v14h3"/><path d="M13 3v18"/></svg></button><button class="tlt" id="deleteBtn" data-tip="Delete selection (⌫)" aria-label="Delete selection (⌫)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="m6 7 1 13h10l1-13"/></svg></button><button class="tlt" id="textBtn" data-tip="Add text (T)" aria-label="Add text (T)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 6V4h14v2"/><path d="M12 4v16"/><path d="M9 20h6"/></svg></button><button class="tlt" id="markerBtn" data-tip="Add marker (M)" aria-label="Add marker (M)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v12l-6 5-6-5z"/></svg></button>
-      </div>
-      <div class="tlt-r">
-        <button class="tlt on" id="snapBtn" data-tip="Turn off auto snapping (N)" aria-label="Turn off auto snapping (N)" aria-pressed="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4v7a6 6 0 0 0 12 0V4"/><path d="M6 8h4M14 8h4"/></svg></button><button class="tlt on" id="overlapBtn" data-tip="Turn off overlap protection" aria-label="Turn off overlap protection" aria-pressed="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="7" height="8" rx="2"/><rect x="14" y="8" width="7" height="8" rx="2"/><path d="M12 5v14"/></svg></button>
-        <span class="tlt-sep"></span>
-        <button class="tlt" id="zoomFit" data-tip="Zoom to fit" aria-label="Zoom to fit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button><button class="tlt" id="zoomOut" data-tip="Zoom out (−)" aria-label="Zoom out (−)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M8 11h6M20 20l-4-4"/></svg></button><input type="range" id="zoom" min="1" max="16" step="0.25" value="1" aria-label="Timeline zoom"><button class="tlt" id="zoomIn" data-tip="Zoom in (+)" aria-label="Zoom in (+)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M8 11h6M11 8v6M20 20l-4-4"/></svg></button>
-      </div>
-    </div>
-    <div class="tlwrap">
-      <div class="tlheads" id="tlHeads"></div>
-      <div class="tmenu trkmenu" id="trackMenu" role="menu" hidden><button data-add="text" role="menuitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 6V4h14v2M12 4v16M9 20h6"/></svg><span>Text track</span><kbd></kbd></button><button data-add="audio" role="menuitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg><span>Audio track</span><kbd>file</kbd></button></div>
-      <div class="auxpop" id="auxPop" hidden></div>
-      <input id="auxFile" type="file" accept="audio/*" hidden>
-      <div class="tlscroll" id="tlScroll"><canvas id="tl"></canvas></div>
-    </div>
-  </section>
-  <nav class="mtools" id="mtools" aria-label="Tools"><button data-sheet="lyrics"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h10M4 18h13"/></svg><span>Lyrics</span></button><button data-sheet="style"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19 12 5l7 14M8 13h8"/></svg><span>Style</span></button><button data-sheet="clips"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m10 9 5 3-5 3z"/></svg><span>Clips</span></button><button data-sheet="text"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 6V4h14v2"/><path d="M12 4v16"/><path d="M9 20h6"/></svg><span>Text</span></button><button data-sheet="hook"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="8" rx="4"/></svg><span>Hook</span></button><button data-sheet="audio"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg><span>Audio</span></button><button data-sheet="format"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="3" width="10" height="18" rx="2"/></svg><span>Format</span></button><button data-sheet="templates"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/></svg><span>Templates</span></button></nav>
-  <div class="msheet" id="msheet" hidden><div class="msheet-h"><b id="msheetTitle"></b><button class="btn small" id="msheetDone">Done</button></div><div class="msheet-b" id="msheetBody"></div></div>
-</div>
-
-<div class="modal" id="exportModal" hidden>
-  <div class="dialog" role="dialog" aria-labelledby="exTitle">
-    <h2 id="exTitle">Export video</h2>
-    <div id="exSetup" class="field">
-      <div class="hint" id="exInfo"></div>
-      <div class="hint">Recording runs in real time, so a 15 second section takes 15 seconds. Keep this tab in front while it records.</div>
-      <div class="row"><button class="btn primary" id="exStart">Start recording</button><button class="btn ghost" id="exClose">Cancel</button></div>
-    </div>
-    <div id="exRun" class="field" hidden>
-      <div class="bar"><i id="exBar"></i></div>
-      <div class="hint" id="exStatus">Recording…</div>
-    </div>
-    <div id="exDone" class="field" hidden>
-      <video id="exVideo" controls playsinline></video>
-      <div class="hint" id="exNote"></div>
-      <div class="row"><button class="btn primary" id="exSave">Save video</button><button class="btn ghost" id="exDone2">Close</button></div>
-    </div>
-  </div>
-</div>
-<div class="toast" id="toast" hidden></div>
-
-<script>
 "use strict";
 /* ============ helpers ============ */
 const $ = s => document.querySelector(s);
@@ -609,6 +11,10 @@ const store = {
   get(k){ try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
   set(k,v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
 };
+/* the guided UI (js/app.js, js/lyrics.js) listens to these: "change" = the project changed, "pick" = a song file was chosen */
+const HOOKS = {change:[], pick:[]};
+const slsOn = (k, f) => HOOKS[k].push(f);
+const slsEmit = (k, ...a) => { for(const f of HOOKS[k]){ try { f(...a); } catch(err){ console.error(err); } } };
 const ASPECTS = { "9:16":[720,1280], "4:5":[864,1080], "1:1":[1080,1080], "16:9":[1280,720] };
 
 /* ============ state ============ */
@@ -641,6 +47,7 @@ function startAux(c, out, at, songT){ const lt = songT - S.P.section.a;
     if(off < 0) s.start(at - off, 0); else s.start(at, off); auxSrcs.push(s); }); }
 function restartAudio(){ if(S.playing && !S.exporting){ S.t = songTime(); play({}); } }
 function ctx(){ if(!actx){ actx = new (window.AudioContext || window.webkitAudioContext)(); gain = actx.createGain(); gain.connect(actx.destination); } return actx; }
+function bounds(){ return S.review && S.audio ? {a:0, b:S.audio.duration} : S.P.section; }
 function songTime(){ return S.playing ? startT + (actx.currentTime - startAt) : S.t; }
 function play(opts={}){
   if(!S.audio) return;
@@ -648,7 +55,7 @@ function play(opts={}){
   stopSource();
   src = c.createBufferSource(); src.buffer = playBuffer();
   const out = opts.dest || gain; mainG = c.createGain(); mainG.gain.value = S.P.mainMute ? 0 : (S.P.mainVol ?? 1); src.connect(mainG); mainG.connect(out);
-  const sec = S.P.section;
+  const sec = bounds();
   if(S.t < sec.a || S.t >= sec.b - 0.02) S.t = sec.a;
   startAt = c.currentTime + 0.02; startT = S.t;
   src.start(startAt, S.t);
@@ -700,7 +107,7 @@ async function setVocal(mode){
 function stopSource(){ if(src){ try{ src.onended = null; src.stop(); }catch{} src.disconnect(); src = null; } auxSrcs.forEach(a => { try{ a.stop(); }catch{} a.disconnect(); }); auxSrcs = []; }
 function pause(){ if(S.playing){ S.t = songTime(); } S.playing = false; stopSource(); syncPlayIcon(); pauseVideos(); }
 function seek(t){
-  const sec = S.P.section; S.t = clamp(t, sec.a, sec.b);
+  const sec = bounds(); S.t = clamp(t, sec.a, sec.b);
   if(S.playing && !S.exporting){ play({}); }
 }
 function syncPlayIcon(){
@@ -868,6 +275,7 @@ function layoutWords(c, texts, maxW){
   let line = 0, x = 0;
   for(const it of items){ if(x > 0 && x + it.w > maxW){ line++; x = 0; } it.x = x; it.line = line; x += it.w + sp; }
   const widths = []; for(const it of items) widths[it.line] = it.x + it.w;
+  if(/[\u0590-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF]/.test(texts.join(""))) for(const it of items) it.x = widths[it.line] - it.x - it.w;
   return {items, lines: line+1, widths};
 }
 function fitPx(c, font, px, texts, maxW){
@@ -1270,8 +678,12 @@ function layer(cv, W, H){ if(!cv){ cv = document.createElement("canvas"); } if(c
 
 /* ============ stage render ============ */
 const stage = $("#stage"), sc = stage.getContext("2d");
-function renderFrame(t){
-  if(S.P && S.P.section) t = clamp(t, S.P.section.a, S.P.section.b);
+function renderFrame(tr0){
+  // tr0 is the real song time (lyrics follow it). Footage, cuts and the hook live inside the soundbite, so in
+  // review mode their clock wraps around the soundbite while the lyrics keep going through the whole song.
+  const rv = !!(S.review && S.audio), sb = S.P.section, sl = Math.max(0.5, sb.b - sb.a);
+  const tl0 = rv ? clamp(tr0, 0, S.audio.duration) : clamp(tr0, sb.a, sb.b);
+  const t = rv ? sb.a + (((tl0 - sb.a) % sl) + sl) % sl : tl0;
   const W = stage.width, H = stage.height, P = S.P, st = P.style;
   const {segs, order} = segInfo();
   let si = segs.findIndex(s => t >= s.a && t < s.b); if(si < 0) si = Math.max(0, segs.length-1);
@@ -1288,15 +700,15 @@ function renderFrame(t){
   if(st.scrim > 0){ sc.fillStyle = `rgba(6,5,10,${st.scrim})`; sc.fillRect(0,0,W,H);
     const vg = sc.createRadialGradient(W/2,H/2,Math.min(W,H)*0.3,W/2,H/2,Math.max(W,H)*0.75); vg.addColorStop(0,"rgba(0,0,0,0)"); vg.addColorStop(1,`rgba(0,0,0,${st.scrim*0.9})`); sc.fillStyle = vg; sc.fillRect(0,0,W,H); }
   // hook
-  drawHook(sc, W, H, P, t);
+  if(!rv) drawHook(sc, W, H, P, t);
   // lyrics
-  const ls = lyricState(t);
+  const ls = lyricState(tl0);
   if(ls && ls.rev > 0){
     const pr = styleDef(st.preset);
     // horizontal position: lyrics live in a column that narrows as it moves toward an edge, so they never leave the frame
     const xp = st.x ?? 0.5, Wn = W*(1 - Math.abs(xp - 0.5)*0.9), left = xp*(W - Wn);
     const yc = cy(H,st), k = st.size || 1;
-    sc.save(); sc.globalAlpha = ls.fade; sc.translate(left + Wn/2, yc); sc.scale(k, k); sc.translate(-Wn/2, -yc); pr.draw(sc, Wn, H, ls, t, st, styleOpts(st, pr)); sc.restore();
+    sc.save(); sc.globalAlpha = ls.fade; sc.translate(left + Wn/2, yc); sc.scale(k, k); sc.translate(-Wn/2, -yc); pr.draw(sc, Wn, H, ls, tl0, st, styleOpts(st, pr)); sc.restore();
   }
 }
 const HOOK_LOOKS = {plain:["#ffffff","#000000"], glow:["#ffffff","#ffd400"], pill:["#ffffff","#0a090e"], box:["#111111","#ffffff"], caption:["#ffffff","#000000"], outline:["#ffffff","#000000"], sticker:["#111111","#ffffff"], banner:["#ffffff","#ff2d3a"]};
@@ -1448,7 +860,7 @@ function drawTimelineStatic(){
   const {a,b} = S.P.section;
   // row backgrounds
   c.fillStyle = col("--ink"); c.fillRect(0, ROWS.hook[0], tlW, ROWS.end-ROWS.hook[0]);
-  c.fillStyle = "rgba(255,255,255,.035)"; ROWS.texts.forEach((r, i) => { if(i % 2) c.fillRect(0, r[0], tlW, r[1] - r[0]); }); ROWS.aux.forEach((r, i) => { if(!(i % 2)) c.fillRect(0, r[0], tlW, r[1] - r[0]); });
+  c.fillStyle = col("--stripe") || "rgba(255,255,255,.035)"; ROWS.texts.forEach((r, i) => { if(i % 2) c.fillRect(0, r[0], tlW, r[1] - r[0]); }); ROWS.aux.forEach((r, i) => { if(!(i % 2)) c.fillRect(0, r[0], tlW, r[1] - r[0]); });
   // beat grid
   const beats = beatsIn(a,b), first = beats.length ? beats[0].k : 0;
   c.font = `600 10px ${FONTS.mono}`; c.textBaseline = "middle";
@@ -1497,7 +909,7 @@ function drawTimelineStatic(){
     c.strokeStyle = sel ? "#fff" : "rgba(111,166,236,.7)"; c.lineWidth = sel ? 1.5 : 1; roundRect(c, x1 + .5, y0 + 3.5, x2 - x1 - 1, 23, 5); c.stroke();
     c.fillStyle = "#dbe8fb"; c.font = `600 10px ${FONTS.sans}`; c.textBaseline = "middle"; c.save(); c.beginPath(); c.rect(x1, y0, x2 - x1 - 4, 30); c.clip(); c.fillText(au.name + (au.mute ? "  (muted)" : ""), x1 + 6, y0 + 9); c.restore(); });
   // hidden text tracks are faded
-  tTracks().forEach((tk, i) => { if(!tk.hide || !ROWS.texts[i]) return; const [y0, y1] = ROWS.texts[i]; c.fillStyle = "rgba(27,27,27,.6)"; c.fillRect(0, y0, tlW, y1 - y0); });
+  tTracks().forEach((tk, i) => { if(!tk.hide || !ROWS.texts[i]) return; const [y0, y1] = ROWS.texts[i]; c.globalAlpha = .6; c.fillStyle = col("--panel"); c.fillRect(0, y0, tlW, y1 - y0); c.globalAlpha = 1; });
   [...ROWS.texts.map((r, i) => [i ? "t" + i : "hook", r]), ["lyrics", ROWS.words], ["cuts", ROWS.cuts], ["audio", ROWS.wave], ...ROWS.aux.map((r, j) => ["a" + j, r])].forEach(([k, [y0, y1]]) => { if(!lockState(k)) return; c.fillStyle = "rgba(0,0,0,.45)"; c.fillRect(0, y0, tlW, y1 - y0);
     c.save(); c.beginPath(); c.rect(0, y0, tlW, y1 - y0); c.clip(); c.strokeStyle = "rgba(255,255,255,.07)"; c.lineWidth = 5; c.beginPath(); for(let xx = -60; xx < tlW + 60; xx += 16){ c.moveTo(xx, y1); c.lineTo(xx + (y1 - y0), y0); } c.stroke(); c.restore(); });
   tlDirty = false;
@@ -1516,7 +928,7 @@ function drawTimeline(){
     tlc.save(); tlc.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--tape"); tlc.globalAlpha = 0.14; tlc.fillRect(xa, ya, w, h); tlc.globalAlpha = 0.9; tlc.strokeStyle = tlc.fillStyle; tlc.lineWidth = 1; tlc.setLineDash([4,3]); tlc.strokeRect(xa + .5, ya + .5, w, h); tlc.restore(); }
   if(S.playing && S.zoom > 1){ const vx = x - tlScroll.scrollLeft; if(vx > tlScroll.clientWidth*0.85 || vx < 0) tlScroll.scrollLeft = x - tlScroll.clientWidth*0.2; }
 }
-function dirty(){ tlDirty = true; saveDraft(); }
+function dirty(){ tlDirty = true; saveDraft(); slsEmit("change"); }
 
 /* timeline interaction */
 let drag = null;
@@ -1764,7 +1176,7 @@ function syncUI(){ setTimeout(syncTextEditor, 0);
   $$("#aspect button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === P.aspect)));
   const [W,H] = ASPECTS[P.aspect]; if(stage.width !== W || stage.height !== H){ stage.width = W; stage.height = H; fitStage(); }
   $("#stageHint").textContent = `${W}×${H}`;
-  updateMeta(); updateTapPad(); syncWordCard(); syncSegCard(); tlDirty = true;
+  updateMeta(); updateTapPad(); syncWordCard(); syncSegCard(); tlDirty = true; slsEmit("change");
 }
 let draftTimer;
 function saveDraft(){ clearTimeout(draftTimer); draftTimer = setTimeout(() => store.set("sls-draft", {songName:S.songName, P:S.P}), 400); queueHistory(); }
@@ -1789,7 +1201,7 @@ function syncUndoUI(){ const u = $("#undoBtn"), r = $("#redoBtn"); if(u) u.disab
 function applyProject(p, keepSong){
   const base = defaultProject();
   S.P = {...base, ...p, style:{...base.style, ...(p.style||{})}, hook:{...base.hook, ...(p.hook||{})}, cuts:{...base.cuts, ...(p.cuts||{})}, section:{...base.section, ...(p.section||{})}};
-  S.P.words = (p.words || []).map(w => ({w:String(w.w), l:+w.l||0, t:+w.t||0, d:+w.d||0.3}));
+  S.P.words = (p.words || []).map(w => { const o = {w:String(w.w), l:+w.l||0, t:+w.t||0, d:+w.d||0.3}; if(w.u) o.u = 1; if(w.alt) o.alt = String(w.alt); return o; });
   if(S.audio){ const dur = S.audio.duration; S.P.section.b = Math.min(S.P.section.b, dur); S.P.section.a = clamp(S.P.section.a, 0, Math.max(0, S.P.section.b - 1)); }
   if(!ASPECTS[S.P.aspect]) S.P.aspect = "9:16";
   const OLD = {punch:"redline", outline:"hollow", glow:"voltage", type:"typewriter"}; if(OLD[S.P.style.preset]) S.P.style.preset = OLD[S.P.style.preset];
@@ -1801,7 +1213,7 @@ function applyProject(p, keepSong){
 // play continues from wherever the playhead is (back to the start once it reaches the end)
 function playFromStart(){ play({}); }
 $("#playBtn").onclick = () => { if(S.tap) return; S.playing ? pause() : play({}); };
-$("#toStart").onclick = () => { S.t = S.P.section.a; if(S.playing) play({}); };
+$("#toStart").onclick = () => { S.t = bounds().a; if(S.playing) play({}); };
 $("#applyLyrics").onclick = () => {
   const txt = $("#lyricsText").value, nw = parseLyrics(txt), old = S.P.words;
   S.P.lyrics = txt;
@@ -2044,6 +1456,12 @@ document.addEventListener("keydown", e => {
   const typing = /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName) && document.activeElement.type !== "range" && document.activeElement.type !== "checkbox";
   if(S.tap){ if(e.code === "Space" || e.code === "Enter"){ e.preventDefault(); tapNow(); } else if(e.code === "Escape"){ pause(); endTap(false); } return; }
   if(typing) return;
+  if(document.body.dataset.step !== "design"){
+    if(document.body.dataset.step !== "lyrics" || !$("#home").hidden) return;
+    if(e.code === "Space" && document.activeElement.tagName !== "BUTTON"){ e.preventDefault(); S.playing ? pause() : play({}); }
+    else if((e.metaKey || e.ctrlKey) && e.code === "KeyZ"){ e.preventDefault(); e.shiftKey ? redo() : undo(); }
+    return;
+  }
   if((e.metaKey || e.ctrlKey) && e.code === "KeyZ"){ e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
   if((e.metaKey || e.ctrlKey) && e.code === "KeyY"){ e.preventDefault(); redo(); return; }
   if((e.metaKey || e.ctrlKey) && e.code === "KeyB"){ e.preventDefault(); addCutAt(songTime()); return; }
@@ -2109,29 +1527,31 @@ $("#clipFiles").onchange = async e => {
 };
 
 /* ============ song loading ============ */
-$("#songFile").onchange = async e => {
-  const f = e.target.files[0]; e.target.value = ""; if(!f) return;
-  pause(); toast("Reading " + f.name + "…");
-  try {
-    const buf = await ctx().decodeAudioData(await f.arrayBuffer());
-    S.audio = buf; S.peaks = computePeaks(buf); S.songName = f.name.replace(/\.[^.]+$/, ""); S.reduced = null; S.inst = null; S.instName = ""; S.vocal = "on"; syncVocalUI();
-    const draft = store.get("sls-draft");
-    if(pendingBuiltin && useBuiltin(pendingBuiltin, true)){ renderBuiltins(); return; }
-    if(draft && draft.songName === S.songName && draft.P){ applyProject(draft.P);
-      const sl = S.P.section.b - S.P.section.a; if(buf.duration <= 60 && Math.abs(sl - 15) < 0.01 && buf.duration > 15.5){ setSection(0, buf.duration); syncUI(); }
-      toast("Restored your last edit for this song"); }
-    else {
-      // a soundbite file (up to a minute) is used whole; a full song starts at its beginning with a 30s window
-      const lyrics = S.P.lyrics, len = buf.duration <= 60 ? buf.duration : 30, a = 0;
-      const p = {...S.P, song:{name:S.songName, duration:buf.duration}, section:{a, b:a+len}, words:[], lyrics};
-      const tempo = detectTempo(buf, Math.max(0,a-5), Math.min(40, buf.duration)); if(tempo){ p.bpm = tempo.bpm; p.offset = tempo.offset; }
-      applyProject(p); S.P.words = parseLyrics(lyrics); autoSpace(S.P.words); dirty();
-      const whole = buf.duration <= 60;
-      toast((tempo ? `Loaded. ${tempo.bpm} BPM detected. ` : "Loaded. ") + (whole ? `Using the whole ${buf.duration.toFixed(1)}s soundbite.` : "Starting from the beginning. Drag the highlighted window to pick your section."));
-    }
-    S.P.song = {name:S.songName, duration:buf.duration}; updateMeta(); tlDirty = true;
-  } catch(err){ toast("That file couldn't be decoded. Try an MP3, WAV or M4A."); }
-};
+$("#songFile").onchange = e => { const f = e.target.files[0]; e.target.value = ""; if(f) slsEmit("pick", f); };
+/* Decodes the file and sets up the project. Returns {restored} (true when an earlier edit of this song came back) or throws if the file can't be read. */
+async function loadSong(f){
+  pause();
+  const buf = await ctx().decodeAudioData(await f.arrayBuffer());
+  const wasDemo = S.songName === "Demo track";
+  S.audio = buf; S.peaks = computePeaks(buf); S.songName = f.name.replace(/\.[^.]+$/, ""); S.reduced = null; S.inst = null; S.instName = ""; S.vocal = "on"; syncVocalUI();
+  const draft = store.get("sls-draft");
+  let restored = false;
+  if(pendingBuiltin && useBuiltin(pendingBuiltin, true)){ renderBuiltins(); restored = true; }
+  else if(draft && draft.songName === S.songName && draft.P){ applyProject(draft.P);
+    const sl = S.P.section.b - S.P.section.a; if(buf.duration <= 60 && Math.abs(sl - 15) < 0.01 && buf.duration > 15.5){ setSection(0, buf.duration); syncUI(); }
+    restored = true; }
+  else {
+    // a soundbite file (up to a minute) is used whole; a full song starts at its beginning with a 30s window
+    const len = buf.duration <= 60 ? buf.duration : 30, a = 0;
+    const p = {...S.P, song:{name:S.songName, duration:buf.duration}, section:{a, b:a+len}, words:[], lyrics:"", markers:[], texts:[], aux:[]};
+    p.cuts = {...p.cuts, mode: p.cuts.mode === "manual" ? "beat" : p.cuts.mode, points:null, slots:null};
+    if(wasDemo) p.hook = {...p.hook, on:false};
+    const tempo = detectTempo(buf, Math.max(0,a-5), Math.min(40, buf.duration)); if(tempo){ p.bpm = tempo.bpm; p.offset = tempo.offset; }
+    applyProject(p); dirty();
+  }
+  S.P.song = {name:S.songName, duration:buf.duration}; S.t = S.P.section.a; updateMeta(); tlDirty = true;
+  return {restored};
+}
 
 /* ============ timing from an example video ============ */
 function onsetEnv(buf, fps){
@@ -2458,8 +1878,9 @@ $("#tplOpen").onchange = async e => { const f = e.target.files[0]; e.target.valu
   try { const j = JSON.parse(await f.text()), p = j.project || j; if(!Array.isArray(p.words)) throw 0; pause(); applyProject(p); toast("Template opened"); } catch { toast("That file isn't a Lyric Studio template"); } };
 function initTemplates(){
   templates = store.get("sls-templates") || []; renderTemplates(); renderBuiltins();
-  if(!window.claude?.use) return;
-  window.claude.use("db").then(db => {
+  const source = window.claude?.use ? window.claude.use("db") : (window.SLSBackend ? window.SLSBackend.db() : null);
+  if(!source) return; if(tplUnsub){ try { tplUnsub(); } catch {} tplUnsub = null; }
+  Promise.resolve(source).then(db => {
     if(!db) return; DB = db; localMode = false;
     $("#tplWhere").textContent = "Templates are shared with everyone who has this page. They keep the section, lyric timing, beat grid, cuts, style and hook. Footage isn't stored, so you can swap visuals for each new version.";
     tplUnsub = db.collection("templates").orderBy("savedAt","desc").limit(200).onSnapshot(snap => {
@@ -2523,12 +1944,13 @@ function loop(){
   requestAnimationFrame(loop);
 }
 function loopBody(){
-  const sec = S.P.section;
+  const sec = bounds();
   if(S.playing){
     let t = songTime();
     if(t >= sec.b){
       if(S.exporting){ renderFrame(sec.b - 0.001); finishExport(); }
       else if(S.tap){ pause(); endTap(S.tap.i > 0); }
+      else if(S.review){ pause(); S.t = sec.a; }
       else { S.t = sec.a; play({}); }
       t = S.t;
     }
@@ -2571,7 +1993,3 @@ function fitStage(){
 }
 function addThumbsForGen(){ S.clips.forEach(c => { if(c.kind === "gen") addThumb(c, genThumb(c.gen)); }); }
 boot();
-</script>
-
-</body>
-</html>
