@@ -39,6 +39,7 @@ window.SLSBackend = (() => {
   return {
     ApiError,
     hasPass: () => !!pass,
+    passcode: () => pass,
     health: () => call("/api/health", { timeout: 8000 }),
     /* Checks a passcode with the server and remembers it in this browser when it is right. */
     async unlock(candidate){
@@ -49,6 +50,24 @@ window.SLSBackend = (() => {
     forget(){ pass = null; try { localStorage.removeItem(KEY); } catch {} },
     transcribe: (payload, signal) => call("/api/transcribe", { method: "POST", body: payload, signal, timeout: 120000 }),
     api: (path, opts) => call(path, opts),
+    /* Sends a file (the exported video) as the request body, reporting upload progress 0..1. Answers JSON. */
+    send(path, blob, { headers = {}, onProgress = () => {}, timeout = 900000 } = {}){
+      return new Promise((resolve, reject) => {
+        const x = new XMLHttpRequest(); x.open("POST", path); x.timeout = timeout;
+        if(pass) x.setRequestHeader("authorization", "Bearer " + pass);
+        for(const [k, v] of Object.entries(headers)) x.setRequestHeader(k, v);
+        x.upload.onprogress = e => { if(e.lengthComputable) onProgress(e.loaded / e.total); };
+        x.onload = () => {
+          let d = null; try { d = JSON.parse(x.responseText); } catch {}
+          if(x.status >= 200 && x.status < 300) return resolve(d || {});
+          if(x.status === 401){ pass = null; try { localStorage.removeItem(KEY); } catch {} }
+          reject(new ApiError((d && d.error) || "http_" + x.status, (d && d.message) || `The upload failed (${x.status}).`, x.status));
+        };
+        x.onerror = () => reject(new ApiError("offline", "The studio server can't be reached.", 0));
+        x.ontimeout = () => reject(new ApiError("timeout", "The upload took too long.", 0));
+        x.send(blob);
+      });
+    },
     /* Downloads a file the backend relays (stock and AI videos), reporting progress 0..1. */
     async blob(path, { signal, onProgress = () => {} } = {}){
       let res;

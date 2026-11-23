@@ -1,5 +1,5 @@
 "use strict";
-/* The guided flow around the editor: splash, start screen, the four steps, the theme switch,
+/* The guided flow around the editor: splash, start screen, the four steps,
    and the "song in, lyrics out" job. Loaded last. Uses js/studio.js (the editor), js/backend.js,
    js/transcribe.js and js/lyrics.js. Exposes window.SLSApp. */
 window.SLSApp = (() => {
@@ -19,12 +19,11 @@ window.SLSApp = (() => {
     addEventListener("keydown", done, { once: true });
   })();
 
-  /* ---------- theme ---------- */
+  /* ---------- light or dark, in the editor only (the start screen is Stellar blue either way) ---------- */
   const SUN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></svg>';
   const MOON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.2A8.2 8.2 0 0 1 9.8 4a8.2 8.2 0 1 0 10.2 10.2z"/></svg>';
-  function paintTheme(){ const dark = root.dataset.theme !== "light"; $$("[data-theme-toggle]").forEach(b => { b.innerHTML = dark ? SUN : MOON; b.title = dark ? "Switch to the light look" : "Switch to the dark look"; });
-    const m = $('meta[name="theme-color"]'); if(m) m.content = dark ? "#080b22" : "#ffffff"; tlDirty = true; }
-  $$("[data-theme-toggle]").forEach(b => b.onclick = () => { root.dataset.theme = root.dataset.theme === "light" ? "dark" : "light"; keep.set("sls-theme", root.dataset.theme); paintTheme(); });
+  function paintTheme(){ const dark = root.dataset.theme === "dark"; $$("[data-theme-toggle]").forEach(b => { b.innerHTML = dark ? SUN : MOON; b.title = dark ? "Switch to the light look" : "Switch to the dark look"; }); tlDirty = true; }
+  $$("[data-theme-toggle]").forEach(b => b.onclick = () => { root.dataset.theme = root.dataset.theme === "dark" ? "light" : "dark"; keep.set("sls-theme", root.dataset.theme); paintTheme(); });
   paintTheme();
 
   /* ---------- steps ---------- */

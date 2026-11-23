@@ -60,7 +60,8 @@ textarea:focus,input:focus,select:focus{box-shadow:none!important;border-color:v
 :root:not([data-theme="light"]) .bar i{background:#fff}
 #stage{border-radius:2px;box-shadow:0 0 0 1px var(--line)}
 .viewport{background:var(--canvas)}
-.preset,.aa,.clipt,.fx-tile{border-radius:4px}
+.preset,.aa,.clipt,.fx-tile,.ph-tile,.mb-mosaic{border-radius:4px}
+.mb-card,.mb-drop{border-radius:6px}
 .preset[aria-pressed="true"]{border-color:var(--text);box-shadow:0 0 0 1px var(--text)}
 .tappad{border-radius:6px}
 
@@ -119,6 +120,8 @@ textarea:focus,input:focus,select:focus{box-shadow:none!important;border-color:v
 .how{border-top:1px solid rgba(255,255,255,.45);padding-top:16px;margin-top:0}
 .how li b{background:none;color:#fff;font:400 12px var(--ui);width:auto;height:auto}
 .how li strong{color:#fff}
+.home-legal{margin:18px 0 0;font-size:12px;color:rgba(255,255,255,.6)}
+.home .home-legal a{color:rgba(255,255,255,.8)}
 .projects{border-top:1px solid rgba(255,255,255,.45);padding-top:16px}
 .pj-head h2{color:#fff}
 .pj-card{background:transparent;backdrop-filter:none;border-color:rgba(255,255,255,.4);border-radius:2px}

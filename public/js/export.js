@@ -217,5 +217,6 @@ window.SLSExport = (() => {
       const v = $("#exVideo"); v.src = URL.createObjectURL(blob); $("#exRun").hidden = true; $("#exDone").hidden = false; $("#exNote").textContent = `${(blob.size / 1048576).toFixed(1)} MB ${exExt.toUpperCase()}, recorded in real time.`; };
     S.t = S.P.section.a; S.exporting = { rec }; S.review = false; renderFrame(S.t); rec.start(250); play({ dest });
   }
-  return { open, formats: FORMATS };
+  /* the last finished export, for posting it (js/publish.js) */
+  return { open, formats: FORMATS, get result(){ return result; }, get audioCodec(){ return result && support && support[result.f.id] ? support[result.f.id].audio : null; } };
 })();

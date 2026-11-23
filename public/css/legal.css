@@ -1,0 +1,16 @@
+/* Terms and Privacy pages: the Stellar Music look, plain and readable */
+:root{--stellar:#0626c7;--text:#1f1f1f;--muted:#6b6b6b;--line:#e2e2e2}
+*{box-sizing:border-box}
+body{margin:0;font:16px/1.6 "Inter Tight","Helvetica Neue",Helvetica,Arial,system-ui,sans-serif;color:var(--text);background:#fff;letter-spacing:-.005em}
+header{background:var(--stellar);padding:18px clamp(16px,4vw,40px)}
+.mark{color:#fff;text-decoration:none;font-size:13px;opacity:.85}
+.mark b{font-style:italic;font-weight:600;font-size:20px;line-height:1;letter-spacing:-.03em;margin-right:6px}
+main{max-width:720px;margin:0 auto;padding:48px clamp(16px,4vw,40px) 32px}
+h1{font-weight:500;font-size:clamp(32px,5vw,48px);line-height:1.05;letter-spacing:-.03em;margin:0}
+.sub{font-style:italic;font-weight:300;color:var(--muted);margin:8px 0 32px}
+h2{font-weight:500;font-size:20px;letter-spacing:-.01em;margin:32px 0 8px}
+ul{padding-left:20px}
+li{margin:6px 0}
+a{color:var(--stellar)}
+footer{max-width:720px;margin:0 auto;padding:24px clamp(16px,4vw,40px) 48px;border-top:1px solid var(--line);font-size:13px;color:var(--muted)}
+footer a{color:var(--muted)}

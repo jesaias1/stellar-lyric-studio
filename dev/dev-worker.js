@@ -6,8 +6,9 @@
 import worker from "../src/worker.js";
 import sample from "./whisper-sample.json";
 
-/* Stand-ins for Pixabay and Higgsfield when their keys aren't in .dev.vars, so the footage panel can be tried
-   locally. They hand back a real free video file (Pexels CDN), so downloading and importing is exercised too. */
+/* Stand-ins for Pixabay, SerpApi (Pinterest) and Higgsfield when their keys aren't in .dev.vars, so the footage and
+   photo panels can be tried locally. They hand back real files (a Pexels video, picsum.photos images), so
+   downloading and importing is exercised too. */
 const SAMPLE_VIDEO = "https://videos.pexels.com/video-files/3195394/3195394-uhd_2560_1440_25fps.mp4";
 const realFetch = globalThis.fetch, hfPolls = new Map();
 async function fakeFetch(input, init) {
@@ -17,6 +18,18 @@ async function fakeFetch(input, init) {
     const q = new URL(u).searchParams.get("q") || "clip";
     return j({ total: 3, totalHits: 3, hits: [1, 2, 3].map(n => ({ id: 1000 + n, pageURL: "https://pixabay.com/videos/", tags: `${q}, sample ${n}`, duration: 12 + n, user: "Sample creator",
       videos: { medium: { url: SAMPLE_VIDEO, width: 2560, height: 1440, size: 4802869, thumbnail: "https://images.pexels.com/videos/3195394/free-video-3195394.jpg?w=320" }, tiny: { url: SAMPLE_VIDEO, width: 2560, height: 1440, size: 4802869 } } })) });
+  }
+  if (u.startsWith("https://pixabay.com/api/?")) {   // photos: real images from picsum.photos
+    const q = new URL(u).searchParams.get("q") || "photo", seed = [...q].reduce((a, c) => a + c.charCodeAt(0), 0);
+    return j({ total: 20, totalHits: 20, hits: Array.from({ length: 20 }, (_, n) => { const id = (seed + n * 7) % 1000;
+      return { id: 2000 + id, pageURL: "https://picsum.photos/", tags: `${q}, sample ${n}`, user: "Sample photographer", imageWidth: 1080, imageHeight: 1920,
+        webformatURL: `https://picsum.photos/id/${id}/270/480`, largeImageURL: `https://picsum.photos/id/${id}/1080/1920` }; }) });
+  }
+  if (u.startsWith("https://serpapi.com/search.json")) {
+    const q = new URL(u).searchParams.get("q") || "pin", seed = [...q].reduce((a, c) => a + c.charCodeAt(0), 0);
+    return j({ pins: Array.from({ length: 20 }, (_, n) => { const id = (seed * 3 + n * 11) % 1000;
+      return { pin_id: String(9000 + id), title: `${q} (sample pin ${n})`, original: `https://picsum.photos/id/${id}/1080/1920`, thumbnail: `https://picsum.photos/id/${id}/270/480`,
+        original_width: 1080, original_height: 1920, pinner: { name: "Sample pinner" }, link: "https://picsum.photos/" }; }) });
   }
   if (u.startsWith("https://api.higgsfield.ai/estimate/")) return j({ usd: "0.35" });
   if (u.startsWith("https://api.higgsfield.ai/requests/")) {
@@ -30,7 +43,7 @@ async function fakeFetch(input, init) {
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
-    if (!env.PIXABAY_KEY && !env.PEXELS_KEY && !env.HF_KEY_ID) { env = { ...env, PIXABAY_KEY: "dev-sample", HF_KEY_ID: "dev", HF_KEY_SECRET: "dev" }; globalThis.fetch = fakeFetch; }
+    if (!env.PIXABAY_KEY && !env.PEXELS_KEY && !env.HF_KEY_ID && !env.SERPAPI_KEY) { env = { ...env, PIXABAY_KEY: "dev-sample", HF_KEY_ID: "dev", HF_KEY_SECRET: "dev", SERPAPI_KEY: "dev-sample" }; globalThis.fetch = fakeFetch; }
     const real = env.AI || (env.CF_API_TOKEN && env.CF_ACCOUNT_ID);
     if (real || url.pathname !== "/api/transcribe" || request.method !== "POST") return worker.fetch(request, env, ctx);
     let meta = {};

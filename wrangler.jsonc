@@ -15,6 +15,10 @@
 	// Shared template library for the team. Off for now: creating the storage needs account-level access on
 	// Ana's account. To turn it on, uncomment this line and deploy (the storage is then created automatically).
 	// "kv_namespaces": [{ "binding": "TEMPLATES" }],
+	// Posting to Instagram: Instagram only takes a video by link, so the video waits here for up to 3 hours.
+	// Create a KV namespace in the Cloudflare dashboard (Storage & Databases > KV), paste its ID below and uncomment.
+	// (When TEMPLATES is on, it is used for this too and PUBLISH isn't needed.)
+	// "kv_namespaces": [{ "binding": "PUBLISH", "id": "paste-the-namespace-id-here" }],
 	// A cap of 120 API requests a minute per visitor
 	"ratelimits": [{ "name": "API_LIMIT", "namespace_id": "1001", "simple": { "limit": 120, "period": 60 } }],
 	"observability": { "enabled": true }

@@ -1,6 +1,6 @@
 {
   "name": "Stellar Lyric Studio",
-  "short_name": "Stellar",
+  "short_name": "SLS",
   "description": "Lyric videos for social media from just a song.",
   "start_url": "/",
   "display": "standalone",

@@ -116,6 +116,7 @@ input[type=color]{width:34px;height:28px;border:1px solid var(--line-2);border-r
 .chips button[aria-pressed="true"]{border-color:var(--tape);color:var(--text);background:color-mix(in srgb,var(--tape) 16%,transparent)}
 .preset{position:relative}
 .preset .fav{position:absolute;top:4px;right:6px;font-size:11px;color:var(--tape)}
+.preset .rec{position:absolute;top:4px;left:6px;font-size:11px;font-style:normal;line-height:1;color:#ffe9a8;text-shadow:0 0 6px rgba(255,214,120,.8);opacity:.9;pointer-events:auto}
 .srow{display:grid;grid-template-columns:96px minmax(0,1fr);gap:8px;align-items:center;font-size:12.5px;color:var(--muted)}
 .srow select{padding:6px 8px}
 .ib-row{display:flex;gap:2px;max-width:100%;background:var(--ink);border:1px solid var(--line-2);border-radius:8px;padding:3px;width:max-content}

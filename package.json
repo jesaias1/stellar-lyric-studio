@@ -8,6 +8,9 @@
     "deploy": "wrangler deploy -c wrangler.jsonc",
     "logs": "wrangler tail"
   },
+  "dependencies": {
+    "@vercel/blob": "^2.0.0"
+  },
   "devDependencies": {
     "mediabunny": "1.65.2",
     "wrangler": "^4.163.0"

@@ -1,14 +1,15 @@
 "use strict";
-/* Footage without files on your computer: free stock video search (Pixabay, Pexels) and AI-generated
-   background clips written from the lyrics (Higgsfield). Both add clips to the same footage pool as imported files.
+/* Footage without files on your computer: photos picked for the song (js/photos.js fills that tab), free stock
+   video search (Pixabay, Pexels) and AI-generated background clips written from the lyrics (Higgsfield). Both add clips to the same footage pool as imported files.
    The backend side is src/media.js. Loaded after app.js. */
 window.SLSFootage = (() => {
   const api = window.SLSBackend, pane = $('[data-pane="clips"]');
   const IDEAS = ["night city", "snow falling", "ocean waves", "neon lights", "forest fog", "sunset clouds", "rain window", "candle light", "stars sky", "road trip"];
   const panel = document.createElement("div"); panel.className = "fx-wrap";
   panel.innerHTML = `
-    <div class="fx-tabs" role="tablist"><button data-fx="stock" aria-selected="true">Free videos</button><button data-fx="ai" aria-selected="false">AI background</button></div>
-    <div class="fx-body" data-fxp="stock">
+    <div class="fx-tabs" role="tablist"><button data-fx="photos" aria-selected="true">Photos</button><button data-fx="stock" aria-selected="false">Free videos</button><button data-fx="ai" aria-selected="false">AI background</button></div>
+    <div class="fx-body" data-fxp="photos"></div>
+    <div class="fx-body" data-fxp="stock" hidden>
       <form class="fx-search" id="stockForm" autocomplete="off"><input type="search" id="stockQ" placeholder="Search: snow, city at night, ocean…" aria-label="Search free videos"><button class="btn small primary">Search</button></form>
       <div class="chips fx-ideas" id="stockIdeas">${IDEAS.map(q => `<button type="button" data-q="${q}">${q}</button>`).join("")}</div>
       <div class="fx-msg hint" id="stockMsg"></div>
@@ -17,7 +18,7 @@ window.SLSFootage = (() => {
       <div class="hint fx-credit" id="stockCredit"></div>
     </div>
     <div class="fx-body" data-fxp="ai" hidden>
-      <div class="fx-msg hint" id="aiMsg">Stellar reads your lyrics, writes a scene for each part of the song, and Higgsfield turns each scene into a background clip.</div>
+      <div class="fx-msg hint" id="aiMsg">SLS reads your lyrics, writes a scene for each part of the song, and Higgsfield turns each scene into a background clip.</div>
       <label class="field"><span class="hint">Mood or setting (optional)</span><input type="text" id="aiMood" placeholder="e.g. warm Christmas night, snow, candlelight"></label>
       <div class="fx-opts"><span class="hint">Clips</span><div class="seg" id="aiCount"><button data-v="1">1</button><button data-v="2">2</button><button data-v="3">3</button><button data-v="4">4</button></div>
         <span class="hint">Length</span><div class="seg" id="aiLen"><button data-v="5">5 s</button><button data-v="10">10 s</button></div></div>

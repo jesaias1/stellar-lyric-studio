@@ -15,12 +15,20 @@
  *   POST   /api/bg/estimate       price of an AI background video (Higgsfield)  }
  *   POST   /api/bg/generate       start an AI background video                  }
  *   GET    /api/bg/status/:id     is it done yet                                }
+ *   GET    /api/photos/search     photos: Pexels, Pixabay, Pinterest (SerpApi)  } see src/photos.js
+ *   POST   /api/photos/pick       keywords + lyrics in, the best photos out     }
+ *   POST   /api/photos/rank       ranks a moodboard's images against the song   }
+ *   POST   /api/moodboard/pinterest  a public Pinterest board's latest pins     }
+ *   POST   /api/publish/...       link YouTube, Instagram, TikTok accounts and post to them } see src/publish.js
+ *   GET    /api/oauth/:platform   where a login comes back (no passcode, signed state)    }
  *
  * Every route except /api/health needs the studio passcode in an "Authorization: Bearer ..." header.
  * The passcode is the SLS_PASSCODE secret (set with `npx wrangler secret put SLS_PASSCODE`).
  */
 
 import { mediaRoute, mediaHealth } from "./media.js";
+import { photosRoute, photosHealth } from "./photos.js";
+import { publishRoute, publishPublicRoute, publishHealth } from "./publish.js";
 
 const MODEL = "@cf/openai/whisper-large-v3-turbo";
 const MAX_AUDIO_B64 = 6_000_000;      // about 4.4 MB of audio per request; the app sends ~1 MB chunks
@@ -44,8 +52,13 @@ async function route(request, env, url) {
   const path = url.pathname.replace(/\/+$/, ""), method = request.method;
 
   if (path === "/api/health" && method === "GET") {
-    return json({ ok: true, ai: hasAI(env), locked: !!env.SLS_PASSCODE, templates: !!env.TEMPLATES, ...mediaHealth(env) });
+    return json({ ok: true, ai: hasAI(env), locked: !!env.SLS_PASSCODE, templates: !!env.TEMPLATES, ...mediaHealth(env), ...photosHealth(env), ...publishHealth(env) });
   }
+
+  // Logins coming back from YouTube, Instagram and TikTok, and the video Instagram fetches: these come from
+  // other servers, so they carry their own signatures instead of the passcode.
+  const pub = await publishPublicRoute(request, env, url, path, method);
+  if (pub) return pub;
 
   // Everything below is private.
   const denied = await guard(request, env);
@@ -61,6 +74,10 @@ async function route(request, env, url) {
 
   const media = await mediaRoute(request, env, url, path, method, { hasAI: hasAI(env), runModel, json });
   if (media) return media;
+  const photos = await photosRoute(request, env, url, path, method, { hasAI: hasAI(env), runModel, json });
+  if (photos) return photos;
+  const publish = await publishRoute(request, env, url, path, method, { json });
+  if (publish) return publish;
 
   return json({ error: "not_found", message: "No such endpoint." }, 404);
 }

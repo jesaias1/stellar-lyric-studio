@@ -7,3 +7,19 @@ SLS_PASSCODE=choose-a-long-passcode
 # A Cloudflare account ID and an API token that has "Workers AI" access.
 # CF_ACCOUNT_ID=your-cloudflare-account-id
 # CF_API_TOKEN=your-workers-ai-api-token
+
+# Optional, local only: real footage and photo search instead of the samples.
+# PIXABAY_KEY=your-pixabay-key
+# PEXELS_KEY=your-pexels-key
+# SERPAPI_KEY=your-serpapi-key   (Pinterest in the image grabber)
+
+# Optional: posting to YouTube, Instagram and TikTok (see the setup guide). Local testing needs the
+# http://localhost:8787/api/oauth/... addresses registered with each platform, which TikTok and Instagram refuse
+# (they want https), so test those two on the live site.
+# TOKEN_KEY=a-long-random-string
+# GOOGLE_CLIENT_ID=...apps.googleusercontent.com
+# GOOGLE_CLIENT_SECRET=...
+# INSTAGRAM_APP_ID=...
+# INSTAGRAM_APP_SECRET=...
+# TIKTOK_CLIENT_KEY=...
+# TIKTOK_CLIENT_SECRET=...

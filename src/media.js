@@ -4,7 +4,7 @@
  *   GET  /api/stock/search?q=&orientation=portrait|landscape|square&page=1
  *        Searches Pixabay (PIXABAY_KEY) and Pexels (PEXELS_KEY), whichever keys are set.
  *   GET  /api/media?u=<url>&s=<signature>
- *        Streams a video file to the browser. Only URLs this backend handed out (signed) are relayed, so it
+ *        Streams a video or photo file to the browser. Only URLs this backend handed out (signed) are relayed, so it
  *        can't be used as an open proxy. Needed because most video hosts don't allow a web page to read their
  *        files, and the app must read them to put them in the exported video.
  *   POST /api/bg/prompts   {lyrics, count, mood}            -> {prompts: [...]}   ideas written by an AI from the lyrics
@@ -42,15 +42,16 @@ async function sign(env, u) {
   const mac = new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(u)));
   return [...mac.slice(0, 16)].map(b => b.toString(16).padStart(2, "0")).join("");
 }
-async function mediaLink(env, u) { return `/api/media?u=${encodeURIComponent(u)}&s=${await sign(env, u)}`; }
+export async function mediaLink(env, u) { return `/api/media?u=${encodeURIComponent(u)}&s=${await sign(env, u)}`; }
 
 async function relay(env, url, request, json) {
   const u = url.searchParams.get("u") || "", s = url.searchParams.get("s") || "";
   if (!/^https:\/\//.test(u) || s !== (await sign(env, u))) return json({ error: "bad_link", message: "That link isn't valid." }, 403);
   const up = await fetch(u, { redirect: "follow", headers: { "user-agent": "StellarLyricStudio/1.0" } });
-  if (!up.ok || !up.body) return json({ error: "upstream", message: `The video host answered ${up.status}.` }, 502);
-  let type = up.headers.get("content-type") || "";
-  if (!/^video\//.test(type)) type = /\.webm(\?|$)/i.test(u) ? "video/webm" : "video/mp4";
+  if (!up.ok || !up.body) return json({ error: "upstream", message: `The host answered ${up.status}.` }, 502);
+  let type = (up.headers.get("content-type") || "").split(";")[0].trim();
+  const pic = u.match(/\.(jpe?g|png|webp|gif|avif)(\?|$)/i);
+  if (!/^(video|image)\//.test(type)) type = pic ? "image/" + pic[1].toLowerCase().replace("jpg", "jpeg") : /\.webm(\?|$)/i.test(u) ? "video/webm" : "video/mp4";
   const headers = { "content-type": type, "cache-control": "private, max-age=3600" };
   const len = up.headers.get("content-length"); if (len) headers["content-length"] = len;
   return new Response(up.body, { status: 200, headers });

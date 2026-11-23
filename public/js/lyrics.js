@@ -44,7 +44,7 @@ window.SLSLyricsUI = (() => {
   }
   function emptyState(){
     const d = document.createElement("div"); d.className = "ly-empty";
-    d.innerHTML = `<b>No lyrics yet</b><span>Let Stellar listen to the song and write them, or paste the lyrics if you have them.</span><div class="row" style="justify-content:center"><button class="btn primary" data-empty="listen">Listen to the song</button><button class="btn" data-empty="paste">Paste lyrics</button></div>`;
+    d.innerHTML = `<b>No lyrics yet</b><span>Let SLS listen to the song and write them, or paste the lyrics if you have them.</span><div class="row" style="justify-content:center"><button class="btn primary" data-empty="listen">Listen to the song</button><button class="btn" data-empty="paste">Paste lyrics</button></div>`;
     return d;
   }
   function syncBars(){

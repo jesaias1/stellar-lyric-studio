@@ -1,5 +1,6 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
+<!-- the editor can switch between light and dark (js/app.js); the blue start screen looks the same in both -->
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -11,14 +12,13 @@
 <link rel="apple-touch-icon" href="img/icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
 <script>
-/* pick the theme before the first paint so there is no flash */
+/* the editor's light or dark look, picked before the first paint so there is no flash. Light (the Stellar look) unless dark was chosen. */
 (function(){ var t = null; try { t = localStorage.getItem("sls-theme"); } catch(e){}
-  if(t !== "light" && t !== "dark") t = window.matchMedia && matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
-  document.documentElement.dataset.theme = t; })();
+  document.documentElement.dataset.theme = t === "dark" ? "dark" : "light"; })();
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:ital,wdth,wght@1,125,800&family=Archivo+Black&family=Archivo+Narrow:wght@500;600&family=Barlow+Condensed:ital,wght@0,800;1,800&family=Bebas+Neue&family=Caveat:wght@700&family=Permanent+Marker&family=Big+Shoulders+Display:wght@800&family=Do+Hyeon&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,600&family=Instrument+Serif:ital@0;1&family=Inter+Tight:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,500&family=Silkscreen&family=JetBrains+Mono:wght@400;600&family=Oswald:wght@600&family=Playfair+Display:ital,wght@1,500&family=Poppins:wght@700&family=Six+Caps&family=Unbounded:wght@600;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:ital,wdth,wght@1,125,800&family=Archivo+Black&family=Archivo+Narrow:wght@500;600&family=Barlow+Condensed:ital,wght@0,800;1,800&family=Bebas+Neue&family=Caveat:wght@700&family=Permanent+Marker&family=Big+Shoulders+Display:wght@800&family=Do+Hyeon&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,600&family=Instrument+Serif:ital@0;1&family=Inter+Tight:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,500&family=Silkscreen&family=JetBrains+Mono:wght@400;600&family=Oswald:wght@600&family=Playfair+Display:ital,wght@1,500&family=Poppins:wght@700&family=Six+Caps&family=Unbounded:wght@600;800&family=Syne:wght@800&family=DM+Serif+Display:ital@0;1&family=Bungee&family=Monoton&family=Rubik+Mono+One&family=Pacifico&family=Space+Mono:wght@700&display=swap">
 <link rel="stylesheet" href="css/studio.css">
 <link rel="stylesheet" href="css/sls.css">
 <link rel="stylesheet" href="css/brand.css">
@@ -43,18 +43,17 @@
 <!-- ============ start screen: drop a song ============ -->
 <section class="home" id="home" aria-label="Start">
   <div class="home-bar">
-    <div class="brand"><span class="wordmark">Stellar</span><span class="brand-sub">lyric studio</span></div>
+    <div class="brand"><span class="wordmark">SLS</span><span class="brand-sub">Stellar Lyric Studio</span></div>
     <nav class="home-nav" aria-label="Start screen"><a href="#projects" id="navProjects">projects</a><a href="#" id="navDemo">demo</a><a href="https://stellarmusic.dk" target="_blank" rel="noopener">stellar music</a></nav>
     <div class="home-bar-r">
       <button class="btn ghost small" id="homeBack" hidden>Back to my project</button>
-      <button class="icon-btn" data-theme-toggle aria-label="Switch between light and dark"></button>
     </div>
   </div>
 
   <div class="home-main">
     <div class="home-copy">
       <h1>Your song in. Lyric video out.</h1>
-      <p>Drop a track and Stellar times every word to the music. Check the lyrics, pick a look, and export a video ready for Instagram, TikTok and Shorts.</p>
+      <p>Drop a track and SLS times every word to the music. Check the lyrics, pick a look, and export a video ready for Instagram, TikTok and Shorts.</p>
     </div>
 
     <!-- state 1: waiting for a song (and, if you have them, the lyrics) -->
@@ -110,6 +109,7 @@
       <li><b>2</b><span><strong>Check the lyrics.</strong> Anything the AI wasn't sure about is marked for you.</span></li>
       <li><b>3</b><span><strong>Pick a style</strong> and export the video.</span></li>
     </ol>
+    <p class="home-legal"><a href="/terms.html">Terms of Service</a> · <a href="/privacy.html">Privacy Policy</a> · Stellar Music, Copenhagen</p>
   </div>
 </section>
 
@@ -136,7 +136,7 @@
 
 <div class="app">
   <header class="top">
-    <button class="brand" id="brandBtn" title="Start screen"><span class="wordmark">Stellar</span><span class="brand-sub">lyric studio</span></button>
+    <button class="brand" id="brandBtn" title="Start screen"><span class="wordmark">SLS</span><span class="brand-sub">Stellar Lyric Studio</span></button>
     <nav class="steps" id="steps" aria-label="Steps">
       <button data-go="song"><i>01</i><span>song</span></button>
       <button data-go="lyrics"><i>02</i><span>lyrics</span></button>
@@ -314,7 +314,7 @@
           <button class="btn" id="tplSave">Save template</button>
           <div class="hint" id="tplWhere">Templates keep the section, lyric timing, beat grid, cuts, style and hook. Footage is not stored, so you can swap visuals for each new version.</div>
         </div>
-        <div class="label">Stellar templates</div>
+        <div class="label">SLS templates</div>
         <div class="tlist" id="builtinList"></div>
         <div class="hint">Pick a template, then load that song (or load the song first). The studio finds the section in the song by its sound and lines everything up.</div>
         <div class="label">Saved templates</div>
@@ -495,13 +495,16 @@
 <script src="js/backend.js"></script>
 <script src="js/studio.js"></script>
 <script src="js/styles-extra.js"></script>
+<script src="js/styles-more.js"></script>
 <script src="js/transcribe.js"></script>
 <script src="js/lyrics.js"></script>
 <script src="js/app.js"></script>
 <script src="js/footage.js"></script>
+<script src="js/photos.js"></script>
 <script src="js/templates.js"></script>
 <script src="js/safezones.js"></script>
 <script src="js/export.js"></script>
+<script src="js/publish.js"></script>
 <script src="js/projects.js"></script>
 </body>
 </html>

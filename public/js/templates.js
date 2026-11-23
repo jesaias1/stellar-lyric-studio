@@ -58,9 +58,9 @@ window.SLSTemplates = (() => {
     if(parts.format) data.format = { aspect: P.aspect, length: +(P.section.b - P.section.a).toFixed(2) };
     if(parts.footage) data.footage = {
       gens: S.clips.filter(c => c.kind === "gen" && c.on).map(c => c.name),
-      stock: S.clips.filter(c => c.src && c.src.kind === "stock" && c.on).map(c => ({ name: c.name, credit: c.credit, ...c.src })),
+      stock: S.clips.filter(c => c.src && (c.src.kind === "stock" || c.src.kind === "photo") && c.on).map(c => ({ name: c.name, credit: c.credit, ...c.src })),
       scenes: S.clips.filter(c => c.src && c.src.kind === "ai").map(c => c.src.prompt).filter(Boolean),
-      own: S.clips.filter(c => c.kind !== "gen" && !c.src && c.on).length };
+      own: S.clips.filter(c => c.kind !== "gen" && (!c.src || c.src.kind === "board") && c.on).length };
     if(parts.lyrics){ const { lyrics, words, section, bpm, offset, markers, srcLyrics, lang, song } = P; data.lyrics = clone({ lyrics, words, section, bpm, offset, markers, srcLyrics, lang, song, points: P.cuts.points || null, slots: P.cuts.slots || null }); }
     return data;
   }
@@ -88,12 +88,12 @@ window.SLSTemplates = (() => {
     const missing = (f.stock || []).filter(s => !S.clips.some(c => c.src && c.src.file === s.file));
     if(missing.length){
       if(!(await SLSApp.ensurePass())) return;
-      toast(`Fetching ${missing.length} stock clip${missing.length === 1 ? "" : "s"} for this template…`);
-      for(const s of missing){ try { const blob = await SLSBackend.blob(s.file); await addFootage([blob], [{ name: s.name, kind: "video", credit: s.credit, src: { kind: "stock", file: s.file, thumb: s.thumb, page: s.page, author: s.author, source: s.source, title: s.title } }], { quiet: true }); }
+      toast(`Fetching ${missing.length} stock file${missing.length === 1 ? "" : "s"} for this template…`);
+      for(const s of missing){ try { const blob = await SLSBackend.blob(s.file), photo = s.kind === "photo"; await addFootage([blob], [{ name: s.name, kind: photo ? "img" : "video", credit: s.credit, src: { kind: photo ? "photo" : "stock", file: s.file, thumb: s.thumb, page: s.page, author: s.author, source: s.source, title: s.title } }], { quiet: true }); }
         catch(err){ console.warn("stock clip unavailable", err); } }
     }
     if(f.scenes && f.scenes.length && window.SLSFootage && SLSFootage.setScenes) SLSFootage.setScenes(f.scenes);
-    if(f.own) toast(`This template also used ${f.own} clip${f.own === 1 ? "" : "s"} from a computer. Import them again in the Clips tab if you want them.`);
+    if(f.own) toast(`This template also used ${f.own} clip${f.own === 1 ? "" : "s"} from a computer or a moodboard. Add them again in the Clips tab if you want them.`);
   }
   // templates saved by the old version: a whole project
   function legacyData(t){ const p = t.project || {}; return { look: p.style, text: { hook: p.hook, texts: p.texts || [], tTracks: p.tTracks || [{}] }, cuts: p.cuts, format: { aspect: p.aspect, length: p.section ? p.section.b - p.section.a : null },

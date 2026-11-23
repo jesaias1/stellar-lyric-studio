@@ -817,9 +817,10 @@ function drawStylePreview(now){
   const vh = cv.width*16/9; c.setTransform(1,0,0,1,0,0); c.clearRect(0,0,cv.width,cv.height); c.save(); c.translate(0, (cv.height - vh)/2); drawStyleCard(c, cv.width, vh, pr, t, true); c.restore();
 }
 const FAVKEY = "sls-favs"; let favs = new Set(store.get(FAVKEY) || []), styleCat = "all";
+let styleRecs = new Set();   // styles that suit the current song (js/styles-more.js fills this)
 function renderPresetGrid(){
   const list = PRESETS.filter(p => styleCat === "all" || (styleCat === "fav" ? favs.has(p.id) : p.cat === styleCat));
-  $("#presets").innerHTML = list.length ? list.map(p => `<button class="preset" data-id="${p.id}" aria-pressed="${p.id === S.P.style.preset}"><canvas data-id="${p.id}" width="150" height="200"></canvas><span>${p.name}</span>${favs.has(p.id) ? '<i class="fav">★</i>' : ""}</button>`).join("")
+  $("#presets").innerHTML = list.length ? list.map(p => `<button class="preset" data-id="${p.id}" aria-pressed="${p.id === S.P.style.preset}"><canvas data-id="${p.id}" width="150" height="200"></canvas><span>${p.name}</span>${favs.has(p.id) ? '<i class="fav">★</i>' : ""}${styleRecs.has(p.id) ? `<i class="rec" title="Suits this song${window.SLSStyleRecs && SLSStyleRecs.why ? " (" + SLSStyleRecs.why + ")" : ""}">✦</i>` : ""}</button>`).join("")
     : `<div class="empty" style="grid-column:1/-1">No favourites yet. Pick a style and tap the star.</div>`;
   $$("#styleCats button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === styleCat)));
   renderPresetThumbs();
@@ -1511,7 +1512,7 @@ function genThumb(g){ const cv = document.createElement("canvas"); cv.width = 12
 function addThumb(c, url){ c.thumb = url; c.thumbImg = new Image(); c.thumbImg.onload = () => tlDirty = true; c.thumbImg.src = url; }
 function renderClips(){
   $("#clipGrid").innerHTML = S.clips.map(c => `<button class="clipt${c.on?"":" off"}" data-id="${c.id}" aria-pressed="${c.on}" title="${c.on?"In":"Out of"} the shuffle">
-    <img alt="" src="${c.thumb||""}"><span class="cap"><span>${esc(c.name)}</span><span class="kind">${c.kind==="gen"?"Built-in":c.src&&c.src.kind==="ai"?"AI":c.src&&c.src.kind==="stock"?"Stock":c.kind==="img"?"Photo":"Video"}</span></span>
+    <img alt="" src="${c.thumb||""}"><span class="cap"><span>${esc(c.name)}</span><span class="kind">${c.kind==="gen"?"Built-in":c.src&&c.src.kind==="ai"?"AI":c.src&&c.src.kind==="stock"?"Stock":c.src&&c.src.kind==="photo"&&c.src.source==="Pinterest"?"Pinterest":c.src&&c.src.kind==="board"?"Moodboard":c.kind==="img"?"Photo":"Video"}</span></span>
     ${c.kind!=="gen"?`<span class="x" data-rm="${c.id}" role="button" aria-label="Remove ${esc(c.name)}">×</span>`:""}</button>`).join("");
 }
 $("#clipGrid").onclick = e => {
