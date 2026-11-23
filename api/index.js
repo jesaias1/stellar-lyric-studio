@@ -16,8 +16,9 @@ export default function handler(request) {
   const url = new URL(request.url), p = url.searchParams.get("p");
   if (p != null) { url.searchParams.delete("p"); url.pathname = "/api/" + p; request = new Request(url, request); }
   return worker.fetch(request, {
-    SLS_PASSCODE: process.env.SLS_PASSCODE,
-    CF_ACCOUNT_ID: process.env.CF_ACCOUNT_ID,
-    CF_API_TOKEN: process.env.CF_API_TOKEN,
+    // trimmed: a value pasted or piped in often carries a stray newline
+    SLS_PASSCODE: (process.env.SLS_PASSCODE || "").trim() || undefined,
+    CF_ACCOUNT_ID: (process.env.CF_ACCOUNT_ID || "").trim() || undefined,
+    CF_API_TOKEN: (process.env.CF_API_TOKEN || "").trim() || undefined,
   });
 }
