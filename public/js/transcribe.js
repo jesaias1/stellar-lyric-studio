@@ -61,7 +61,8 @@ window.SLSTranscribe = (() => {
   /* ---------- text helpers ---------- */
   const norm = w => w.normalize("NFKC").toLowerCase().replace(/[\p{P}\p{S}\s]/gu, "");
   const tidy = w => w.replace(/^[\s.,;:"“”„«»…\-–—(\[♪♫]+|[\s.,;:"“”„«»…\-–—)\]♪♫]+$/gu, "");
-  const JUNK = /subtit|amara\.org|thanks? (you )?for watching|sottotitoli|untertitel|sous-titres|ondertitel|napisy|www\.|https?:|\.com\b/i;
+  // Whisper was trained on subtitled video, so over music or silence it sometimes "hears" a subtitle credit
+  const JUNK = /subtit|amara\.org|thanks? (you )?for watching|sottotitoli|untertitel|sous-titres|ondertitel|napisy|teksting|tekstet av|tekster(ne)? af|tekstning|undertekst|textning|svensktext|svenska undertexter|nicolai winther|www\.|https?:|\.com\b/i;
 
   /* ---------- one pass: stitch the pieces back together ---------- */
   function stitch(cuts, results, dur){
@@ -122,7 +123,8 @@ window.SLSTranscribe = (() => {
   // Whisper gives the silence before a word to that word, so a word after a pause seems to start far too early.
   // A word that runs much longer than its length explains is pulled up to where it would really begin.
   function fixStarts(list){
-    list.forEach(w => { const cap = Math.min(1.5, Math.max(0.45, 0.3 + 0.09 * [...w.w].length)); if(w.e - w.s > cap * 1.7) w.s = w.e - cap; });
+    list.forEach((w, k) => { if(!w.brk && k > 0) return;   // a long word in the middle of a phrase is a held note: leave it
+      const cap = Math.min(1.5, Math.max(0.45, 0.3 + 0.09 * [...w.w].length)); if(w.e - w.s > cap * 1.7) w.s = w.e - cap; });
     return list.sort((a, b) => a.s - b.s);
   }
   function finish(list, lang){
@@ -269,10 +271,12 @@ window.SLSTranscribe = (() => {
     for(const idx of byLine.values()){
       const hit = idx.filter(i => T[i]); if(!hit.length) continue;
       const groups = [[hit[0]]];
-      for(let k = 1; k < hit.length; k++){ const p = hit[k - 1], i = hit[k]; if(T[i].s - T[p].e > 1.2 + 0.45 * (i - p - 1)) groups.push([i]); else groups[groups.length - 1].push(i); }
+      for(let k = 1; k < hit.length; k++){ const p = hit[k - 1], i = hit[k]; if(T[i].s - T[p].s > 4 + 1.5 * (i - p - 1)) groups.push([i]); else groups[groups.length - 1].push(i); }
       const best = groups.reduce((a, g) => g.length > a.length ? g : a, groups[0]);
-      const need = idx.length >= 3 ? Math.max(2, Math.ceil(idx.filter(i => !U[i].opt).length * 0.34)) : 1;
-      for(const i of hit) if(best.length < need || !best.includes(i)) T[i] = null;
+      // a single matched word only anchors a line when it's a longer word (short ones match by chance)
+      const real = idx.filter(i => !U[i].opt).length, need = real >= 3 ? Math.max(2, Math.ceil(real * 0.3)) : 1;
+      const enough = best.length >= need || (best.length === 1 && [...U[best[0]].n].length >= 5);
+      for(const i of hit) if(!enough || !best.includes(i)) T[i] = null;
     }
     // bracketed words (backing vocals, ad-libs) that weren't heard are left out; lines left empty go too
     const keep = U.map((u, i) => !(u.opt && !T[i]));
@@ -280,11 +284,15 @@ window.SLSTranscribe = (() => {
     const lineMap = new Map(); U = U.map(u => { if(!lineMap.has(u.l)) lineMap.set(u.l, lineMap.size); return { ...u, l: lineMap.get(u.l) }; });
     const found = T2.filter(Boolean).length;
     if(!found) return { words: [], lyrics: "", matched: 0 };
+    // the song's pace: typical time from one found word to the next found word in the same line
+    const steps = []; for(let i = 1; i < U.length; i++) if(T2[i] && T2[i - 1] && U[i].l === U[i - 1].l) steps.push(T2[i].s - T2[i - 1].s);
+    steps.sort((x, y) => x - y);
+    const pace = steps.length ? Math.min(1.2, Math.max(0.22, steps[Math.floor(steps.length / 2)])) : 0.32;
     // words that weren't found: placed between the words around them, never past them
     for(let i = 0; i < U.length;){
       if(T2[i]){ i++; continue; }
       let j = i; while(j < U.length && !T2[j]) j++;
-      const prev = T2[i - 1], next = T2[j], k = j - i, per = 0.32;
+      const prev = T2[i - 1], next = T2[j], k = j - i, per = pace;
       const sameLinePrev = prev && U[i - 1].l === U[i].l, sameLineNext = next && U[j].l === U[j - 1].l;
       let from, step;
       if(prev && next){

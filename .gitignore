@@ -8,3 +8,4 @@ public/_test/
 .vercel
 .env*
 public/zz-local-test.wav
+public/zz-local-*

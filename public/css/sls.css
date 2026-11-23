@@ -354,3 +354,8 @@ body[data-step="lyrics"] .transport{gap:12px;padding:12px 16px}
   .start{grid-template-columns:1fr}
   .paste-card textarea{min-height:130px}
 }
+.ly-line.missing .ly-w{opacity:.45;text-decoration:line-through;text-decoration-color:color-mix(in srgb,var(--warn) 70%,transparent);text-decoration-thickness:1.5px}
+.ly-line.missing .ly-w.u{background:none;box-shadow:none}
+.ly-line.missing .ly-w.u::after{content:none}
+.ly-line.missing .ly-words::after{content:"not in the song";margin-left:8px;padding:2px 8px;border-radius:99px;font:600 10.5px var(--mono);letter-spacing:.03em;color:var(--warn);background:var(--warn-bg)}
+.ly-review-btns{flex-wrap:wrap;justify-content:flex-end}

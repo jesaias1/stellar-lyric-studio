@@ -29,7 +29,8 @@ window.SLSLyricsUI = (() => {
     groups.forEach((L, li) => {
       const prev = groups[li - 1], gap = prev ? L[0].t - (prev[prev.length - 1].t + prev[prev.length - 1].d) : L[0].t;
       if(gap > 8){ const g = document.createElement("div"); g.className = "ly-gap"; g.textContent = "music · " + Math.round(gap) + "s"; frag.append(g); }
-      const row = document.createElement("div"); row.className = "ly-line"; row.dataset.li = li;
+      const row = document.createElement("div"); row.className = "ly-line" + (L.every(w => w.g) ? " missing" : ""); row.dataset.li = li;
+      if(L.every(w => w.g)) row.title = "None of this line could be found in the song. It may not be sung in this version.";
       const t = document.createElement("button"); t.className = "ly-t"; t.title = "Play from this line"; t.innerHTML = IC.play + "<span>" + clock(L[0].t) + "</span>";
       const ws = document.createElement("div"); ws.className = "ly-words"; if(/[֐-ࣿ]/.test(L[0].w)) ws.dir = "rtl";
       L.forEach(w => { const b = document.createElement("button"); b.className = "ly-w" + (w.u ? " u" : ""); b.textContent = w.w; if(w.u) b.title = w.g ? "This word couldn't be found in the vocal, so its timing is a guess" : "The AI wasn't sure about this word"; rowOf.push(rows.length); flat.push(w); els.push(b); ws.append(b); });
@@ -48,7 +49,13 @@ window.SLSLyricsUI = (() => {
   }
   function syncBars(){
     const words = S.P.words, unsure = words.filter(w => w.u).length, lines = new Set(words.map(w => w.l)).size, bar = $("#lyReview");
-    if(unsure){ hadUnsure = true; bar.hidden = false; bar.classList.remove("clear");
+    const missing = lineGroups().filter(L => L.every(w => w.g)), inMissing = missing.reduce((a, L) => a + L.length, 0);
+    $("#lyDropMissing").hidden = !missing.length;
+    if(missing.length){ hadUnsure = true; bar.hidden = false; bar.classList.remove("clear");
+      const rest = unsure - inMissing;
+      $("#lyReviewTxt").textContent = `${missing.length === 1 ? "1 line" : missing.length + " lines"} couldn't be found in the song at all. ${missing.length === 1 ? "It's" : "They're"} probably not sung in this version.` + (rest > 0 ? ` ${rest} other word${rest === 1 ? "" : "s"} to check.` : "");
+      $("#lyNextU").hidden = rest <= 0; $("#lyAcceptAll").hidden = true; }
+    else if(unsure){ hadUnsure = true; bar.hidden = false; bar.classList.remove("clear");
       const guessed = words.filter(w => w.u && w.g).length, n = unsure === 1 ? "1 word" : unsure + " words";
       $("#lyReviewTxt").textContent = guessed === unsure ? `${n} to check. ${unsure === 1 ? "It" : "They"} couldn't be found in the vocal, so the timing is a guess.`
         : guessed ? `${n} to check: the AI wasn't sure it heard some, and couldn't find others in the vocal.` : `${n} to check. The AI wasn't sure it heard ${unsure === 1 ? "it" : "them"} right.`;
@@ -102,7 +109,9 @@ window.SLSLyricsUI = (() => {
       parts.forEach((txt, k) => { const share = txt.length / total, o = k === 0 ? w : { l: w.l }; o.w = txt; o.t = +(t0 + d0 * acc).toFixed(3); o.d = +Math.max(0.06, d0 * share - 0.02).toFixed(3); acc += share; if(k) S.P.words.push(o); last = o; }); }
     open = null; changed(); render(); return last;
   }
-  function nextUnsure(after){ const from = after ? flat.indexOf(after) : -1; return flat.find((w, k) => k > from && w.u) || flat.find(w => w.u) || null; }
+  // the next word to review; lines not found in the song at all are left for "Remove those lines"
+  function nextUnsure(after){ const skip = new Set(lineGroups().filter(L => L.every(w => w.g)).flat()), ok = w => w.u && !skip.has(w), from = after ? flat.indexOf(after) : -1;
+    return flat.find((w, k) => k > from && ok(w)) || flat.find(ok) || null; }
   function step(dir){ const i = flat.indexOf(open.w), kept = commit(), j = kept ? flat.indexOf(kept) + dir : Math.min(i, flat.length - 1); if(flat[j]) openWord(flat[j]); }
   function hear(w){ const a = Math.max(0, w.t - 0.8); S.t = a; hearEnd = Math.min(S.audio ? S.audio.duration : 1e9, w.t + w.d + 0.7); play({}); }
 
@@ -140,6 +149,9 @@ window.SLSLyricsUI = (() => {
     else if(e.key === "Escape"){ e.preventDefault(); const w = open.w; if(open.original === "" ){ S.P.words = S.P.words.filter(x => x !== w); open = null; changed(); render(); } else { w.w = open.original; closeEditor(); render(); } }
     else if(e.key === "Backspace" && e.target.value === "" && !e.repeat){ e.preventDefault(); const i = flat.indexOf(open.w), pv = flat[i - 1]; commit(); if(pv && S.P.words.includes(pv)) openWord(pv); }
   });
+  $("#lyDropMissing").onclick = () => { if(open) commit(); const gone = new Set(lineGroups().filter(L => L.every(w => w.g)).flat()); if(!gone.size) return;
+    const lines = new Set([...gone].map(w => w.l)).size; S.P.words = S.P.words.filter(w => !gone.has(w)); relabel(lineGroups()); changed(); render();
+    toast(`${lines} line${lines === 1 ? "" : "s"} removed. Undo with Ctrl+Z.`); };
   $("#lyNextU").onclick = () => { const cur = open ? open.w : null; if(open) commit(); const nx = nextUnsure(cur && S.P.words.includes(cur) ? cur : null); if(nx) openWord(nx); };
   $("#lyAcceptAll").onclick = () => { if(open) commit(); const n = S.P.words.filter(w => w.u).length; S.P.words.forEach(w => { delete w.u; delete w.g; delete w.alt; }); dirty(); render(); toast(`${n} word${n === 1 ? "" : "s"} accepted. Undo with Ctrl+Z.`); };
 
