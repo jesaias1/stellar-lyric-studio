@@ -4,7 +4,10 @@
  *   GET  /api/photos/search?q=&orientation=&from=free|pinterest|both&page=1&next=
  *        One search, as is. Free photos come from Pexels (PEXELS_KEY) and Pixabay (PIXABAY_KEY);
  *        Pinterest results come through SerpApi (SERPAPI_KEY), because Pinterest has no public search API.
- *   POST /api/photos/pick     {lyrics, prompt, count, aspect, from}  -> {queries, picks, spare, errors}
+ *   POST /api/photos/pick     {lyrics, prompt, count, aspect, from, exclude?, queries?, page?, next?}
+ *                             -> {queries, picks, spare, errors, page, next, skipped}
+ *        exclude: ids/links of images already used, never returned. queries+page+next: "find more", the same
+ *        searches further down the results (page is the last page read, next the Pinterest page tokens).
  *        The whole grab in one go: an AI turns the keywords and the lyrics into a few searches, they run on
  *        every source that is switched on, and the AI ranks what came back against the song. `picks` are
  *        the best `count`, `spare` the runners-up the review window offers as replacements.
@@ -197,23 +200,39 @@ async function pickRoute(env, request, json, ai) {
   const lyrics = String(b.lyrics || "").slice(0, 6000), prompt = clean(b.prompt).slice(0, 300);
   const on = sources(env, from);
   if (!on.pexels && !on.pixabay && !on.pinterest) return json({ error: "no_photos", message: noSourceMessage(env, from) }, 503);
-  if (!prompt && !clean(lyrics)) return json({ error: "bad_request", message: "Type a few keywords or a prompt first." }, 400);
+  // images already used (in this video or an earlier one) or already shown: never offered again
+  const exclude = new Set((Array.isArray(b.exclude) ? b.exclude : []).slice(0, 4000).map(x => String(x).replace(/\?.*$/, "")));
+  // "find more": the same searches, further down the results
+  const again = Array.isArray(b.queries) && b.queries.length ? b.queries.map(q => clean(q).slice(0, 120)).filter(Boolean).slice(0, 5) : null;
+  let page = again ? Math.max(1, Math.min(19, Math.round(+b.page || 1))) + 1 : 1, lastPage = page;
+  const next = b.next && typeof b.next === "object" ? b.next : {};
+  if (!again && !prompt && !clean(lyrics)) return json({ error: "bad_request", message: "Type a few keywords or a prompt first." }, 400);
 
   // more searches when more pictures are needed, so there is plenty to choose from
   const nq = count > 16 ? 4 : 3;
-  const { queries, ai: wrote } = await writeQueries(ai, lyrics, prompt, nq);
+  const { queries, ai: wrote } = again ? { queries: again, ai: false } : await writeQueries(ai, lyrics, prompt, nq);
   const per = Math.max(12, Math.min(30, Math.ceil(count * 2.2 / queries.length)));
-  const runs = await Promise.all(queries.map(q => searchAll(env, q, orientation, from, { per })));
-  const errors = [...new Set(runs.flatMap(r => r.errors))];
-
-  // one list, no duplicates, the first results of every query first
-  const seen = new Set(), pool = [];
-  for (let i = 0; runs.some(r => i < r.items.length); i++) for (const r of runs) {
-    const it = r.items[i]; if (!it) continue;
-    const k = it.file.replace(/\?.*$/, ""); if (seen.has(it.id) || seen.has(k)) continue;
-    seen.add(it.id); seen.add(k); pool.push(it);
+  const used = it => exclude.has(it.id) || exclude.has(String(it.page || "").replace(/\?.*$/, "")) || exclude.has(it.file.replace(/\?.*$/, ""));
+  const seen = new Set(), pool = [], errors = new Set(), tokens = {};
+  let skipped = 0;
+  // up to three pages deep until there are enough new images to choose from
+  for (let round = 0; round < 3 && page <= 20; round++, page++) {
+    lastPage = page;
+    const runs = await Promise.all(queries.map(q => searchAll(env, q, orientation, from, { per, page, next: page > 1 ? next[q] || null : null })));
+    runs.forEach((r, k) => { r.errors.forEach(e => errors.add(e)); tokens[queries[k]] = r.next || null; next[queries[k]] = r.next || null; });
+    // one list, no duplicates, the first results of every query first
+    for (let i = 0; runs.some(r => i < r.items.length); i++) for (const r of runs) {
+      const it = r.items[i]; if (!it) continue;
+      const k = it.file.replace(/\?.*$/, ""); if (seen.has(it.id) || seen.has(k)) continue;
+      seen.add(it.id); seen.add(k);
+      if (used(it)) { skipped++; continue; }
+      pool.push(it);
+    }
+    const more = runs.some(r => r.items.length) && (on.pexels || on.pixabay || Object.values(next).some(Boolean));
+    if (pool.length >= count * 1.6 || !more) break;
   }
-  if (!pool.length) return json({ queries, picks: [], spare: [], errors, ai: wrote, message: `Nothing found for ${queries.map(q => `"${q}"`).join(", ")}. Try other keywords.` });
+  if (!pool.length) return json({ queries, picks: [], spare: [], errors: [...errors], ai: wrote, page: lastPage, next: tokens, skipped,
+    message: skipped ? "Every image these searches found has been used already. Try other keywords." : `Nothing found for ${queries.map(q => `"${q}"`).join(", ")}. Try other keywords.` });
 
   // quality first, then the AI's judgement on the best of them
   const scored = pool.map((it, i) => ({ it, s: baseScore(it, orientation, i) })).sort((x, y) => y.s - x.s).map(x => x.it);
@@ -225,7 +244,7 @@ async function pickRoute(env, request, json, ai) {
   ranked = [...ranked, ...scored.slice(shortlist.length)];
 
   const picks = await signAll(env, ranked.slice(0, count)), spare = await signAll(env, ranked.slice(count, count + Math.max(12, count)));
-  return json({ queries, picks, spare, errors, ai: !!order || wrote, sources: on });
+  return json({ queries, picks, spare, errors: [...errors], ai: !!order || wrote, sources: on, page: lastPage, next: tokens, skipped });
 }
 
 async function rankRoute(request, json, ai) {

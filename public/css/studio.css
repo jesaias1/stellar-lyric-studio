@@ -271,3 +271,16 @@ input[type=color]{width:34px;height:28px;border:1px solid var(--line-2);border-r
   .msheet-b #secRow > span:first-child{display:none}
 }
 @media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+
+/* preview zoom and full screen */
+.viewctl{display:flex;align-items:center;gap:2px;margin-left:auto}
+.transport .viewctl .btn{min-width:30px;padding:4px 8px}
+.vz-val{min-width:48px!important;font-variant-numeric:tabular-nums}
+.viewport.zoomed{display:block;overflow:auto;cursor:default}
+.viewport.zoomed #stage{display:block;margin:0 auto}
+.stage:fullscreen{background:var(--canvas);width:100vw;height:100vh}
+.stage:fullscreen .stagebar{display:none}
+body.stage-full .stage{position:fixed;inset:0;z-index:950;background:var(--canvas)}
+body.stage-full .stage .stagebar{display:none}
+.size-px{width:64px;padding:4px 6px;text-align:right;font-variant-numeric:tabular-nums}
+@media (max-width: 760px){ .viewctl #vzOut,.viewctl #vzIn,.viewctl .vz-val{display:none} }

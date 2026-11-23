@@ -149,7 +149,7 @@ async function transcribe(request, env) {
   const segments = (out.segments || []).map(s => ({
     s: num(s.start), e: num(s.end), text: String(s.text || "").trim(),
     nsp: num(s.no_speech_prob), lp: num(s.avg_logprob), cr: num(s.compression_ratio),
-    words: (s.words || []).map(w => ({ w: String(w.word || "").trim(), s: num(w.start), e: num(w.end) })).filter(w => w.w),
+    words: (s.words || []).map(w => { const o = { w: String(w.word || "").trim(), s: num(w.start), e: num(w.end) }; const p = num(w.probability); if(p != null) o.p = p; return o; }).filter(w => w.w),
   }));
   return json({
     language: info.language || input.language || null,

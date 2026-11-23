@@ -98,14 +98,30 @@ window.SLSPhotos = (() => {
     const n = count(), go = $("#phGo"); busy = true; go.disabled = true; go.textContent = "Finding images…";
     msg(`Searching ${from === "free" ? "free photos" : from === "pinterest" ? "Pinterest" : "free photos and Pinterest"} and picking the ${n} that fit your song best…`);
     try {
-      const d = await api.api("/api/photos/pick", { method: "POST", body: { prompt, lyrics, count: n, aspect: S.P.aspect, from }, timeout: 120000 });
+      const d = await api.api("/api/photos/pick", { method: "POST", body: { prompt, lyrics, count: n, aspect: S.P.aspect, from, exclude: usedKeys() }, timeout: 120000 });
       if(!d.picks.length){ msg(d.message || "Nothing found. Try other keywords."); return; }
-      const toItem = r => ({ id: r.id, thumb: r.thumb, file: r.file, source: r.source, name: (r.title || r.q || prompt || "Photo").split(/[,·]/)[0].trim().slice(0, 28) || "Photo",
-        credit: `${r.author} on ${r.source}`, src: { kind: "photo", file: r.file, thumb: r.thumb, page: r.page, author: r.author, source: r.source, title: r.title || "" } });
+      const toItem = photoItem(prompt);
       msg(d.errors && d.errors.length ? d.errors.join(" · ") : "");
-      review({ picks: d.picks.map(toItem), spare: d.spare.map(toItem), target: n, searched: d.queries });
+      review({ picks: d.picks.map(toItem), spare: d.spare.map(toItem), target: n, searched: d.queries, page: d.page || 1, next: d.next || {}, prompt, lyrics, from, skipped: d.skipped || 0 });
     } catch(err){ msg(errText(err)); }
     finally { busy = false; go.disabled = false; go.textContent = "Find the best images"; }
+  }
+
+  const photoItem = prompt => r => ({ id: r.id, thumb: r.thumb, file: r.file, source: r.source, name: (r.title || r.q || prompt || "Photo").split(/[,·]/)[0].trim().slice(0, 28) || "Photo",
+    credit: `${r.author} on ${r.source}`, src: { kind: "photo", id: r.id, file: r.file, thumb: r.thumb, page: r.page, author: r.author, source: r.source, title: r.title || "" } });
+
+  /* ---------- images already used ----------
+     An image goes into one video once. Everything added from a search is remembered in this browser (and
+     everything already in this project counts too), so later searches only bring new images. */
+  const USED = "sls-used-images";
+  function usedKeys(){
+    const inProject = S.clips.flatMap(c => c.src && c.src.kind === "photo" ? [c.src.id, c.src.page] : []);
+    return [...new Set([...keep.get(USED, []), ...inProject].filter(Boolean))].slice(-3500);
+  }
+  function markUsed(items){
+    const list = keep.get(USED, []), have = new Set(list);
+    for(const p of items) for(const k of [p.id, p.src && p.src.page]) if(k && !have.has(k)){ have.add(k); list.push(k); }
+    keep.set(USED, list.slice(-3000));
   }
 
   /* ---------- the review window ---------- */
@@ -118,7 +134,7 @@ window.SLSPhotos = (() => {
       <div class="ph-grid ph-spare" id="phSpare"></div>
       <label class="ph-only"><input type="checkbox" id="phOnly" checked> Use only these images in the video <span class="hint">(your other clips are switched off, not deleted)</span></label>
       <div class="field" id="phRun" hidden><div class="bar"><i id="phBar"></i></div><div class="hint" id="phRunMsg"></div></div>
-      <div class="row ph-actions"><button class="btn primary" id="phAdd" type="button">Add</button><button class="btn" id="phSwap" type="button">Replace the removed ones</button><button class="btn ghost" id="phCancel" type="button">Cancel</button></div>
+      <div class="row ph-actions"><button class="btn primary" id="phAdd" type="button">Add</button><button class="btn" id="phSwap" type="button">Replace the removed ones</button><button class="btn" id="phMore" type="button">Find more images</button><button class="btn ghost" id="phCancel" type="button">Cancel</button></div>
     </div>`;
   document.body.append(rv);
   let R = null;   // {picks, spare, target, searched, board}
@@ -135,13 +151,37 @@ window.SLSPhotos = (() => {
     $("#phSpareH").hidden = !R.spare.length; $("#phSpare").hidden = !R.spare.length;
     const unit = S.P.words.length ? "lyric line" : "part of the soundbite";
     let info = `${kept} image${kept === 1 ? "" : "s"} for ${R.target} ${unit}${R.target === 1 ? "" : "s"}. Tap an image to throw it out, tap it again to bring it back.`;
-    if(kept && kept < R.target) info += ` With fewer images than ${unit}s, some will show twice.`;
+    if(kept && kept < R.target) info += R.board ? ` That's fewer than ${R.target}, so each image stays up a little longer (none is shown twice).`
+      : ` That's fewer than ${R.target}: tap Find more images, or each image stays up a little longer (none is shown twice).`;
+    if(R.note) info += " " + R.note;
     if(R.searched && R.searched.length) info += ` Searched for ${R.searched.map(q => `“${q}”`).join(", ")}.`;
     $("#phInfo").textContent = info;
     $("#phAdd").textContent = kept ? `Add ${kept} image${kept === 1 ? "" : "s"}` : "Add";
     $("#phAdd").disabled = !kept;
     $("#phSwap").hidden = !(removed && R.spare.length);
+    const more = $("#phMore"); more.hidden = !!R.board; more.classList.toggle("primary", !R.board && kept < R.target && !R.spare.length);
+    $("#phAdd").classList.toggle("primary", !more.classList.contains("primary"));
   }
+  // the same searches, further down the results, leaving out everything already used or on screen
+  $("#phMore").onclick = async () => {
+    if(!R || R.board || rv.classList.contains("busy")) return;
+    const b = $("#phMore"), shown = [...R.picks, ...R.spare].flatMap(p => [p.id, p.src && p.src.page]).filter(Boolean);
+    setBusy(true); b.textContent = "Finding more…";
+    try {
+      const d = await api.api("/api/photos/pick", { method: "POST", timeout: 120000, body: { prompt: R.prompt, lyrics: R.lyrics, from: R.from, aspect: S.P.aspect,
+        count: Math.max(6, R.target), queries: R.searched, page: R.page, next: R.next, exclude: [...usedKeys(), ...shown] } });
+      if(!R) return;
+      R.page = d.page || R.page + 1; R.next = d.next || {};
+      const fresh = [...d.picks, ...d.spare].map(photoItem(R.prompt));
+      if(!fresh.length){ R.note = "No new images left for these searches. Close this and try other keywords."; paintReview(); return; }
+      // fill up to the number needed first, the rest go to the options
+      let kept = R.picks.filter(p => !p.out).length;
+      for(const p of fresh){ if(kept < R.target){ R.picks.push({ ...p, out: false }); kept++; } else R.spare.push(p); }
+      R.note = `${fresh.length} new image${fresh.length === 1 ? "" : "s"} found.`;
+      paintReview();
+    } catch(err){ R.note = errText(err); paintReview(); }
+    finally { setBusy(false); b.textContent = "Find more images"; }
+  };
   $("#phPicks").onclick = e => { const t = e.target.closest(".ph-tile"); if(!t || rv.classList.contains("busy")) return; const p = R.picks[+t.dataset.i]; p.out = !p.out; paintReview(); };
   $("#phSpare").onclick = e => { const t = e.target.closest(".ph-tile"); if(!t || rv.classList.contains("busy")) return; const [p] = R.spare.splice(+t.dataset.i, 1); p.out = false; R.picks.push(p); paintReview(); };
   $("#phSwap").onclick = () => { R.picks = R.picks.map(p => p.out && R.spare.length ? { ...R.spare.shift(), out: false } : p); paintReview(); };
@@ -149,7 +189,7 @@ window.SLSPhotos = (() => {
   $("#phCancel").onclick = close; $("#phX").onclick = close;
   rv.addEventListener("click", e => { if(e.target === rv) close(); });
   addEventListener("keydown", e => { if(e.key === "Escape" && !rv.hidden) close(); });
-  function setBusy(on){ rv.classList.toggle("busy", on); ["phAdd", "phSwap", "phCancel"].forEach(id => $("#" + id).disabled = on); $("#phOnly").disabled = on; }
+  function setBusy(on){ rv.classList.toggle("busy", on); ["phAdd", "phSwap", "phMore", "phCancel"].forEach(id => $("#" + id).disabled = on); $("#phOnly").disabled = on; }
 
   async function inParallel(list, limit, fn){ let next = 0; await Promise.all(Array.from({ length: Math.min(limit, list.length) }, async () => { while(next < list.length){ const i = next++; await fn(list[i], i); } })); }
   $("#phAdd").onclick = async () => {
@@ -167,6 +207,7 @@ window.SLSPhotos = (() => {
     try {
       const ids = await addFootage(files, metas, { quiet: true });
       if(!ids.length){ $("#phRunMsg").textContent = "None of the images could be read. Try again or pick others."; setBusy(false); return; }
+      if(!R.board) markUsed(chosen.filter((p, i) => blobs[i]));
       useAsSlideshow(ids, only);
       setBusy(false); rv.hidden = true; R = null;
       toast(`${ids.length} image${ids.length === 1 ? "" : "s"} added` + (S.P.words.length ? ": a new one on every lyric line." : ".") + (failed ? ` ${failed} couldn't be downloaded.` : ""));
@@ -176,8 +217,11 @@ window.SLSPhotos = (() => {
   function useAsSlideshow(ids, only){
     if(only) S.clips.forEach(c => { c.on = ids.includes(c.id); });
     S.P.cuts.order = "inorder"; S.P.cuts.slots = null; S.P.cuts.points = null;
-    if(S.P.words.some(w => w.t >= S.P.section.a - 0.2 && w.t < S.P.section.b)) S.P.cuts.mode = "lines";
-    else { S.P.cuts.mode = "count"; S.P.cuts.count = ids.length; }
+    const on = S.clips.filter(c => c.on).length;
+    S.P.cuts.mode = "count"; S.P.cuts.count = on;
+    // one image per lyric line, unless there are fewer images than lines: then each is shown once, for longer,
+    // rather than the slideshow starting over and showing them twice
+    if(S.P.words.some(w => w.t >= S.P.section.a - 0.2 && w.t < S.P.section.b)){ S.P.cuts.mode = "lines"; if(segments().length > on){ S.P.cuts.mode = "count"; S.P.cuts.count = on; } }
     renderClips(); syncUI(); dirty();
   }
 

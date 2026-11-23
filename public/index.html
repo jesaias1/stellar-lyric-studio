@@ -342,6 +342,12 @@
         <button class="play" id="playBtn" aria-label="Play"><svg viewBox="0 0 16 16" fill="currentColor" id="playIcon"><path d="M4 2.5v11l9-5.5z"/></svg></button>
         <input type="range" class="rv-seek" id="rvSeek" min="0" max="100" step="0.05" value="0" aria-label="Position in the song">
         <div class="tc" id="tc"><b>0:00.0</b> / 0:15.0</div>
+        <div class="viewctl" role="group" aria-label="Preview size">
+          <button class="btn small ghost" id="vzOut" type="button" title="Zoom out (−)" aria-label="Zoom out">−</button>
+          <button class="btn small ghost vz-val" id="vzVal" type="button" title="Back to fit (0)">Fit</button>
+          <button class="btn small ghost" id="vzIn" type="button" title="Zoom in (+)" aria-label="Zoom in">+</button>
+          <button class="btn small ghost" id="vFull" type="button" title="Full screen (F)" aria-label="Full screen"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></svg></button>
+        </div>
       </div>
     </main>
 
@@ -363,7 +369,7 @@
           <div class="label" id="ssTitle">Stack settings</div>
           <label class="srow"><span>Primary font</span><select id="sPf"></select></label>
           <label class="srow" id="sSfRow"><span>Secondary font</span><select id="sSf"></select></label>
-          <label class="srow"><span>Size</span><span class="row" style="gap:8px;flex:1;flex-wrap:nowrap"><input type="range" id="sSize" min="0.5" max="1.8" step="0.05"><span class="hint" id="sizeVal" style="min-width:42px;text-align:right">1.00×</span></span></label>
+          <label class="srow"><span>Size</span><span class="row" style="gap:6px;flex:1;flex-wrap:nowrap"><input type="range" id="sSize" min="0.12" max="2.5" step="0.01"><input type="number" id="sizePx" class="size-px" min="4" max="600" step="1" aria-label="Lyric text size in pixels" title="Text size in pixels on a 1080p video. Long lines shrink to fit the frame."><span class="hint">px</span></span></label>
           <div class="srow"><span>Highlight</span><div class="swatches" id="hiSw"></div></div>
           <div class="srow"><span>Text colour</span><div class="swatches"><input type="color" id="sColor" title="Text colour"></div></div>
           <label class="srow"><span>Case</span><select id="sCase"><option value="auto">Style default</option><option value="as">As typed</option><option value="lower">lowercase</option><option value="upper">UPPERCASE</option></select></label>

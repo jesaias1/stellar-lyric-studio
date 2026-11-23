@@ -1184,7 +1184,7 @@ function syncHookUI(){ const h = S.P.hook, len = S.P.section.b - S.P.section.a;
 function syncUI(){ setTimeout(syncTextEditor, 0);
   const P = S.P, st = P.style;
   $("#lyricsText").value = P.lyrics; $("#bpm").value = P.bpm;
-  $("#sSize").value = st.size; $("#sX").value = st.x ?? 0.5; $("#sizeVal").textContent = (+st.size).toFixed(2) + "×"; $("#sY").value = st.y; $("#sScrim").value = st.scrim;
+  $("#sSize").value = st.size; $("#sX").value = st.x ?? 0.5; paintSizePx(); $("#sY").value = st.y; $("#sScrim").value = st.scrim;
   $("#sCase").value = st.case; $("#sColor").value = st.color; syncStylePanel();
   $$("#hookSeg button").forEach(b => b.setAttribute("aria-pressed", String((b.dataset.v === "on") === !!P.hook.on))); $("#hFields").hidden = !P.hook.on; $("#hOffHint").hidden = !!P.hook.on; syncHookUI(); $("#hText").value = P.hook.text; $("#hDur").value = P.hook.dur; $("#hDurVal").textContent = (+P.hook.dur).toFixed(1) + "s";
   $$("#presets .preset").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.id === st.preset)));
@@ -1283,7 +1283,37 @@ window.matchMedia("(max-width:700px) and (pointer:coarse)").addEventListener("ch
 function showTab(name){ document.body.dataset.mtab = name; $$(".tabs [data-tab]").forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === name)));
   if(name === "style"){ renderPresetThumbs(); return; } $$("[data-pane]").forEach(p => p.hidden = p.dataset.pane !== name); }
 
-const bindStyle = (id, key, num) => $(id).addEventListener("input", e => { S.P.style[key] = num ? +e.target.value : e.target.value; if(key==="size") $("#sizeVal").textContent = (+e.target.value).toFixed(2)+"×"; saveDraft(); });
+const bindStyle = (id, key, num) => $(id).addEventListener("input", e => { S.P.style[key] = num ? +e.target.value : e.target.value; if(key==="size") paintSizePx(); saveDraft(); });
+/* Lyric size as a number: the style's text height in pixels on a 1080p video (the slider's 1× is whatever size the
+   style was designed at). Measured by drawing the current line once and noting the largest font it asks for;
+   long lines still shrink to fit the frame. */
+const SIZE_MIN = 0.12, SIZE_MAX = 2.5;
+let measureCv = null, basePxCache = { key: "", px: null };
+function lyricBasePx(){
+  const P = S.P, st = P.style, pr = styleDef(st.preset), W = stage.width, H = stage.height;
+  const inBite = P.words.filter(w => w.t >= P.section.a - 0.2 && w.t < P.section.b);
+  let t = songTime(), s = inBite.length ? lyricState(t) : null;
+  if(inBite.length && (!s || !s.rev)){ t = inBite[0].t + 0.6; s = lyricState(t); }
+  if(!s || !s.rev){ t = 99; s = demoState(pr, t); }
+  if(!s || !s.rev) return null;
+  const key = [st.preset, st.pf, st.sf, st.case, W, H, s.words.map(w => w.w).join(" ")].join("|");
+  if(basePxCache.key === key) return basePxCache.px;
+  measureCv = measureCv || document.createElement("canvas"); measureCv.width = W; measureCv.height = H;
+  const c = measureCv.getContext("2d"), d = Object.getOwnPropertyDescriptor(CanvasRenderingContext2D.prototype, "font"); let max = 0;
+  Object.defineProperty(c, "font", { configurable: true, get(){ return d.get.call(this); }, set(v){ const m = /([\d.]+)px/.exec(v); if(m) max = Math.max(max, +m[1]); d.set.call(this, v); } });
+  const Wn = W*(1 - Math.abs((st.x ?? 0.5) - 0.5)*0.9);
+  try { c.save(); pr.draw(c, Wn, H, s, t, { ...st, size: 1 }, styleOpts(st, pr)); c.restore(); } catch {}
+  delete c.font;
+  basePxCache = { key, px: max ? max * 1080 / Math.min(W, H) : null };
+  return basePxCache.px;
+}
+function paintSizePx(){ const b = lyricBasePx(), box = $("#sizePx"); if(document.activeElement === box) return; box.value = b ? Math.round(b * (S.P.style.size || 1)) : ""; box.disabled = !b; }
+$("#sizePx").addEventListener("change", e => { const b = lyricBasePx(), v = +e.target.value; if(!b || !(v > 0)) { paintSizePx(); return; }
+  const k = clamp(v / b, SIZE_MIN, SIZE_MAX); S.P.style.size = +k.toFixed(3); $("#sSize").value = S.P.style.size; saveDraft();
+  if(Math.abs(k - v / b) > 0.001){ toast(`That's as ${k === SIZE_MIN ? "small" : "big"} as this style goes: ${Math.round(b * k)} px`); }
+  e.target.blur(); paintSizePx(); });
+setInterval(() => { if(document.body.dataset.step === "design" && !document.hidden) paintSizePx(); }, 700);
+$("#sizePx").addEventListener("keydown", e => { if(e.key === "Enter") e.target.dispatchEvent(new Event("change")); });
 bindStyle("#sSize","size",true); bindStyle("#sX","x",true); bindStyle("#sY","y",true);
 $("#sCenter").onclick = () => { S.P.style.x = 0.5; S.P.style.y = 0.5; syncUI(); saveDraft(); }; bindStyle("#sScrim","scrim",true); bindStyle("#sCase","case"); bindStyle("#sColor","color"); $("#sColor").addEventListener("change", renderPresetThumbs);
 $("#sPf").onchange = e => setStyleOpt("pf", e.target.value);
@@ -2017,8 +2047,40 @@ function boot(){
 }
 function fitStage(){
   const vp = $(".viewport"), cs = getComputedStyle(vp), aw = vp.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight), ah = vp.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
-  const k = Math.max(0.05, Math.min(aw/stage.width, ah/stage.height));
+  // keep the same spot in the middle when zooming
+  const cx = vp.scrollWidth > vp.clientWidth ? (vp.scrollLeft + vp.clientWidth/2) / vp.scrollWidth : 0.5, cyf = vp.scrollHeight > vp.clientHeight ? (vp.scrollTop + vp.clientHeight/2) / vp.scrollHeight : 0.5;
+  const k = Math.max(0.05, Math.min(aw/stage.width, ah/stage.height)) * (S.viewZoom || 1);
   stage.style.width = Math.floor(stage.width*k) + "px"; stage.style.height = Math.floor(stage.height*k) + "px";
+  if((S.viewZoom || 1) > 1){ vp.scrollLeft = cx * vp.scrollWidth - vp.clientWidth/2; vp.scrollTop = cyf * vp.scrollHeight - vp.clientHeight/2; }
 }
+/* ---------- preview zoom and full screen ---------- */
+const VZ = [1, 1.25, 1.5, 2, 2.5, 3, 4];
+function setViewZoom(z){
+  S.viewZoom = clamp(z, 1, 4); $(".viewport").classList.toggle("zoomed", S.viewZoom > 1.001);
+  fitStage(); $("#vzVal").textContent = S.viewZoom > 1.001 ? Math.round(S.viewZoom * 100) + "%" : "Fit";
+}
+const zoomStep = dir => { const z = S.viewZoom || 1; setViewZoom(dir > 0 ? (VZ.find(v => v > z + 0.01) || 4) : ([...VZ].reverse().find(v => v < z - 0.01) || 1)); };
+$("#vzIn").onclick = () => zoomStep(1); $("#vzOut").onclick = () => zoomStep(-1); $("#vzVal").onclick = () => setViewZoom(1);
+$(".viewport").addEventListener("wheel", e => { if(!(e.ctrlKey || e.metaKey)) return; e.preventDefault(); setViewZoom((S.viewZoom || 1) * Math.exp(-e.deltaY * (Math.abs(e.deltaY) < 40 ? 0.01 : 0.002))); }, { passive: false });
+const isFull = () => document.fullscreenElement === $(".stage") || document.webkitFullscreenElement === $(".stage") || document.body.classList.contains("stage-full");
+function toggleFull(){
+  const el = $(".stage");
+  if(isFull()){ if(document.fullscreenElement || document.webkitFullscreenElement) (document.exitFullscreen || document.webkitExitFullscreen).call(document); else document.body.classList.remove("stage-full"); }
+  else { const go = el.requestFullscreen || el.webkitRequestFullscreen; if(go) Promise.resolve(go.call(el)).catch(() => document.body.classList.add("stage-full")); else document.body.classList.add("stage-full"); }
+  setTimeout(paintFull, 60);
+}
+function paintFull(){ const on = isFull(); $("#vFull").title = on ? "Leave full screen (F or Esc)" : "Full screen (F)"; $("#vFull").setAttribute("aria-label", on ? "Leave full screen" : "Full screen"); requestAnimationFrame(fitStage); }
+$("#vFull").onclick = toggleFull;
+document.addEventListener("fullscreenchange", paintFull); document.addEventListener("webkitfullscreenchange", paintFull);
+document.addEventListener("keydown", e => {
+  const typing = /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName) && document.activeElement.type !== "range";
+  if(typing || e.metaKey || e.ctrlKey || e.altKey || !$("#home").hidden) return;
+  if(e.code === "Escape" && document.body.classList.contains("stage-full")){ document.body.classList.remove("stage-full"); paintFull(); return; }
+  if(!["design", "lyrics"].includes(document.body.dataset.step)) return;
+  if(e.code === "KeyF"){ e.preventDefault(); toggleFull(); }
+  else if(e.key === "+" || e.key === "="){ e.preventDefault(); zoomStep(1); }
+  else if(e.key === "-" || e.key === "_"){ e.preventDefault(); zoomStep(-1); }
+  else if(e.key === "0"){ e.preventDefault(); setViewZoom(1); }
+});
 function addThumbsForGen(){ S.clips.forEach(c => { if(c.kind === "gen") addThumb(c, genThumb(c.gen)); }); }
 boot();

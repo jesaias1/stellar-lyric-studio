@@ -143,7 +143,10 @@ window.SLSApp = (() => {
       const s = n => n === 1 ? "" : "s";
       if(!out.words.length) toast("No sung words were found. You can paste the lyrics instead.");
       else if(out.mode === "aligned" && out.matched < 0.4) toast(`Only ${Math.round(out.matched * 100)}% of your lyrics were found in the song. Check they belong to this song, and pick the song's language.`);
-      else if(out.mode === "aligned") toast(out.unsure ? `Your lyrics are timed. ${out.unsure} word${s(out.unsure)} couldn't be found in the vocal: check those.` : "Your lyrics are timed. Every word was found in the vocal.");
+      else if(out.mode === "aligned"){
+        const left = out.dropped ? ` ${out.dropped} line${s(out.dropped)} from your paste ${out.dropped === 1 ? "isn't" : "aren't"} sung in the song, so ${out.dropped === 1 ? "it was" : "they were"} left out.` : "";
+        toast((out.unsure ? `Your lyrics are timed. ${out.unsure} word${s(out.unsure)} couldn't be found in the vocal: check those.` : "Your lyrics are timed. Every word was found in the vocal.") + left);
+      }
       else toast(out.unsure ? `Lyrics ready. ${out.unsure} word${s(out.unsure)} to check.` : "Lyrics ready. Every word was heard the same way twice.");
     } catch(err){
       if(ctl.signal.aborted || err.code === "cancelled"){ if(S.P.words.length) go(lastStep); else oops("Stopped", "The song is loaded, but the lyrics weren't written. You can try again or type them in.", {}); return; }

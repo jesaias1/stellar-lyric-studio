@@ -39,6 +39,22 @@ window.SLSTranscribe = (() => {
     if(peak > 0.001){ const g = Math.min(8, 0.95 / peak); if(Math.abs(g - 1) > 0.05) for(let i = 0; i < out.length; i++) out[i] = Math.max(-1, Math.min(1, out[i] * g)); }
     return out;
   }
+  // the voice's range only (roughly 1 to 4 kHz), for telling a held note from a silence before a word
+  async function voiceBand(buf){
+    try {
+      const oc = new OfflineAudioContext(1, Math.ceil(buf.duration * RATE), RATE), src = oc.createBufferSource(); src.buffer = buf;
+      const bp = oc.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = 2000; bp.Q.value = 0.6;
+      src.connect(bp).connect(oc.destination); src.start();
+      return (await oc.startRendering()).getChannelData(0);
+    } catch { return null; }
+  }
+  // words "heard" where the song is all but silent (before it starts, after it ends, in a gap) were made up
+  function dropSilent(list, env){
+    if(!env || !list.length) return list;
+    const sorted = Array.from(env).sort((x, y) => x - y), mid = sorted[Math.floor(sorted.length * 0.5)];
+    if(!(mid > 0)) return list;
+    return list.filter(w => { const l = level(env, w.s, Math.max(w.e, w.s + 0.1)); return l == null || l > mid * 0.003; });
+  }
   function wavBase64(samples, from, to){
     const n = to - from, bytes = new Uint8Array(44 + n * 2), dv = new DataView(bytes.buffer), wr = (o, s) => { for(let i = 0; i < s.length; i++) bytes[o + i] = s.charCodeAt(i); };
     wr(0, "RIFF"); dv.setUint32(4, 36 + n * 2, true); wr(8, "WAVEfmt "); dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 1, true);
@@ -70,24 +86,33 @@ window.SLSTranscribe = (() => {
     cuts.forEach((c, k) => {
       const r = results[k]; if(!r) return;
       const lo = k > 0 ? (c.s + cuts[k - 1].e) / 2 : -1, hi = k < cuts.length - 1 ? (cuts[k + 1].s + c.e) / 2 : Infinity;   // each overlap is split down the middle
-      for(const seg of r.segments || []){
-        if(JUNK.test(seg.text)) continue;
-        if((seg.nsp ?? 0) > 0.6 && (seg.lp ?? 0) < -1) continue;       // the model itself thinks nobody is singing here
-        (seg.words || []).forEach((w, i) => {
+      (r.segments || []).forEach((seg, si) => {
+        if(JUNK.test(seg.text)) return;
+        const nsp = seg.nsp ?? 0, lp = seg.lp ?? -0.5, cr = seg.cr ?? 1, ws = seg.words || [];
+        if(nsp > 0.6 && lp < -1) return;                                 // the model itself thinks nobody is singing here
+        if(lp < -1.4) return;                                            // a wild guess
+        if(cr > 2.8 && lp < -0.5 && ws.length > 6) return;               // looping on itself, a known way it makes text up
+        if(ws.length >= 4){ const d = ws.map(w => (w.e ?? 0) - (w.s ?? 0)).sort((x, y) => x - y)[Math.floor(ws.length / 2)]; if(d < 0.05) return; }   // words with no length: written, not heard
+        ws.forEach((w, i) => {
+          if(w.p != null && w.p < 0.12) return;
           const text = tidy(w.w); if(!text || !norm(text)) return;
           const s = c.s + (w.s ?? 0), e = c.s + Math.max(w.e ?? 0, (w.s ?? 0) + 0.04); if(s < lo || s >= hi || s > dur + 0.5) return;
           const edge = Math.min(c.s > 0 ? s - c.s : Infinity, c.e < dur - 0.05 ? c.e - s : Infinity);
-          words.push({ w: text, n: norm(text), s, e, lp: seg.lp ?? -0.5, edge, brk: i === 0 });
+          words.push({ w: text, n: norm(text), s, e, lp, edge, brk: i === 0, sg: k + ":" + si });
         });
-      }
+      });
     });
     words.sort((a, b) => a.s - b.s);
     // the same word caught on both sides of a seam
     return words.filter((w, i) => !(i > 0 && w.n === words[i - 1].n && w.s - words[i - 1].s < 0.6 && w.edge < OVERLAP + 0.5 && words[i - 1].edge < OVERLAP + 0.5));
   }
 
-  /* ---------- two passes into one transcript, with doubts marked ---------- */
-  function reconcile(A, B){
+  /* ---------- two passes into one transcript, with doubts marked ----------
+     ctx (optional): { covB: [[s, e]] parts of the song the second pass really heard, cuts: [times] where either
+     pass cut the song }. Words only one pass heard are the usual way the AI invents lyrics (over an intro, a beat
+     break or an outro it "hears" a line that isn't there). They are kept only where that's believable: near a cut,
+     where the other pass didn't listen, inside a phrase both passes heard, or tight between words both heard. */
+  function reconcile(A, B, ctx = {}){
     const n = A.length, m = B.length;
     if(!m) return A.map(w => ({ ...w, u: w.lp < -0.7 ? 1 : 0 }));
     if(!n) return B.map(w => ({ ...w, u: 1 }));
@@ -96,40 +121,103 @@ window.SLSTranscribe = (() => {
     const same = (i, j) => A[i].n === B[j].n && Math.abs(A[i].s - B[j].s) < 2.5;
     for(let i = n - 1; i >= 0; i--) for(let j = m - 1; j >= 0; j--)
       dp[i * W + j] = same(i, j) ? dp[(i + 1) * W + j + 1] + 1 : Math.max(dp[(i + 1) * W + j], dp[i * W + j + 1]);
-    const out = []; let i = 0, j = 0, ra = [], rb = [];
-    const score = r => r.reduce((a, w) => a + w.lp - (w.edge < 1.2 ? 0.6 : 0), 0) / r.length;
-    const flush = () => {
-      if(ra.length && rb.length){
-        // both heard something here, but not the same thing: keep the more confident reading, offer the other
-        const [keep, other] = score(ra) >= score(rb) ? [ra, rb] : [rb, ra], pair = keep.length === other.length;
-        keep.forEach((w, k) => out.push({ ...w, u: 1, alt: pair ? (other[k].n !== w.n ? other[k].w : "") : (k === 0 ? other.map(x => x.w).join(" ") : "") }));
-      } else {
-        // only one pass heard these. Right at a cut that is expected, so trust it; elsewhere, ask.
-        for(const w of ra.length ? ra : rb){ if(w.lp < -1.1) continue; out.push({ ...w, u: 1, alt: "" }); }
-      }
-      ra = []; rb = [];
-    };
+    const ops = []; let i = 0, j = 0, ra = [], rb = [];
+    const push = () => { if(ra.length || rb.length) ops.push({ ra, rb }); ra = []; rb = []; };
     while(i < n && j < m){
-      if(same(i, j)){ flush(); const a = A[i], b = B[j]; out.push({ ...(a.edge >= b.edge ? a : b), w: a.w, brk: a.brk, u: 0 }); i++; j++; }
+      if(same(i, j)){ push(); ops.push({ a: A[i], b: B[j] }); i++; j++; }
       else if(dp[(i + 1) * W + j] >= dp[i * W + j + 1]) ra.push(A[i++]);
       else rb.push(B[j++]);
     }
     while(i < n) ra.push(A[i++]); while(j < m) rb.push(B[j++]);
-    flush();
+    push();
+    const agreedSeg = new Set(); ops.forEach(o => { if(o.a){ agreedSeg.add("A" + o.a.sg); agreedSeg.add("B" + o.b.sg); } });
+    const covB = ctx.covB || null, cuts = ctx.cuts || [];
+    const coveredByB = t => !covB || covB.some(([s, e]) => t >= s + 0.5 && t <= e - 0.5);
+    const nearCut = t => cuts.some(c => Math.abs(c - t) < 2.5);
+    const score = r => r.reduce((a, w) => a + w.lp - (w.edge < 1.2 ? 0.6 : 0), 0) / r.length;
+    const agS = ops.filter(o => o.a).map(o => o.a.s), agE = ops.filter(o => o.a).map(o => o.a.e);
+    const agreedBefore = t => { let x = -Infinity; for(const e of agE){ if(e <= t + 0.05) x = e; else break; } return x; };
+    const agreedAfter = t => { for(const s of agS) if(s >= t - 0.05) return s; return Infinity; };
+    const out = [];
+    ops.forEach((o, k) => {
+      if(o.a){ const a = o.a, b = o.b; out.push({ ...(a.edge >= b.edge ? a : b), w: a.w, brk: a.brk, u: 0 }); return; }
+      const { ra, rb } = o;
+      if(ra.length && rb.length){
+        // both heard something here, but not the same thing: keep the more confident reading, offer the other
+        const [keep, other] = score(ra) >= score(rb) ? [ra, rb] : [rb, ra], pair = keep.length === other.length;
+        keep.forEach((w, q) => out.push({ ...w, u: 1, alt: pair ? (other[q].n !== w.n ? other[q].w : "") : (q === 0 ? other.map(x => x.w).join(" ") : "") }));
+        return;
+      }
+      // only one pass heard these
+      const fromA = ra.length > 0, run = fromA ? ra : rb;
+      for(const w of run){
+        if(w.lp < -1.1) continue;
+        const before = agreedBefore(w.s), after = agreedAfter(w.e);
+        const tight = (w.s - before < 3 && after - w.e < 3) || w.s - before < 1 || after - w.e < 1;
+        const otherListened = fromA ? coveredByB(w.s) : true;
+        const ok = !otherListened || nearCut(w.s) || agreedSeg.has((fromA ? "A" : "B") + w.sg) || tight;
+        if(ok) out.push({ ...w, u: 1, alt: "" });
+      }
+    });
     return out.sort((a, b) => a.s - b.s);
   }
 
   /* ---------- timing and lines ---------- */
-  // Whisper gives the silence before a word to that word, so a word after a pause seems to start far too early.
-  // A word that runs much longer than its length explains is pulled up to where it would really begin.
-  function fixStarts(list){
-    list.forEach((w, k) => { if(!w.brk && k > 0) return;   // a long word in the middle of a phrase is a held note: leave it
-      const cap = Math.min(1.5, Math.max(0.45, 0.3 + 0.09 * [...w.w].length)); if(w.e - w.s > cap * 1.7) w.s = w.e - cap; });
+  // Whisper gives the silence before a word to that word, so a word after a pause seems to start far too early
+  // (the hook comes in, but its first word has been lit up since the end of the last line). A word that runs much
+  // longer than its length explains is pulled up to where it would really begin. A held note looks the same in
+  // the timings, so the audio decides: if the part that would be cut is clearly quieter in the voice's range than
+  // the rest of the word, nobody was singing there.
+  const FR = 50;   // loudness frames per second
+  function envelope(samples){
+    if(!samples) return null;
+    const hop = RATE / FR, n = Math.floor(samples.length / hop), env = new Float32Array(n);
+    for(let f = 0; f < n; f++){ let e = 0; const a = f * hop; for(let i = 0; i < hop; i += 2){ const v = samples[a + i]; e += v * v; } env[f] = e / (hop / 2); }
+    return env;
+  }
+  function level(env, s, e){
+    if(!env) return null;
+    const a = Math.max(0, Math.floor(s * FR)), b = Math.min(env.length, Math.max(a + 1, Math.ceil(e * FR)));
+    if(b <= a) return null; let x = 0; for(let f = a; f < b; f++) x += env[f]; return x / (b - a);
+  }
+  const startCap = w => Math.min(1.2, Math.max(0.35, 0.18 + 0.075 * [...w.w].length));
+  // how loud the part before the real start is, against the sung part (1 = same, 0 = silent); null without audio
+  function leadRatio(env, w, cap){ const x = level(env, w.s, w.e - cap), y = level(env, w.e - cap, w.e); return x == null || !y ? null : x / y; }
+  // where the voice clearly comes in inside a word: a rise in the voice's range that lasts (a drum hit doesn't)
+  function onset(env, w){
+    if(!env) return null;
+    const a = Math.ceil((w.s + 0.2) * FR), b = Math.floor((w.e - 0.12) * FR), tail = level(env, w.e - Math.min(0.3, (w.e - w.s) / 3), w.e);
+    let best = 0, at = -1;
+    for(let f = Math.max(a, 15); f <= b && f + 10 <= env.length; f++){
+      const pre = level(env, (f - 15) / FR, f / FR), post = level(env, f / FR, (f + 10) / FR), later = level(env, (f + 10) / FR, Math.min(w.e, (f + 20) / FR));
+      if(pre > 0 && post / pre > best && post >= tail * 0.5 && (later == null || later >= pre * 1.5)){ best = post / pre; at = f; }
+    }
+    return best >= 2 ? at / FR : null;
+  }
+  // starts: the word opens a phrase (then it's moved unless the audio clearly says it's a held note).
+  // loose: also check long words inside a phrase (moved only when the audio shows the voice coming in late).
+  function trimStart(w, env, starts, loose){
+    const cap = startCap(w), d = w.e - w.s; if(d <= cap * 1.35) return false;
+    if(!starts && !loose) return false;
+    const on = onset(env, w);
+    if(on != null){ w.s = Math.min(on, w.e - 0.12); return true; }
+    if(!starts) return env ? false : (([...w.w].length <= 4 && d > cap * 1.6) || d > cap * 2.4) ? (w.s = w.e - cap, true) : false;
+    const r = leadRatio(env, w, cap);
+    if(r == null || r < 0.85){ w.s = w.e - cap; return true; }
+    return false;
+  }
+  function fixStarts(list, env = null, loose = false){
+    list.sort((a, b) => a.s - b.s);
+    list.forEach((w, k) => {
+      const prev = list[k - 1], next = list[k + 1];
+      const starts = !prev || w.brk || w.s - prev.e > 0.25, ends = !next || next.brk || next.s - w.e > 0.25;
+      trimStart(w, env, starts, loose && !ends);
+    });
     return list.sort((a, b) => a.s - b.s);
   }
-  function finish(list, lang){
+  function finish(list, lang, env = null){
     if(!list.length) return { words: [], lyrics: "" };
-    fixStarts(list);
+    fixStarts(list, env, true);
     // lines: a real pause, or one of Whisper's own phrase breaks
     let lines = [], cur = [];
     list.forEach((w, k) => { const prev = list[k - 1]; if(cur.length && (w.s - prev.e > 0.5 || (w.brk && w.s - prev.e > 0.12) || (w.brk && cur.length >= 6))){ lines.push(cur); cur = []; } cur.push(w); });
@@ -249,21 +337,49 @@ window.SLSTranscribe = (() => {
   // heard words split into single characters when the pasted lyrics are matched character by character
   function splitChars(list){ return list.flatMap(w => { const cs = [...w.w]; if(cs.length < 2 || !CJK.test(w.w)) return [w]; const step = (w.e - w.s) / cs.length; return cs.map((ch, k) => ({ ...w, w: ch, n: norm(ch), s: w.s + k * step, e: w.s + (k + 1) * step })); }); }
 
-  function alignLyrics(text, passA, passB){
+  /* ctx (optional): { env: loudness envelope, covB: [[s, e]] parts the second pass heard, cuts: [times] } */
+  function alignLyrics(text, passA, passB, ctx = {}){
     let U = tokenize(text);
     if(!U.length) return null;
-    const A = splitChars(fixStarts(passA.map(w => ({ ...w })))), B = splitChars(fixStarts(passB.map(w => ({ ...w }))));
+    const env = ctx.env || null, covB = ctx.covB || null, cuts = ctx.cuts || [];
+    const A = splitChars(fixStarts(passA.map(w => ({ ...w })), env)), B = splitChars(fixStarts(passB.map(w => ({ ...w })), env));
     const pa = matchUp(U, A), pb = B.length ? matchUp(U, B) : new Int32Array(U.length).fill(-1);
+    // The first pass is given the lyrics as a hint, and over an instrumental part it can simply say them back.
+    // A word only that pass found, where the second pass listened and heard nothing at all, is such an echo.
+    const Bs = B.map(w => w.s);
+    const heardByB = t => { let lo = 0, hi = Bs.length; while(lo < hi){ const mid = (lo + hi) >> 1; if(Bs[mid] < t - 1.5) lo = mid + 1; else hi = mid; } return lo < Bs.length && Bs[lo] <= t + 1.5; };
+    const bListened = t => B.length > 0 && (!covB || covB.some(([s, e]) => t >= s + 0.5 && t <= e - 0.5)) && !cuts.some(c => Math.abs(c - t) < 2);
     // timing for each pasted word from the passes that heard it
     const T = U.map((u, i) => {
       const a = pa[i] >= 0 ? A[pa[i]] : null, b = pb[i] >= 0 ? B[pb[i]] : null;
       if(a && b && Math.abs(a.s - b.s) < 0.6) return { s: (a.s + b.s) / 2, e: (a.e + b.e) / 2, ok: 2 };
-      if(a && b) return { ...(b.edge > a.edge + 1 ? { s: b.s, e: b.e } : { s: a.s, e: a.e }), ok: 1 };   // they disagree: trust the one heard further from a cut
+      if(a && b) return { s: a.s, e: a.e, ok: 1, alt: { s: b.s, e: b.e }, far: b.edge > a.edge + 1 };   // they disagree: settled below
+      if(a && bListened(a.s) && !heardByB(a.s)) return null;
       if(a || b){ const x = a || b; return { s: x.s, e: x.e, ok: 1 }; }
       return null;
     });
-    // anything out of order (two passes pulling different ways) is dropped back to "not found"
-    let last = -1; T.forEach((t, i) => { if(!t) return; if(t.s < last - 0.05) T[i] = null; else last = t.s; });
+    // where the passes disagree, take the reading that fits between the words around it
+    const sure = T.map((t, i) => t && t.ok === 2 ? i : -1).filter(i => i >= 0);
+    T.forEach((t, i) => {
+      if(!t || !t.alt) return;
+      let p = -1, q = -1; for(const k of sure){ if(k < i) p = k; else { q = k; break; } }
+      const lo = p >= 0 ? T[p].s : -Infinity, hi = q >= 0 ? T[q].s : Infinity;
+      const fits = x => x.s > lo - 0.05 && x.s < hi + 0.05, fa = fits(t), fb = fits(t.alt);
+      const near = x => Math.min(Math.abs(x.s - lo), Math.abs(hi - x.s)), da = near(t), db = near(t.alt);
+      const echo = bListened(t.s) && !heardByB(t.s);
+      const useB = fb && !fa ? true : fa && !fb ? false : echo ? true : Math.abs(da - db) > 1 ? db < da : t.far;
+      T[i] = useB ? { s: t.alt.s, e: t.alt.e, ok: 1 } : { s: t.s, e: t.e, ok: 1 };
+    });
+    // anything out of order: keep the longest run of words that are in order, weighting agreed words higher
+    {
+      const idx = T.map((t, i) => t ? i : -1).filter(i => i >= 0), L = idx.length;
+      const best = new Float64Array(L), from = new Int32Array(L).fill(-1);
+      for(let x = 0; x < L; x++){ const w = T[idx[x]].ok; best[x] = w;
+        for(let y = 0; y < x; y++) if(T[idx[y]].s <= T[idx[x]].s + 0.05 && best[y] + w > best[x]){ best[x] = best[y] + w; from[x] = y; } }
+      let end = -1; for(let x = 0; x < L; x++) if(end < 0 || best[x] > best[end]) end = x;
+      const keepSet = new Set(); for(let x = end; x >= 0; x = from[x]) keepSet.add(idx[x]);
+      idx.forEach(i => { if(!keepSet.has(i)) T[i] = null; });
+    }
     // a line is sung in one go: matches scattered across the song (a line pasted twice but sung once picks up
     // stray similar words) don't count. Per line, only the tightest group of matches is kept, and only if it
     // covers a fair part of the line.
@@ -277,6 +393,23 @@ window.SLSTranscribe = (() => {
       const real = idx.filter(i => !U[i].opt).length, need = real >= 3 ? Math.max(2, Math.ceil(real * 0.3)) : 1;
       const enough = best.length >= need || (best.length === 1 && [...U[best[0]].n].length >= 5);
       for(const i of hit) if(!enough || !best.includes(i)) T[i] = null;
+      // the line's first found word, far ahead of the rest of the line, is a stray (an echo, an ad-lib, the same
+      // little word sung earlier): it would sit lit up waiting for the line. Let it be placed from its neighbours.
+      const left = idx.filter(i => T[i]);
+      if(left.length >= 2){ const [i0, i1] = left, gap = T[i1].s - T[i0].e, short = [...U[i0].n].length <= 4;
+        if(gap > (i1 - i0) * 0.7 + (short ? 0.9 : 1.8)) T[i0] = null; }
+    }
+    // Whole lines nobody sang. When most of the lyrics were found, a line with no word heard at all is almost
+    // always one that isn't in this version (a chorus pasted once too often, a verse the song skips), and
+    // squeezing it in between real lines puts words on screen that aren't sung. Those lines are left out.
+    let dropped = 0, droppedWords = 0;
+    {
+      const hitShare = T.filter(Boolean).length / U.length;
+      if(hitShare >= 0.45){
+        const gone = new Set();
+        for(const [l, idx] of byLine) if(idx.every(i => !T[i]) && idx.some(i => !U[i].opt)){ gone.add(l); dropped++; }
+        if(gone.size){ const keepI = U.map((u, i) => !gone.has(u.l)); droppedWords = keepI.filter(k => !k).length; U = U.filter((_, i) => keepI[i]); const T1 = T.filter((_, i) => keepI[i]); T.length = 0; T.push(...T1); }
+      }
     }
     // bracketed words (backing vocals, ad-libs) that weren't heard are left out; lines left empty go too
     const keep = U.map((u, i) => !(u.opt && !T[i]));
@@ -306,6 +439,13 @@ window.SLSTranscribe = (() => {
       for(let q = 0; q < k; q++) T2[i + q] = { s: from + q * step, e: from + (q + 0.85) * step, ok: 0 };
       i = j;
     }
+    // first words of lines (and, where the audio is clear, long words inside them) start when they're sung
+    for(let i = 0; i < U.length; i++){
+      if(!T2[i].ok) continue;
+      const first = i === 0 || U[i].l !== U[i - 1].l, last = i === U.length - 1 || U[i + 1].l !== U[i].l;
+      const w = { w: U[i].w, s: T2[i].s, e: T2[i].e };
+      if(trimStart(w, env, first, !first && !last && !!env)) T2[i] = { ...T2[i], s: w.s };
+    }
     // never let a word start before the one sung before it
     for(let i = 1; i < T2.length; i++) if(T2[i].s < T2[i - 1].s + 0.02){ T2[i] = { ...T2[i], s: T2[i - 1].s + 0.02, e: Math.max(T2[i].e, T2[i - 1].s + 0.08) }; }
     // words, lines as pasted, sensible lengths
@@ -318,7 +458,7 @@ window.SLSTranscribe = (() => {
     words = merged;
     const out = words.map((w, k) => { const nx = words[k + 1], o = { w: w.w, l: w.l, t: +w.t.toFixed(3), d: +Math.max(0.06, Math.min(Math.max(w.e - w.t, 0.12), 2.5, nx ? nx.t - w.t - 0.02 : 9)).toFixed(3) }; if(w.g){ o.u = 1; o.g = 1; } return o; });
     const lines = []; out.forEach(w => { (lines[w.l] = lines[w.l] || []).push(w.w); });
-    return { words: out, lyrics: lines.filter(Boolean).map(L => L.join(" ")).join("\n"), matched: found / U.length };
+    return { words: out, lyrics: lines.filter(Boolean).map(L => L.join(" ")).join("\n"), matched: found / (U.length + droppedWords), dropped };
   }
   // the part of the pasted lyrics most likely sung in a piece of the song, as a hint for the AI
   function promptFor(U, c, dur){
@@ -334,6 +474,7 @@ window.SLSTranscribe = (() => {
     const api = window.SLSBackend, stop = () => { if(signal && signal.aborted) throw new api.ApiError("cancelled", "Cancelled.", 0); };
     onProgress({ stage: "read", pct: 0.02 });
     const mono = await toMono16k(buf), dur = mono.length / RATE; stop();
+    const loud = envelope(mono), voice = envelope(await voiceBand(buf)) || loud; stop();
     const given = lyrics && lyrics.trim() ? tokenize(lyrics) : [];
     const first = Math.min(CHUNK / 2 - 1, Math.max(4, dur / 2));
     const A = plan(dur, 0), B = dur > 6 ? plan(dur, first) : [];
@@ -373,16 +514,20 @@ window.SLSTranscribe = (() => {
     }));
     stop();
     onProgress({ stage: "time", pct: 0.95 });
-    const a = stitch(A, res.A, dur), b = B.length && failedB < B.length ? stitch(B, res.B, dur) : [];
+    const a = dropSilent(stitch(A, res.A, dur), loud), b = B.length && failedB < B.length ? dropSilent(stitch(B, res.B, dur), loud) : [];
+    // a piece the second pass came back (nearly) empty on doesn't count as a second opinion
+    const heardIn = (list, c) => list.filter(w => w.s >= c.s && w.s < c.e).length;
+    const edges = P => P.flatMap((c, k) => [k > 0 ? c.s : null, k < P.length - 1 ? c.e : null]).filter(x => x != null);
+    const ctx = { env: voice, covB: B.filter((c, k) => res.B[k] && heardIn(b, c) >= Math.max(1, 0.3 * heardIn(a, c))).map(c => [c.s, c.e]), cuts: [...edges(A), ...edges(B)] };
     if(given.length){
-      const al = alignLyrics(lyrics, a, b);
+      const al = alignLyrics(lyrics, a, b, ctx);
       onProgress({ stage: "time", pct: 1 });
       return { ...al, mode: "aligned", language: lang || detected || null, unsure: al.words.filter(w => w.u).length, doubleChecked: b.length > 0 };
     }
-    const final = finish(reconcile(a, b), lang || detected);
+    const final = finish(reconcile(a, b, ctx), lang || detected, voice);
     onProgress({ stage: "time", pct: 1 });
     return { ...final, mode: "heard", language: lang || detected || null, unsure: final.words.filter(w => w.u).length, doubleChecked: b.length > 0 };
   }
 
-  return { run, cleanLyrics, LANGUAGES, langName, _test: { plan, stitch, reconcile, finish, norm, tidy, tokenize, similar, matchUp, alignLyrics } };
+  return { run, cleanLyrics, LANGUAGES, langName, _test: { plan, stitch, reconcile, finish, norm, tidy, tokenize, similar, matchUp, alignLyrics, envelope, dropSilent, fixStarts } };
 })();
