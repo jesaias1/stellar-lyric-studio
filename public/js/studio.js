@@ -188,6 +188,12 @@ function segments(){
     S.P.cuts.points.filter(t => t > a + 0.1 && t < b - 0.1).sort((x,y)=>x-y).forEach(t => { if(t > pts[pts.length-1] + 0.1) pts.push(t); });
     pts.push(b); const segs = []; for(let i=0;i<pts.length-1;i++) segs.push({a:pts[i], b:pts[i+1], i}); return segs;
   }
+  if(S.P.cuts.mode === "lines"){   // a new picture or clip on every lyric line
+    const starts = [...new Set(S.P.words.map(w => w.l))].map(l => Math.min(...S.P.words.filter(w => w.l === l).map(w => w.t))).sort((x,y)=>x-y);
+    const lead = 0.12;   // change just before the line is sung, so the picture lands with the words
+    starts.forEach(t => { const p = Math.max(a, t - lead); if(p > a + 0.4 && p < b - 0.4 && p > pts[pts.length-1] + 0.6) pts.push(p); });
+    pts.push(b); const segs = []; for(let i=0;i<pts.length-1;i++) segs.push({a:pts[i], b:pts[i+1], i}); return segs;
+  }
   if(S.P.cuts.mode === "count"){
     const n = clamp(Math.round(S.P.cuts.count||8), 1, 60), beats = beatsIn(a,b).map(x=>x.t).filter(t => t > a + 0.15 && t < b - 0.15);
     for(let k=1;k<n;k++){ const target = a + (b-a)*k/n; let best = target, bd = Infinity; for(const t of beats){ const d = Math.abs(t-target); if(d < bd){ bd = d; best = t; } }
@@ -210,7 +216,7 @@ function defaultIn(i, v){ return (i*1.7) % Math.max(0.1, (v && v.duration ? v.du
 function resolvedIn(i){ const {order} = segInfo(), clip = S.clips.find(c => c.id === order[i]); const sl = slotOf(i); if(sl.in != null) return sl.in; return clip && clip.kind === "video" ? defaultIn(i, clip.el) : 0; }
 function segInfo(){
   const pool = S.clips.filter(c=>c.on);
-  const key = [S.P.section.a,S.P.section.b,S.P.bpm,S.P.offset,JSON.stringify(S.P.cuts),pool.map(c=>c.id).join(",")].join("|");
+  const key = [S.P.section.a,S.P.section.b,S.P.bpm,S.P.offset,JSON.stringify(S.P.cuts),pool.map(c=>c.id).join(","),S.P.cuts.mode === "lines" ? S.P.words.map(w=>w.l+":"+w.t.toFixed(2)).join(",") : ""].join("|");
   if(key === segCache.key) return segCache;
   const segs = segments(), r = rng(S.P.cuts.seed), order = [];
   if(S.P.cuts.slots && S.P.cuts.slots.length !== segs.length) S.P.cuts.slots = null;   // the cut layout changed: fall back to the automatic order
@@ -218,6 +224,7 @@ function segInfo(){
   let bag = [], last = null;
   for(let i=0;i<segs.length;i++){
     if(!pool.length){ order.push(null); continue; }
+    if(S.P.cuts.order === "inorder"){ let id = pool[i % pool.length].id; if(slots && slots[i] && slots[i].c && S.clips.find(c=>c.id===slots[i].c)) id = slots[i].c; order.push(id); last = id; continue; }
     if(!bag.length){ bag = pool.map(c=>c.id); for(let j=bag.length-1;j>0;j--){ const k=Math.floor(r()*(j+1)); [bag[j],bag[k]]=[bag[k],bag[j]]; } if(bag.length>1 && bag[0]===last) bag.push(bag.shift()); }
     let id = bag.shift();
     if(slots && slots[i] && slots[i].c && S.clips.find(c=>c.id===slots[i].c)) id = slots[i].c;
@@ -649,6 +656,7 @@ function drawClip(c, W, H, clip, lt, segDur, segI){
   if(clip.kind === "gen"){ drawGen(c, W, H, clip.gen, lt + segI*3.1, segI); return true; }
   if(clip.kind === "img"){ const p = clamp(lt/Math.max(segDur,.1),0,1), dir = segI%4;
     coverDraw(c, clip.el, W, H, clip.el.naturalWidth, clip.el.naturalHeight, 1.06 + 0.1*p, (dir===0?-1:dir===1?1:0)*(p-.5)*0.8, (dir===2?-1:dir===3?1:0)*(p-.5)*0.8); return true; }
+  if(clip.kind === "video" && clip.xf){ coverDraw(c, clip.xf, W, H, clip.xf.width, clip.xf.height, 1.0, 0, 0); return true; }   // a frame decoded by the exporter
   if(clip.kind === "video"){ const v = vidFor(clip, segI); if(v.readyState >= 2 && !v.seeking && v.videoWidth){ coverDraw(c, v, W, H, v.videoWidth, v.videoHeight, 1.0, 0, 0); return true; } return false; }
   return true;
 }
@@ -693,8 +701,17 @@ function renderFrame(tr0){
   if(si !== lastSi){ const cc = cutC.getContext("2d"); cc.clearRect(0,0,W,H); cc.drawImage(footC, 0, 0); lastSi = si; }   // keep the outgoing frame for crossfades
   const spd = slotOf(si).sp || 1; fc.save(); drawClip(fc, W, H, clip, lt*spd, seg ? (seg.b - seg.a)*spd : 1, si); fc.restore();          // not ready? the last good frame stays
   const XF = clamp(P.cuts.xf ?? 0.35, 0.05, 3);
-  if(tr === "crossfade" && si > 0 && lt < XF){ sc.drawImage(cutC, 0, 0); sc.save(); sc.globalAlpha = ease(lt/XF); sc.drawImage(footC, 0, 0); sc.restore(); }
-  else sc.drawImage(footC, 0, 0);
+  const tk = si > 0 && lt < XF ? ease(lt/XF) : 1;
+  if(tk >= 1 || !["crossfade","slide","push","zoom","wipe","blur","spin"].includes(tr)) sc.drawImage(footC, 0, 0);
+  else if(tr === "crossfade"){ sc.drawImage(cutC, 0, 0); sc.save(); sc.globalAlpha = tk; sc.drawImage(footC, 0, 0); sc.restore(); }
+  else if(tr === "slide"){ sc.drawImage(cutC, 0, 0); sc.drawImage(footC, W*(1 - tk), 0); }
+  else if(tr === "push"){ sc.drawImage(cutC, -W*tk, 0); sc.drawImage(footC, W*(1 - tk), 0); }
+  else if(tr === "zoom"){ sc.save(); const z = 1 + 0.25*tk; sc.translate(W/2, H/2); sc.scale(z, z); sc.translate(-W/2, -H/2); sc.drawImage(cutC, 0, 0); sc.restore();
+    sc.save(); sc.globalAlpha = tk; const z2 = 1.18 - 0.18*tk; sc.translate(W/2, H/2); sc.scale(z2, z2); sc.translate(-W/2, -H/2); sc.drawImage(footC, 0, 0); sc.restore(); }
+  else if(tr === "wipe"){ sc.drawImage(cutC, 0, 0); sc.save(); sc.beginPath(); sc.moveTo(0,0); sc.lineTo(W*tk*1.35,0); sc.lineTo(W*tk*1.35 - W*0.35,H); sc.lineTo(0,H); sc.closePath(); sc.clip(); sc.drawImage(footC, 0, 0); sc.restore(); }
+  else if(tr === "blur"){ const bl = Math.sin(tk*Math.PI)*Math.max(W,H)*0.02; sc.save(); if("filter" in sc) sc.filter = `blur(${bl.toFixed(1)}px)`; sc.drawImage(cutC, 0, 0); sc.globalAlpha = tk; sc.drawImage(footC, 0, 0); sc.restore(); }
+  else if(tr === "spin"){ sc.fillStyle = "#000"; sc.fillRect(0,0,W,H); sc.save(); sc.translate(W/2, H/2); const half = tk < 0.5, k2 = half ? tk*2 : (tk - 0.5)*2;
+    sc.rotate((half ? k2 : k2 - 1)*0.5); const z = half ? 1 + k2*0.6 : 1.6 - k2*0.6; sc.scale(z, z); sc.translate(-W/2, -H/2); sc.drawImage(half ? cutC : footC, 0, 0); sc.restore(); }
   if(tr === "flash" && si > 0 && lt < XF){ sc.fillStyle = `rgba(255,255,255,${0.55*(1 - lt/XF)})`; sc.fillRect(0,0,W,H); }
   if(tr === "dip" && si > 0 && lt < XF){ sc.fillStyle = `rgba(0,0,0,${0.85*(1 - lt/XF)})`; sc.fillRect(0,0,W,H); }
   if(st.scrim > 0){ sc.fillStyle = `rgba(6,5,10,${st.scrim})`; sc.fillRect(0,0,W,H);
@@ -1149,6 +1166,7 @@ function updateMeta(){
   $("#songMeta").textContent = S.audio ? `${fmt(S.audio.duration)} · section ${fmt(P.section.a)} to ${fmt(P.section.b)} (${(P.section.b-P.section.a).toFixed(1)}s)` : "";
 }
 function syncCutUI(){ const m = S.P.cuts.mode;
+  $$("#cutOrder button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === (S.P.cuts.order || "shuffle"))));
   $$("#cutTrans button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === (S.P.cuts.transition || "none"))));
   $("#xfField").hidden = (S.P.cuts.transition || "none") === "none"; $("#xfDur").value = S.P.cuts.xf ?? 0.35; $("#xfDurVal").textContent = (+(S.P.cuts.xf ?? 0.35)).toFixed(2) + "s";
   $$("#cutMode button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === m)));
@@ -1291,6 +1309,7 @@ const secMax = () => S.audio ? S.audio.duration : 60;
 $("#secLenIn").onchange = e => { const len = clamp(+e.target.value || 15, 2, Math.min(60, secMax())), a = clamp(S.P.section.a, 0, secMax() - len); setSection(a, a + len); syncUI(); };
 $("#secStartIn").onchange = e => { const len = S.P.section.b - S.P.section.a, a = clamp(+e.target.value || 0, 0, Math.max(0, secMax() - len)); setSection(a, a + len); syncUI(); };
 $("#secEndIn").onchange = e => { const b = clamp(+e.target.value || 0, S.P.section.a + 2, Math.min(secMax(), S.P.section.a + 60)); setSection(S.P.section.a, b); syncUI(); };
+$("#cutOrder").onclick = e => { const b = e.target.closest("button"); if(!b) return; S.P.cuts.order = b.dataset.v; S.P.cuts.slots = null; syncCutUI(); dirty(); };
 $("#cutTrans").onclick = e => { const b = e.target.closest("button"); if(!b) return; S.P.cuts.transition = b.dataset.v; syncCutUI(); saveDraft(); if(!S.playing){ const {segs} = segInfo(); const k = segs.findIndex(x => x.a > S.t); if(k > 0){ S.t = segs[k].a - 0.6; play({}); } } };
 function addCutAt(t0){ if(S.locks.cuts){ toast("The cuts track is locked"); return false; } toManualCuts(); const t = snapTime(t0, 2), {a,b} = S.P.section; if(t <= a + 0.15 || t >= b - 0.15){ toast("Move the playhead inside the soundbite first"); return false; }
   if(S.P.cuts.points.some(p => Math.abs(p - t) < 0.15)){ toast("There's already a cut there"); return false; }
@@ -1492,7 +1511,7 @@ function genThumb(g){ const cv = document.createElement("canvas"); cv.width = 12
 function addThumb(c, url){ c.thumb = url; c.thumbImg = new Image(); c.thumbImg.onload = () => tlDirty = true; c.thumbImg.src = url; }
 function renderClips(){
   $("#clipGrid").innerHTML = S.clips.map(c => `<button class="clipt${c.on?"":" off"}" data-id="${c.id}" aria-pressed="${c.on}" title="${c.on?"In":"Out of"} the shuffle">
-    <img alt="" src="${c.thumb||""}"><span class="cap"><span>${esc(c.name)}</span><span class="kind">${c.kind==="gen"?"Built-in":c.kind==="img"?"Photo":"Video"}</span></span>
+    <img alt="" src="${c.thumb||""}"><span class="cap"><span>${esc(c.name)}</span><span class="kind">${c.kind==="gen"?"Built-in":c.src&&c.src.kind==="ai"?"AI":c.src&&c.src.kind==="stock"?"Stock":c.kind==="img"?"Photo":"Video"}</span></span>
     ${c.kind!=="gen"?`<span class="x" data-rm="${c.id}" role="button" aria-label="Remove ${esc(c.name)}">×</span>`:""}</button>`).join("");
 }
 $("#clipGrid").onclick = e => {
@@ -1502,29 +1521,37 @@ $("#clipGrid").onclick = e => {
   if(c.on && S.clips.filter(x=>x.on).length === 1){ toast("Keep at least one clip in the shuffle"); return; }
   c.on = !c.on; renderClips(); tlDirty = true; syncSegCard();
 };
-$("#clipFiles").onchange = async e => {
-  const files = [...e.target.files]; e.target.value = "";
-  let added = 0;
-  for(const f of files){
-    const url = URL.createObjectURL(f), id = "u" + (++clipId), name = f.name.replace(/\.[^.]+$/, "").slice(0, 28);
-    if(f.type.startsWith("image/")){
+$("#clipFiles").onchange = async e => { const files = [...e.target.files]; e.target.value = ""; await addFootage(files); };
+/* Adds photos and videos to the footage pool. files: File or Blob objects; meta (optional, per file):
+   {name, credit, src} where src describes where it came from so a template can fetch it again. */
+async function addFootage(files, metas = [], { quiet = false } = {}){
+  let added = 0; const ids = [];
+  for(const [fi, f] of files.entries()){
+    const meta = metas[fi] || {};
+    const url = URL.createObjectURL(f), id = "u" + (++clipId), name = (meta.name || f.name || "Clip").replace(/\.[^.]+$/, "").slice(0, 28);
+    const type = f.type || (meta.kind === "video" ? "video/mp4" : "");
+    if(type.startsWith("image/")){
       const img = new Image(); img.src = url; try { await img.decode(); } catch { continue; }
-      const c = {id, name, kind:"img", el:img, url, on:true}; const cv = document.createElement("canvas"); cv.width = 120; cv.height = 160; coverDraw(cv.getContext("2d"), img, 120, 160, img.naturalWidth, img.naturalHeight, 1, 0, 0); addThumb(c, cv.toDataURL("image/jpeg",.8));
-      S.clips.push(c); added++;
-    } else if(f.type.startsWith("video/")){
+      const c = {id, name, kind:"img", el:img, url, blob:f, on:true, credit:meta.credit, src:meta.src}; const cv = document.createElement("canvas"); cv.width = 120; cv.height = 160; coverDraw(cv.getContext("2d"), img, 120, 160, img.naturalWidth, img.naturalHeight, 1, 0, 0); addThumb(c, cv.toDataURL("image/jpeg",.8));
+      S.clips.push(c); added++; ids.push(id);
+    } else if(type.startsWith("video/") || type === "application/octet-stream" || type === "binary/octet-stream"){
       const v = document.createElement("video"); v.src = url; v.muted = true; v.playsInline = true; v.loop = true; v.preload = "auto"; v.crossOrigin = "anonymous";
       const ok = await new Promise(res => { v.onloadeddata = () => res(true); v.onerror = () => res(false); setTimeout(() => res(v.readyState >= 2), 8000); });
-      if(!ok){ toast(`Couldn't read ${f.name}. Try an MP4 (H.264).`); continue; }
+      if(!ok){ toast(`Couldn't read ${name}. Try an MP4 (H.264).`); continue; }
       await new Promise(res => { v.onseeked = res; v.currentTime = Math.min(0.5, (v.duration||1)/2); setTimeout(res, 1500); });
-      const c = {id, name, kind:"video", el:v, url, on:true}; const cv = document.createElement("canvas"); cv.width = 120; cv.height = 160; coverDraw(cv.getContext("2d"), v, 120, 160, v.videoWidth, v.videoHeight, 1, 0, 0); addThumb(c, cv.toDataURL("image/jpeg",.8));
-      S.clips.push(c); added++;
+      const c = {id, name, kind:"video", el:v, url, blob:f, on:true, credit:meta.credit, src:meta.src}; const cv = document.createElement("canvas"); cv.width = 120; cv.height = 160; coverDraw(cv.getContext("2d"), v, 120, 160, v.videoWidth, v.videoHeight, 1, 0, 0); addThumb(c, cv.toDataURL("image/jpeg",.8));
+      S.clips.push(c); added++; ids.push(id);
     }
   }
   if(added && S.clips.some(c=>c.kind==="gen" && c.on) && S.clips.filter(c=>c.kind!=="gen").length === added){
-    S.clips.forEach(c => { if(c.kind === "gen") c.on = false; }); toast(`${added} clip${added>1?"s":""} added. Built-in visuals switched off; tap them to bring them back.`);
-  } else if(added) toast(`${added} clip${added>1?"s":""} added to the pool`);
-  renderClips(); tlDirty = true; syncSegCard();
-};
+    S.clips.forEach(c => { if(c.kind === "gen") c.on = false; }); if(!quiet) toast(`${added} clip${added>1?"s":""} added. Built-in visuals switched off; tap them to bring them back.`);
+  } else if(added && !quiet) toast(`${added} clip${added>1?"s":""} added to the pool`);
+  // several photos make a slideshow: a new photo on every lyric line, in the order they were picked
+  const pics = ids.filter(id => S.clips.find(c => c.id === id)?.kind === "img").length;
+  if(pics >= 2 && pics === ids.length && S.P.words.length && S.P.cuts.mode === "beat"){ S.P.cuts.mode = "lines"; S.P.cuts.order = "inorder"; S.P.cuts.slots = null; syncUI(); if(!quiet) toast(`${pics} photos added as a slideshow: a new photo on every lyric line. Change it under "How cuts are chosen".`); }
+  renderClips(); tlDirty = true; syncSegCard(); slsEmit("change");
+  return ids;
+}
 
 /* ============ song loading ============ */
 $("#songFile").onchange = e => { const f = e.target.files[0]; e.target.value = ""; if(f) slsEmit("pick", f); };
@@ -1944,6 +1971,7 @@ function loop(){
   requestAnimationFrame(loop);
 }
 function loopBody(){
+  if(S.exporting && S.exporting.offline) return;   // js/export.js is drawing frames itself
   const sec = bounds();
   if(S.playing){
     let t = songTime();

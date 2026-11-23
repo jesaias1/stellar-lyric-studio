@@ -207,5 +207,12 @@ window.SLSApp = (() => {
   (function frame(){ try { if(home.hidden && body.dataset.step === "lyrics"){ SLSLyricsUI.tick(); if(!seeking) seekBar.value = songTime(); } } catch(err){ if(!frame.warned){ frame.warned = true; console.error(err); } } requestAnimationFrame(frame); })();
 
   body.dataset.step = "lyrics"; S.review = false; showHome("drop"); paintSteps();
-  return { go, pick, listen, paste };
+  /* asks for the passcode if this browser doesn't have it yet; true when unlocked */
+  async function ensurePass(){
+    if(api.hasPass()) return true;
+    const ok = await askPass(); if(ok === true) return true;
+    if(ok && ok.message) toast(ok.message);
+    return false;
+  }
+  return { go, pick, listen, paste, ensurePass };
 })();

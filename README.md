@@ -12,6 +12,11 @@ you check them, pick a style and export a video.
 | The guided flow | `public/js/app.js`, `public/css/sls.css` | Splash, start screen, the four steps, light and dark looks. |
 | Lyric AI pipeline | `public/js/transcribe.js` | Cuts the song into pieces, has them transcribed twice, compares the two passes and marks words it is unsure about. |
 | Lyric review | `public/js/lyrics.js` | Click a word to fix it, keep or correct the unsure ones. |
+| More lyric styles | `public/js/styles-extra.js` | Glow, Cinematic and Playful styles, plus more Bold and Layered ones. |
+| Footage | `public/js/footage.js`, `src/media.js` | Free stock video search (Pixabay, Pexels) and AI backgrounds written from the lyrics (Higgsfield). |
+| Safe zones | `public/js/safezones.js` | Shows where TikTok, Reels, Shorts, Stories and YouTube put their buttons. Never exported. |
+| Export | `public/js/export.js`, `public/vendor/` | Renders the soundbite frame by frame and encodes MP4, MOV, WebM or MKV in the browser (mediabunny, MPL-2.0). |
+| Templates | `public/js/templates.js` | Reusable looks: pick which parts a template carries, starter looks built in. |
 | Backend | `src/worker.js` | Passcode check, the Whisper call, shared templates. Runs as a Cloudflare Worker, or on Vercel through `api/index.js`. |
 
 The speech model is Whisper large v3 turbo on Cloudflare Workers AI. It handles about 100 languages and returns a
@@ -38,6 +43,14 @@ npm run deploy
 
 **Vercel**: import the repo, then add `SLS_PASSCODE`, `CF_ACCOUNT_ID` and `CF_API_TOKEN` under
 Settings > Environment Variables. The token needs "Workers AI" access.
+
+Optional keys, for footage:
+
+| Key | Where to get it | Switches on |
+| --- | --- | --- |
+| `PIXABAY_KEY` | free, https://pixabay.com/api/docs/ (log in) | stock video search |
+| `PEXELS_KEY` | https://www.pexels.com/api/ (new keys are paused at the moment) | more stock video |
+| `HF_KEY_ID`, `HF_KEY_SECRET` | https://console.higgsfield.ai (API account with balance) | AI background clips |
 
 ## Notes
 

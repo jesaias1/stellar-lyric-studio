@@ -9,6 +9,7 @@
     "logs": "wrangler tail"
   },
   "devDependencies": {
+    "mediabunny": "1.65.2",
     "wrangler": "^4.163.0"
   },
   "type": "module"

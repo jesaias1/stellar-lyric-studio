@@ -18,7 +18,7 @@
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:ital,wdth,wght@1,125,800&family=Archivo+Black&family=Archivo+Narrow:wght@500;600&family=Barlow+Condensed:ital,wght@0,800;1,800&family=Bebas+Neue&family=Big+Shoulders+Display:wght@800&family=Do+Hyeon&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,600&family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@300&family=JetBrains+Mono:wght@400;600&family=Oswald:wght@600&family=Playfair+Display:ital,wght@1,500&family=Poppins:wght@700&family=Six+Caps&family=Unbounded:wght@600;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:ital,wdth,wght@1,125,800&family=Archivo+Black&family=Archivo+Narrow:wght@500;600&family=Barlow+Condensed:ital,wght@0,800;1,800&family=Bebas+Neue&family=Caveat:wght@700&family=Permanent+Marker&family=Big+Shoulders+Display:wght@800&family=Do+Hyeon&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,600&family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@300&family=JetBrains+Mono:wght@400;600&family=Oswald:wght@600&family=Playfair+Display:ital,wght@1,500&family=Poppins:wght@700&family=Six+Caps&family=Unbounded:wght@600;800&display=swap">
 <link rel="stylesheet" href="css/studio.css">
 <link rel="stylesheet" href="css/sls.css">
 </head>
@@ -254,13 +254,14 @@
       <section class="pane" data-pane="clips" hidden>
         <div class="row" style="justify-content:space-between">
           <span class="label">Footage pool</span>
-          <label class="btn small file">+ Import<input id="clipFiles" type="file" accept="image/*,video/*" multiple></label>
+          <label class="btn small file">+ Photos or videos<input id="clipFiles" type="file" accept="image/*,video/*" multiple></label>
         </div>
         <div class="clips" id="clipGrid"></div>
         <div class="hint">Tap a tile to include or leave it out of the shuffle. Imported clips stay in this browser session.</div>
         <div class="field">
           <span class="label">How cuts are chosen</span>
-          <div class="seg" id="cutMode"><button data-v="beat">On the beat</button><button data-v="count">I pick how many</button><button data-v="manual">Custom</button></div>
+          <div class="seg seg-wrap" id="cutMode"><button data-v="lines">Each lyric line</button><button data-v="beat">On the beat</button><button data-v="count">I pick how many</button><button data-v="manual">Custom</button></div>
+          <div class="seg" id="cutOrder"><button data-v="shuffle">Shuffle</button><button data-v="inorder">In the order added</button></div>
           <span class="hint">Drag any cut on the timeline to move it. Moving one switches to Custom.</span>
         </div>
         <div class="field" id="cutCountField" hidden>
@@ -270,7 +271,7 @@
         </div>
         <div class="field">
           <span class="label">Transition between clips</span>
-          <div class="seg" id="cutTrans"><button data-v="none">None</button><button data-v="crossfade">Crossfade</button><button data-v="flash">Flash</button><button data-v="dip">Dip</button></div>
+          <div class="seg seg-wrap" id="cutTrans"><button data-v="none">Cut</button><button data-v="crossfade">Crossfade</button><button data-v="slide">Slide</button><button data-v="push">Push</button><button data-v="zoom">Zoom</button><button data-v="wipe">Wipe</button><button data-v="blur">Blur</button><button data-v="spin">Spin</button><button data-v="flash">Flash</button><button data-v="dip">Dip</button></div>
           <span class="hint">None is a clean, instant cut.</span>
           <label class="field" id="xfField" hidden><span class="row" style="justify-content:space-between"><span class="hint">Transition length</span><span class="hint" id="xfDurVal">0.35s</span></span><input type="range" id="xfDur" min="0.05" max="2" step="0.05"></label>
         </div>
@@ -352,7 +353,7 @@
           </div>
           <canvas id="stylePrev" width="300" height="200" aria-label="Animated preview of the selected style"></canvas>
         </div>
-        <div class="chips" id="styleCats"><button data-v="all">All</button><button data-v="fav">Favourites</button><button data-v="minimal">Minimal</button><button data-v="bold">Bold</button><button data-v="layered">Layered</button></div>
+        <div class="chips" id="styleCats"><button data-v="all">All</button><button data-v="fav">Favourites</button><button data-v="minimal">Minimal</button><button data-v="bold">Bold</button><button data-v="layered">Layered</button><button data-v="glow">Glow</button><button data-v="cinematic">Cinematic</button><button data-v="playful">Playful</button></div>
         <div class="presets" id="presets"></div>
         <div class="card">
           <div class="label" id="ssTitle">Stack settings</div>
@@ -489,8 +490,13 @@
 
 <script src="js/backend.js"></script>
 <script src="js/studio.js"></script>
+<script src="js/styles-extra.js"></script>
 <script src="js/transcribe.js"></script>
 <script src="js/lyrics.js"></script>
 <script src="js/app.js"></script>
+<script src="js/footage.js"></script>
+<script src="js/templates.js"></script>
+<script src="js/safezones.js"></script>
+<script src="js/export.js"></script>
 </body>
 </html>

@@ -48,6 +48,20 @@ window.SLSBackend = (() => {
     },
     forget(){ pass = null; try { localStorage.removeItem(KEY); } catch {} },
     transcribe: (payload, signal) => call("/api/transcribe", { method: "POST", body: payload, signal, timeout: 120000 }),
+    api: (path, opts) => call(path, opts),
+    /* Downloads a file the backend relays (stock and AI videos), reporting progress 0..1. */
+    async blob(path, { signal, onProgress = () => {} } = {}){
+      let res;
+      try { res = await fetch(path, { signal, headers: pass ? { authorization: "Bearer " + pass } : {} }); }
+      catch(err){ throw new ApiError(signal && signal.aborted ? "cancelled" : "offline", signal && signal.aborted ? "Cancelled." : "The studio server can't be reached.", 0); }
+      if(!res.ok){ let d = null; try { d = await res.json(); } catch {} if(res.status === 401){ pass = null; try { localStorage.removeItem(KEY); } catch {} }
+        throw new ApiError((d && d.error) || "http_" + res.status, (d && d.message) || `The download failed (${res.status}).`, res.status); }
+      const total = +res.headers.get("content-length") || 0, type = res.headers.get("content-type") || "video/mp4";
+      if(!res.body || !res.body.getReader) return res.blob();
+      const reader = res.body.getReader(), parts = []; let got = 0;
+      for(;;){ const { done, value } = await reader.read(); if(done) break; parts.push(value); got += value.length; onProgress(total ? got / total : Math.min(0.95, got / 2e7)); }
+      onProgress(1); return new Blob(parts, { type });
+    },
 
     /* Shared templates, shaped like the small database interface studio.js already uses. Null when not signed in. */
     async db(){
@@ -62,7 +76,7 @@ window.SLSBackend = (() => {
         orderBy: () => col, limit: () => col,
         onSnapshot(cb, errCb){ listener = cb; onErr = errCb; refresh(); const f = () => { if(!document.hidden) refresh(); }; document.addEventListener("visibilitychange", f); return () => { listener = null; document.removeEventListener("visibilitychange", f); }; },
         async add(doc){ const id = "t" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); await call("/api/templates/" + id, { method: "PUT", body: doc }); refresh(); return { id }; },
-        doc: id => ({ async delete(){ await call("/api/templates/" + id, { method: "DELETE" }); refresh(); } }),
+        doc: id => ({ async delete(){ await call("/api/templates/" + id, { method: "DELETE" }); refresh(); }, async set(doc){ await call("/api/templates/" + id, { method: "PUT", body: doc }); refresh(); } }),
       };
       return { collection: () => col };
     },
