@@ -16,6 +16,7 @@ you check them, pick a style and export a video.
 | Footage | `public/js/footage.js`, `src/media.js` | Free stock video search (Pixabay, Pexels) and AI backgrounds written from the lyrics (Higgsfield). |
 | Safe zones | `public/js/safezones.js` | Shows where TikTok, Reels, Shorts, Stories and YouTube put their buttons. Never exported. |
 | Export | `public/js/export.js`, `public/vendor/` | Renders the soundbite frame by frame and encodes MP4, MOV, WebM or MKV in the browser (mediabunny, MPL-2.0). |
+| Projects | `public/js/projects.js` | Every song is a project, saved in the browser (IndexedDB) with its song file, clips and settings; autosaves, and a refresh reopens it. |
 | Templates | `public/js/templates.js` | Reusable looks: pick which parts a template carries, starter looks built in. |
 | Backend | `src/worker.js` | Passcode check, the Whisper call, shared templates. Runs as a Cloudflare Worker, or on Vercel through `api/index.js`. |
 

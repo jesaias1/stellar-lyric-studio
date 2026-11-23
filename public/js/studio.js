@@ -12,7 +12,7 @@ const store = {
   set(k,v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
 };
 /* the guided UI (js/app.js, js/lyrics.js) listens to these: "change" = the project changed, "pick" = a song file was chosen */
-const HOOKS = {change:[], pick:[]};
+const HOOKS = {change:[], pick:[], step:[]};
 const slsOn = (k, f) => HOOKS[k].push(f);
 const slsEmit = (k, ...a) => { for(const f of HOOKS[k]){ try { f(...a); } catch(err){ console.error(err); } } };
 const ASPECTS = { "9:16":[720,1280], "4:5":[864,1080], "1:1":[1080,1080], "16:9":[1280,720] };
@@ -1556,12 +1556,12 @@ async function addFootage(files, metas = [], { quiet = false } = {}){
 /* ============ song loading ============ */
 $("#songFile").onchange = e => { const f = e.target.files[0]; e.target.value = ""; if(f) slsEmit("pick", f); };
 /* Decodes the file and sets up the project. Returns {restored} (true when an earlier edit of this song came back) or throws if the file can't be read. */
-async function loadSong(f){
+async function loadSong(f, {useDraft = true} = {}){
   pause();
   const buf = await ctx().decodeAudioData(await f.arrayBuffer());
   const wasDemo = S.songName === "Demo track";
   S.audio = buf; S.peaks = computePeaks(buf); S.songName = f.name.replace(/\.[^.]+$/, ""); S.reduced = null; S.inst = null; S.instName = ""; S.vocal = "on"; syncVocalUI();
-  const draft = store.get("sls-draft");
+  const draft = useDraft ? store.get("sls-draft") : null;
   let restored = false;
   if(pendingBuiltin && useBuiltin(pendingBuiltin, true)){ renderBuiltins(); restored = true; }
   else if(draft && draft.songName === S.songName && draft.P){ applyProject(draft.P);

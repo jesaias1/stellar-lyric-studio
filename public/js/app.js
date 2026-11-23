@@ -33,14 +33,14 @@ window.SLSApp = (() => {
   function go(step){
     if(step === "export"){ go("design"); $("#exportBtn").click(); return; }
     SLSLyricsUI.commit(); SLSLyricsUI.clearHear();
-    if(step === "song"){ pause(); showHome("drop"); $("#homeBack").hidden = !started; paintSteps(); return; }
+    if(step === "song"){ pause(); showHome("drop"); $("#homeBack").hidden = !started; paintSteps(); slsEmit("step", step); return; }
     started = true; home.hidden = true; lastStep = step;
     if(S.tap){ pause(); endTap(false); }
     pause();
     body.dataset.step = step; S.review = step === "lyrics";
     if(step === "design"){ S.t = clamp(S.t, S.P.section.a, S.P.section.b); selectNone(); sizeTimeline(); renderPresetThumbs(); }
     else { closeSheet(); SLSLyricsUI.resetMarks(); SLSLyricsUI.render(); $("#rvSeek").max = S.audio ? S.audio.duration : 100; }
-    tlDirty = true; requestAnimationFrame(fitStage); paintSteps();
+    tlDirty = true; requestAnimationFrame(fitStage); paintSteps(); slsEmit("step", step);
   }
   $("#steps").onclick = e => { const b = e.target.closest("[data-go]"); if(b) go(b.dataset.go); };
   $("#brandBtn").onclick = () => go("song");
@@ -50,7 +50,7 @@ window.SLSApp = (() => {
   $("#demoBtn").onclick = () => { go("lyrics"); toast("This is the demo track. Load your own song to have the lyrics written for you."); };
 
   /* ---------- start screen states ---------- */
-  function showHome(state){ home.hidden = false; $("#start").hidden = state !== "drop"; $("#homeOpts").hidden = state !== "drop"; $("#work").hidden = state !== "work"; $("#oops").hidden = state !== "oops"; $(".how").hidden = state !== "drop"; if(state !== "drop") home.scrollTop = 0; }
+  function showHome(state){ home.hidden = false; if(window.SLSProjects) setTimeout(() => SLSProjects.paint(), 0); $("#start").hidden = state !== "drop"; $("#homeOpts").hidden = state !== "drop"; $("#work").hidden = state !== "work"; $("#oops").hidden = state !== "oops"; $(".how").hidden = state !== "drop"; if(state !== "drop") home.scrollTop = 0; }
   function progress(p){
     const LABEL = { read: "Reading your song", listen: "Listening for the words", check: "Listening again to double-check", time: "Timing every word" }, order = ["read", "listen", "check", "time"];
     $("#workStep").textContent = LABEL[p.stage] + (p.total && p.stage !== "time" && p.stage !== "read" ? "…" : "");
@@ -100,12 +100,14 @@ window.SLSApp = (() => {
     if(!file) return; if(job) job.abort();
     lastFile = file; SLSLyricsUI.commit(); pause();
     $("#workSong").textContent = file.name; showHome("work"); progress({ stage: "read", pct: 0.01 }); paintSteps();
-    let info;
-    try { info = await loadSong(file); }
+    const pasted = homeLyrics.value.trim();
+    // the same song file again, with no new lyrics pasted: open the project that already has it
+    const same = !pasted && window.SLSProjects ? await SLSProjects.findSong(file) : null;
+    if(same){ await SLSProjects.open(same.id); toast(`Opened your project "${same.name}". To start again on this song, use Listen again in the Lyrics step.`); return; }
+    try { await loadSong(file, { useDraft: false }); }
     catch { oops("That file couldn't be read", "Try an MP3, WAV, M4A or FLAC file. If it came from a streaming app it may be protected.", { retry: false, manual: false }); return; }
     started = true; SLSLyricsUI.forgetReview();
-    const pasted = homeLyrics.value.trim();
-    if(info.restored && S.P.words.length && !pasted){ go("lyrics"); toast("Welcome back. Your last edit of this song is restored."); return; }
+    if(window.SLSProjects) await SLSProjects.create(file);
     await listen({ lyrics: pasted });
   }
   /* lyrics: text to time to the song. Left out, "Listen again" reuses the lyrics this song was last timed with. */
@@ -214,5 +216,7 @@ window.SLSApp = (() => {
     if(ok && ok.message) toast(ok.message);
     return false;
   }
-  return { go, pick, listen, paste, ensurePass };
+  /* the "working" card on the start screen, for other parts of the app (opening a project) */
+  function working(title, step){ $("#workSong").textContent = title; showHome("work"); $("#workStep").textContent = step; $("#workBar").style.width = "35%"; $$("#workList li").forEach(li => { li.className = ""; }); paintSteps(); }
+  return { go, pick, listen, paste, ensurePass, working, get step(){ return home.hidden ? body.dataset.step : "song"; }, get lastStep(){ return lastStep; } };
 })();
