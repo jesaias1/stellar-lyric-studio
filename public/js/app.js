@@ -47,6 +47,8 @@ window.SLSApp = (() => {
   $("#homeBack").onclick = () => go(lastStep);
   $("#lyNext").onclick = () => go("design");
   $("#openLyEd").onclick = () => go("lyrics");
+  $("#navDemo").onclick = e => { e.preventDefault(); $("#demoBtn").click(); };
+  $("#navProjects").onclick = e => { e.preventDefault(); const p = $("#projects"); if(p && !p.hidden) p.scrollIntoView({ behavior: "smooth", block: "start" }); else toast("No projects yet. Drop a song to start one."); };
   $("#demoBtn").onclick = () => { go("lyrics"); toast("This is the demo track. Load your own song to have the lyrics written for you."); };
 
   /* ---------- start screen states ---------- */

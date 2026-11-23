@@ -246,8 +246,150 @@
     } },
   ];
 
+  /* ---------- second batch: Editorial (the Stellar Music look) and more ---------- */
+  Object.assign(FONTLIB, {
+    grotesk: { name: "Inter Tight Medium", css: '"Inter Tight", "Helvetica Neue", Arial, sans-serif', w: "500" },
+    groteski: { name: "Inter Tight Light Italic", css: '"Inter Tight", "Helvetica Neue", Arial, sans-serif', w: "300", i: "italic" },
+    pixel: { name: "Silkscreen (pixel)", css: 'Silkscreen, "Courier New", monospace', w: "400" },
+  });
+  Promise.all(["grotesk", "groteski", "pixel"].map(k => document.fonts.load(fnt(k, 40)).catch(() => {}))).then(() => { renderPresetThumbs(); tlDirty = true; });
+  const MORE = [
+    { id: "statement", name: "Statement", cat: "editorial", caseDef: "as", demo: "We create innovative music", def: { pf: "grotesk", sf: "groteski", hi: "#ffffff" },
+      draw(c, W, H, s, t, st, o){   // big left-aligned sentence, like the Stellar Music front page
+        c.textBaseline = "top";
+        lineLayout(c, W, H, s, st, o, { caseDef: "as", px: 0.072, maxW: 0.84, lh: 1.0, align: "left", each(it, i, x, y, px){
+          if(!sung(s, i)) return; const k = ease((t - s.words[i].t) / 0.3); setLS(c, -px * 0.035);
+          c.save(); c.globalAlpha *= k; c.fillStyle = o.tx; c.fillText(it.s, x, y + (1 - k) * px * 0.2); c.restore(); setLS(c, 0); } });
+    } },
+    { id: "editorial", name: "Editorial", cat: "editorial", caseDef: "as", demo: "authentic music for our artists", def: { pf: "grotesk", hi: "#ffffff" },
+      draw(c, W, H, s, t, st, o){
+        c.textBaseline = "top";
+        lineLayout(c, W, H, s, st, o, { caseDef: "as", px: 0.05, maxW: 0.82, lh: 1.35, each(it, i, x, y, px){
+          const k = sung(s, i) ? ease((t - s.words[i].t) / 0.25) : 0; c.save(); c.fillStyle = o.tx; c.globalAlpha *= 0.3 + 0.7 * k; c.fillText(it.s, x, y); c.restore();
+          if(i === s.rev - 1){ c.fillStyle = o.hi; c.fillRect(x, y + px * 1.12, it.w * ease((t - s.words[i].t) / 0.3), Math.max(1.5, px * 0.05)); } } });
+    } },
+    { id: "runline", name: "Running Line", cat: "editorial", caseDef: "as", demo: "We create innovative music * authentic management", def: { pf: "grotesk", hi: "#ffffff" },
+      draw(c, W, H, s, t, st, o){   // the line runs sideways like a news ticker, the sung word lit
+        const words = s.words.map(w => caseOf(st, "as", w.w)), px = H * 0.05; c.font = fnt(o.pf, px); c.textBaseline = "middle"; c.textAlign = "left";
+        const sp = c.measureText(" ").width, ws = words.map(w => c.measureText(w).width), total = ws.reduce((a, b) => a + b + sp, 0), yc = cy(H, st);
+        const p = clamp((t - s.start) / Math.max(1, s.end - s.start), 0, 1), x0 = W * 0.9 - p * (total + W * 0.1);
+        c.strokeStyle = o.tx; c.globalAlpha *= 0.6; c.lineWidth = 1; c.beginPath(); c.moveTo(0, yc - px * 0.9); c.lineTo(W, yc - px * 0.9); c.moveTo(0, yc + px * 0.9); c.lineTo(W, yc + px * 0.9); c.stroke(); c.globalAlpha /= 0.6;
+        let x = x0; words.forEach((w, i) => { c.fillStyle = o.tx; c.globalAlpha = (i < s.rev ? 1 : 0.35) * s.fade; c.fillText(w, x, yc); x += ws[i] + sp; });
+    } },
+    { id: "viewfinder", name: "Viewfinder", cat: "editorial", caseDef: "upper", demo: "warning", def: { pf: "grotesk", hi: "#ff3b30" },
+      draw(c, W, H, s, t, st, o){
+        const { w, age } = curWord(s, t), txt = caseOf(st, "upper", w.w), px = fitK(c, o.pf, [txt], W * 0.66, H * 0.08), yc = cy(H, st);
+        c.font = fnt(o.pf, px); c.textAlign = "center"; c.textBaseline = "middle"; const tw = c.measureText(txt).width, k = ease(age / 0.25);
+        const bw = tw + px * (1.6 - 0.4 * k), bh = px * (2.2 - 0.4 * k), l = px * 0.4; c.strokeStyle = o.tx; c.lineWidth = Math.max(1.5, px * 0.04);
+        [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sy]) => { const x = W / 2 + sx * bw / 2, y = yc + sy * bh / 2; c.beginPath(); c.moveTo(x - sx * l, y); c.lineTo(x, y); c.lineTo(x, y - sy * l); c.stroke(); });
+        c.fillStyle = o.hi; if(Math.floor(t * 2) % 2 === 0){ c.beginPath(); c.arc(W / 2 - bw / 2 + px * 0.25, yc - bh / 2 - px * 0.45, px * 0.12, 0, TAU); c.fill(); }
+        c.font = fnt(o.pf, px * 0.28); c.textAlign = "left"; c.fillStyle = o.tx; c.fillText("REC", W / 2 - bw / 2 + px * 0.45, yc - bh / 2 - px * 0.45);
+        c.font = fnt(o.pf, px); c.textAlign = "center"; c.globalAlpha *= k; c.fillText(txt, W / 2, yc);
+    } },
+    { id: "poster", name: "Poster", cat: "editorial", caseDef: "upper", demo: "neon on the water tonight", def: { pf: "black", hi: "#ffffff" },
+      draw(c, W, H, s, t, st, o){   // each word fills the width, stacked like a gig poster
+        const words = s.words.slice(0, Math.max(1, s.rev)).map(w => caseOf(st, "upper", w.w)), maxW = W * 0.82; let y = cy(H, st), hs = [];
+        const sizes = words.map(w => fitK(c, o.pf, [w], maxW, H * 0.2)), total = sizes.reduce((a, b) => a + b * 0.92, 0), scale = total > H * 0.6 ? H * 0.6 / total : 1;
+        y -= total * scale / 2; c.textAlign = "center"; c.textBaseline = "top";
+        words.forEach((w, i) => { const px = sizes[i] * scale, k = ease((t - s.words[i].t) / 0.2); c.font = fnt(o.pf, px); c.save(); c.globalAlpha *= k; c.fillStyle = i === s.rev - 1 ? o.hi : o.tx; c.fillText(w, W / 2, y + (1 - k) * px * 0.1); c.restore(); y += px * 0.92; });
+    } },
+    { id: "tilt", name: "Tilt", cat: "playful", caseDef: "upper", demo: "say it like you mean it", def: { pf: "anton", hi: "#ffd23f" },
+      draw(c, W, H, s, t, st, o){
+        c.textBaseline = "middle";
+        lineLayout(c, W, H, s, st, o, { caseDef: "upper", px: 0.07, maxW: 0.8, lh: 1.15, each(it, i, x, y, px, lh){
+          if(!sung(s, i)) return; const k = overshoot(ease((t - s.words[i].t) / 0.25)), r = rng(41 + i * 9), on = i === s.rev - 1;
+          c.save(); c.translate(x + it.w / 2, y + lh / 2); c.rotate((r() - 0.5) * 0.35 * k); c.scale(k, k); c.textAlign = "center"; c.fillStyle = on ? o.hi : o.tx; c.fillText(it.s, 0, 0); c.restore(); } });
+    } },
+    { id: "bubble", name: "Bubble", cat: "playful", caseDef: "lower", demo: "we don't have to go home", def: { pf: "round", hi: "#7b5cff" },
+      draw(c, W, H, s, t, st, o){
+        c.textBaseline = "middle";
+        lineLayout(c, W, H, s, st, o, { caseDef: "lower", px: 0.045, maxW: 0.8, lh: 1.7, each(it, i, x, y, px, lh){
+          if(!sung(s, i)) return; const k = overshoot(ease((t - s.words[i].t) / 0.22)), on = i === s.rev - 1;
+          c.save(); c.translate(x + it.w / 2, y + lh / 2); c.scale(k, k); c.fillStyle = on ? o.hi : "rgba(255,255,255,.92)"; roundRect(c, -it.w / 2 - px * 0.4, -px * 0.7, it.w + px * 0.8, px * 1.4, px * 0.7); c.fill();
+          c.fillStyle = on ? "#fff" : "#141414"; c.textAlign = "center"; c.fillText(it.s, 0, px * 0.04); c.restore(); } });
+    } },
+    { id: "ransom", name: "Ransom", cat: "playful", caseDef: "upper", demo: "warning", def: { pf: "black", hi: "#ffffff" },
+      draw(c, W, H, s, t, st, o){   // cut-out letters, each its own paper and font
+        const { i, w, age } = curWord(s, t), txt = caseOf(st, "upper", w.w), r = rng(13 + i * 17), fonts = ["black", "serif", "anton", "mono", "marker", "playfair"], cols = ["#fff", "#111", "#ffd23f", "#ff4f8b", "#38d6ff", "#f3ecb0"];
+        const chars = [...txt], px = Math.min(H * 0.1, W * 0.84 / Math.max(3, chars.length) * 1.25), yc = cy(H, st);
+        const picks = chars.map(() => ({ f: fonts[Math.floor(r() * fonts.length)], bg: cols[Math.floor(r() * cols.length)], rot: (r() - 0.5) * 0.3, dy: (r() - 0.5) * px * 0.2 }));
+        c.textBaseline = "middle"; c.textAlign = "center"; let widths = chars.map((ch, n) => { c.font = fnt(picks[n].f, px); return c.measureText(ch).width + px * 0.35; });
+        let x = (W - widths.reduce((a, b) => a + b, 0)) / 2;
+        chars.forEach((ch, n) => { const k = ease((age - n * 0.03) / 0.15); if(k <= 0){ x += widths[n]; return; } const p = picks[n], bw = widths[n] - px * 0.08;
+          c.save(); c.translate(x + widths[n] / 2, yc + p.dy); c.rotate(p.rot); c.scale(k, k); c.fillStyle = p.bg; c.fillRect(-bw / 2, -px * 0.65, bw, px * 1.3);
+          c.font = fnt(p.f, px); c.fillStyle = p.bg === "#111" ? "#fff" : "#111"; c.fillText(ch, 0, px * 0.04); c.restore(); x += widths[n]; });
+    } },
+    { id: "arcade", name: "Arcade", cat: "playful", caseDef: "upper", demo: "player one ready", def: { pf: "pixel", hi: "#39ff6a" },
+      draw(c, W, H, s, t, st, o){
+        c.textBaseline = "top";
+        lineLayout(c, W, H, s, st, o, { caseDef: "upper", px: 0.045, maxW: 0.84, lh: 1.6, each(it, i, x, y, px){
+          if(!sung(s, i)) return; const on = i === s.rev - 1, w = s.words[i], n = on ? Math.ceil(it.s.length * clamp((t - w.t) / Math.max(0.12, Math.min(0.4, w.d)), 0, 1)) : it.s.length;
+          c.save(); c.fillStyle = "rgba(0,0,0,.6)"; c.fillText(it.s.slice(0, n), x + px * 0.12, y + px * 0.12); c.fillStyle = on ? o.hi : o.tx; c.fillText(it.s.slice(0, n), x, y); c.restore(); } });
+    } },
+    { id: "chrome", name: "Chrome", cat: "bold", caseDef: "upper", demo: "overdrive", def: { pf: "archivoi", hi: "#ff4fd8" },
+      draw(c, W, H, s, t, st, o){
+        const { w, age } = curWord(s, t), txt = caseOf(st, "upper", w.w), px = fitK(c, o.pf, [txt], W * 0.84, H * 0.11), yc = cy(H, st), k = 0.8 + 0.2 * overshoot(age / 0.22);
+        c.save(); c.translate(W / 2, yc); c.scale(k, k); c.font = fnt(o.pf, px); c.textAlign = "center"; c.textBaseline = "middle";
+        const g = c.createLinearGradient(0, -px * 0.5, 0, px * 0.5); g.addColorStop(0, "#ffffff"); g.addColorStop(0.45, "#9fb6ff"); g.addColorStop(0.5, "#1b1b3a"); g.addColorStop(0.62, o.hi); g.addColorStop(1, "#ffffff");
+        c.lineJoin = "round"; c.lineWidth = px * 0.08; c.strokeStyle = "#0c0c22"; c.strokeText(txt, 0, 0); c.fillStyle = g; c.fillText(txt, 0, 0);
+        c.globalCompositeOperation = "lighter"; c.globalAlpha *= 0.5 * (1 - ease(age / 0.4)); c.fillStyle = "#fff"; c.fillText(txt, 0, 0); c.restore();
+    } },
+    { id: "pulse", name: "Pulse", cat: "glow", caseDef: "upper", demo: "heartbeat", def: { pf: "black", hi: "#ff2d55" },
+      draw(c, W, H, s, t, st, o){   // throbs on the song's beat
+        const { w, age } = curWord(s, t), txt = caseOf(st, "upper", w.w), px = fitK(c, o.pf, [txt], W * 0.8, H * 0.1), yc = cy(H, st);
+        const bl = 60 / ((S.P && S.P.bpm) || 100), ph = (((t - ((S.P && S.P.offset) || 0)) % bl) + bl) % bl / bl, beat = Math.exp(-ph * 6), k = (0.9 + 0.1 * overshoot(age / 0.2)) * (1 + 0.06 * beat);
+        c.save(); c.translate(W / 2, yc); c.scale(k, k); c.font = fnt(o.pf, px); c.textAlign = "center"; c.textBaseline = "middle";
+        c.shadowColor = o.hi; c.shadowBlur = px * (0.3 + 0.9 * beat); c.fillStyle = o.hi; c.fillText(txt, 0, 0); c.shadowBlur = 0; c.fillStyle = o.tx; c.globalAlpha *= 0.35 + 0.4 * beat; c.fillText(txt, 0, 0); c.restore();
+    } },
+    { id: "rain", name: "Rain", cat: "layered", caseDef: "lower", demo: "tell me where the river goes", def: { pf: "sans", hi: "#9fd8ff" },
+      draw(c, W, H, s, t, st, o){   // letters fall into place one after another
+        c.textBaseline = "top";
+        lineLayout(c, W, H, s, st, o, { caseDef: "lower", px: 0.05, maxW: 0.84, lh: 1.35, each(it, i, x, y, px){
+          if(!sung(s, i)) return; const age = t - s.words[i].t, on = i === s.rev - 1; let cx = x, n = 0;
+          c.save(); c.fillStyle = on ? o.hi : o.tx;
+          for(const ch of it.s){ const k = bounceOut(clamp((age - n * 0.035) / 0.4, 0, 1)); if(k > 0){ c.globalAlpha = s.fade * Math.min(1, k * 2); c.fillText(ch, cx, y - (1 - k) * px * 1.6); } cx += c.measureText(ch).width; n++; }
+          c.restore(); } });
+    } },
+  ];
+  NEW.push(...MORE);
+
   for(const p of NEW) if(!PRESETS.some(x => x.id === p.id)) PRESETS.push(p);
   // a saved project that uses one of these styles may have been loaded before this file ran
   try { const d = store.get("sls-draft"); if(d && d.P && d.P.style && NEW.some(p => p.id === d.P.style.preset) && S.P && S.songName === d.songName){ S.P.style.preset = d.P.style.preset; syncUI(); } } catch {}
   renderPresetGrid();
+
+  /* ---------- hover preview: a small window that plays the style beside the grid ---------- */
+  const peek = document.createElement("div"); peek.className = "style-peek"; peek.hidden = true;
+  peek.innerHTML = `<canvas width="270" height="480"></canvas><div class="sp-cap"><b></b><span></span></div>`;
+  document.body.append(peek);
+  const pc = peek.querySelector("canvas"), pg = pc.getContext("2d"), CATS = { minimal: "Minimal", bold: "Bold", layered: "Layered", glow: "Glow", cinematic: "Cinematic", playful: "Playful", editorial: "Editorial" };
+  let showing = null, raf = 0, t0 = 0, hideT = 0;
+  const canHover = matchMedia("(hover: hover) and (pointer: fine)").matches;
+  function frame(now){
+    if(!showing){ raf = 0; return; }
+    const pr = styleDef(showing), n = Math.max(1, (pr.demo || "x").split(/\s+/).length), loop = n * 0.38 + 1.6, t = ((now - t0) / 1000) % loop;
+    pg.setTransform(1, 0, 0, 1, 0, 0); pg.clearRect(0, 0, pc.width, pc.height);
+    // the project's own footage colours would be nicer, but a calm backdrop keeps every style readable
+    const g = pg.createLinearGradient(0, 0, 0, pc.height); g.addColorStop(0, "#1b1d33"); g.addColorStop(1, "#0b0b12"); pg.fillStyle = g; pg.fillRect(0, 0, pc.width, pc.height);
+    const st = { ...S.P.style, preset: pr.id, size: 1, x: 0.5, y: 0.5, case: "auto" }, s = demoState(pr, t);
+    if(s && s.rev){ pg.save(); try { pr.draw(pg, pc.width, pc.height, s, t, st, styleOpts(st, pr)); } catch {} pg.restore(); }
+    raf = requestAnimationFrame(frame);
+  }
+  function show(btn){
+    const id = btn.dataset.id; clearTimeout(hideT); if(showing === id) return;
+    showing = id; t0 = performance.now(); const pr = styleDef(id);
+    peek.querySelector("b").textContent = pr.name; peek.querySelector("span").textContent = (CATS[pr.cat] || "") + (id === S.P.style.preset ? " · in use" : " · click to use");
+    const r = btn.getBoundingClientRect(), pw = 200, ph = 356 + 44, gap = 14;
+    let x = r.left - pw - gap; if(x < 8) x = r.right + gap; if(x + pw > innerWidth - 8) x = Math.max(8, innerWidth - pw - 8);
+    const y = clamp(r.top + r.height / 2 - ph / 2, 8, innerHeight - ph - 8);
+    peek.style.left = x + "px"; peek.style.top = y + "px"; peek.hidden = false; peek.classList.remove("in"); void peek.offsetWidth; peek.classList.add("in");
+    if(!raf) raf = requestAnimationFrame(frame);
+  }
+  function hide(){ hideT = setTimeout(() => { showing = null; peek.hidden = true; }, 80); }
+  if(canHover){
+    $("#presets").addEventListener("pointerover", e => { const b = e.target.closest(".preset"); if(b) show(b); });
+    $("#presets").addEventListener("pointerout", e => { const b = e.target.closest(".preset"); if(b && !b.contains(e.relatedTarget)) hide(); });
+    $("#presets").addEventListener("click", () => { if(showing) peek.querySelector("span").textContent = (CATS[styleDef(showing).cat] || "") + " · in use"; });
+    addEventListener("scroll", () => { if(showing){ showing = null; peek.hidden = true; } }, true);
+  }
 })();

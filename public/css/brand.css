@@ -1,0 +1,188 @@
+/* Stellar Music look (stellarmusic.dk): flat royal blue, black and white, one grotesk typeface, thin rules,
+   big sentence-case statements with light italic sub-lines, lowercase navigation. No gradients, no glows.
+   Loaded after studio.css and sls.css and overrides them. */
+
+:root{
+  --stellar:#0626c7; --stellar-hi:#1f3df0; --stellar-ink:#ffffff;
+  --brand:#0626c7; --brand-hi:#1f3df0;
+  --canvas:#000000; --panel:#0a0a0a; --ink:#131313; --raise:#1c1c1c; --line:#232323; --line-2:#363636;
+  --text:#ffffff; --muted:#9b9b9b; --dim:#5a5a5a;
+  --tape:#7b90ff; --on-tape:#000;
+  --lyric:#0626c7; --clip:#1aa3a8; --hook:#d99a2e; --audio:#8c8c8c;
+  --stripe:rgba(255,255,255,.025);
+  --glow:transparent; --shadow:0 20px 50px rgba(0,0,0,.5);
+  --ui:"Inter Tight", "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
+  --display:"Inter Tight", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --mono:"Inter Tight", "Helvetica Neue", Arial, sans-serif;
+}
+:root[data-theme="light"]{
+  --canvas:#ececec; --panel:#ffffff; --ink:#f5f5f5; --raise:#ebebeb; --line:#e2e2e2; --line-2:#cfcfcf;
+  --text:#1f1f1f; --muted:#6b6b6b; --dim:#a6a6a6;
+  --tape:#0626c7; --on-tape:#fff;
+  --stripe:rgba(6,38,199,.03);
+  --shadow:0 20px 50px rgba(0,0,0,.12);
+}
+body{font:14px/1.4 var(--ui);letter-spacing:-.005em}
+
+/* ---------- type: one grotesk, medium weight, tight; light italic for secondary lines ---------- */
+.label{font:500 11px/1.2 var(--ui);letter-spacing:.01em;text-transform:lowercase;color:var(--muted)}
+.hint{letter-spacing:0}
+.dialog h2,.ly-title h2,.drop-title,.work-step,.oops-title,.ly-empty b,.paste-head b,.pj-head h2,.tp-head .label{font:500 22px/1.05 var(--display);font-stretch:normal;font-style:normal;letter-spacing:-.02em;text-transform:none}
+.ly-title h2{font-size:28px}
+.ly-title p,.home-copy p{font-style:italic;font-weight:300}
+.wordmark{font:italic 600 19px/1 var(--display);letter-spacing:-.03em;color:var(--text)}
+.brand-sub{font:400 13px/1 var(--ui);color:var(--muted);letter-spacing:0}
+.brand{gap:8px;align-items:baseline}
+.brand .brand-name,.brand-tile{display:none}
+
+/* ---------- controls: flat, small radius, blue for the one thing that matters ---------- */
+.btn{border-radius:4px;border-color:var(--line-2);background:transparent;font-weight:500;box-shadow:none}
+.btn:hover{border-color:var(--text)}
+.btn.small{border-radius:3px}
+.btn.primary,.btn.primary:hover{background:var(--stellar);border-color:var(--stellar);color:#fff;box-shadow:none;filter:none}
+.btn.primary:hover{background:var(--stellar-hi);border-color:var(--stellar-hi)}
+.play{background:var(--stellar);box-shadow:none}
+.play:hover{transform:none;background:var(--stellar-hi)}
+.icon-btn{border-radius:4px}
+.seg{border-radius:4px;background:transparent;border-color:var(--line-2)}
+.seg button{border-radius:2px;font-weight:500}
+.seg button[aria-pressed="true"]{background:var(--text);color:var(--panel);box-shadow:none}
+.chips button{border-radius:3px}
+.chips button[aria-pressed="true"]{background:var(--text);border-color:var(--text);color:var(--panel)}
+textarea,input[type=text],input[type=number],input[type=password],input[type=search],select{border-radius:4px;background:var(--ink)}
+textarea:focus,input:focus,select:focus{box-shadow:none!important;border-color:var(--text)!important}
+.card,.titem,.shead,.fx-wrap,.tp-card,.tp-starter,.ex-f,.ex-sum,.fx-job,.ly-edit,.paste-card{border-radius:6px}
+.dialog{border-radius:6px;box-shadow:var(--shadow);border-color:var(--line-2)}
+.modal{background:rgba(0,0,0,.72);backdrop-filter:none}
+.toast{border-radius:4px;background:var(--text);color:var(--panel)}
+.bar{border-radius:0;height:3px}
+.bar i{background:var(--stellar);border-radius:0}
+:root:not([data-theme="light"]) .bar i{background:#fff}
+#stage{border-radius:2px;box-shadow:0 0 0 1px var(--line)}
+.viewport{background:var(--canvas)}
+.preset,.aa,.clipt,.fx-tile{border-radius:4px}
+.preset[aria-pressed="true"]{border-color:var(--text);box-shadow:0 0 0 1px var(--text)}
+.tappad{border-radius:6px}
+
+/* ---------- top bar and steps: lowercase words, underline for the current one ---------- */
+.top{border-bottom:1px solid var(--line)}
+.steps{border:0;background:none;padding:0;gap:18px}
+.steps button{padding:4px 0;border-radius:0;font:500 14px/1 var(--ui);color:var(--muted);gap:6px;border-bottom:1px solid transparent}
+.steps button i{width:auto;height:auto;background:none!important;color:inherit!important;font:400 11px/1 var(--ui);opacity:.7}
+.steps button[aria-current="step"]{background:none;box-shadow:none;color:var(--text);border-bottom-color:var(--text)}
+.steps button.done{color:var(--text)}
+.pj-status{font-family:var(--ui);color:var(--muted);font-weight:400;font-style:italic}
+
+/* ---------- start screen: the blue page ---------- */
+.home{background:var(--stellar);color:#fff}
+.home::before,.home::after{display:none}
+.home .hint,.home .drop-sub,.home .drop-note,.home .lang,.home .how li,.home .pj-info span,.home .pj-head .hint{color:rgba(255,255,255,.72)}
+.home .link-btn,.home .drop-link,.home a{color:#fff;text-decoration-color:rgba(255,255,255,.5)}
+.home .wordmark{color:#fff}
+.home .brand-sub{color:rgba(255,255,255,.7)}
+.home-bar{padding:18px clamp(16px,2.2vw,28px);align-items:center}
+.home-nav{display:flex;gap:clamp(18px,7vw,110px);margin-right:auto;margin-left:clamp(20px,8vw,120px)}
+.home-nav a{font:500 14px/1 var(--ui);color:#fff;text-decoration:none}
+.home-nav a:hover{text-decoration:underline;text-underline-offset:4px}
+.home .icon-btn,.home .btn{border-color:rgba(255,255,255,.45);color:#fff}
+.home .icon-btn:hover,.home .btn:hover{border-color:#fff}
+.home-main{width:min(1240px,100%);align-items:stretch;text-align:left;justify-content:flex-start;padding:clamp(24px,7vh,90px) clamp(16px,2.2vw,28px) 36px;gap:26px}
+.home-copy{max-width:none}
+.home-copy h1{font:500 clamp(36px,5.4vw,72px)/1 var(--display);font-stretch:normal;letter-spacing:-.035em;margin:0 0 10px;color:#fff;text-wrap:balance}
+.home-copy h1 em{color:inherit}
+.home-copy p{margin:0;max-width:62ch;font-size:clamp(17px,1.9vw,25px);line-height:1.15;letter-spacing:-.02em;color:#fff}
+.start{gap:18px}
+.drop,.paste-card,.work,.oops{background:transparent;backdrop-filter:none;border:1px solid rgba(255,255,255,.55);border-radius:2px;box-shadow:none;color:#fff}
+.drop{border-style:dashed}
+.drop:hover,.drop:focus-visible,.drop.over,.paste-card:focus-within,.paste-card.has{border-color:#fff;box-shadow:none;background:rgba(255,255,255,.06)}
+.drop.over{transform:none}
+.paste-card.has ~ .drop{border-style:solid;border-color:#fff}
+.drop-ico{color:#fff}
+.drop-orbit i,.work-orbit i{border-color:rgba(255,255,255,.55)}
+.drop-orbit b,.work-orbit b{background:#fff;box-shadow:none}
+.work-orbit::after{background:radial-gradient(circle,#fff,transparent 70%)}
+.paste-num{background:#fff;color:var(--stellar);border-radius:50%;font:600 11px var(--ui)}
+.paste-card textarea{background:rgba(0,0,0,.18);border-color:rgba(255,255,255,.35);color:#fff;border-radius:2px}
+.paste-card textarea::placeholder{color:rgba(255,255,255,.6)}
+.paste-head i{color:rgba(255,255,255,.7);font-style:italic;font-weight:300}
+.lang select{background:transparent;border-color:rgba(255,255,255,.5);color:#fff}
+.lang select option{color:#000}
+.work-list li{color:rgba(255,255,255,.6)}
+.work-list li::before{background:rgba(255,255,255,.35)}
+.work-list li.on{color:#fff}
+.work-list li.on::before{background:#fff;box-shadow:none}
+.work-list li.ok::before{background:#7dffb8}
+.work .bar{background:rgba(255,255,255,.25)}
+.work .bar i{background:#fff}
+.work-song{font-family:var(--ui);font-style:italic;font-weight:300;color:rgba(255,255,255,.8)}
+.home .oops .btn.primary{background:#fff;color:var(--stellar);border-color:#fff}
+.how{border-top:1px solid rgba(255,255,255,.45);padding-top:16px;margin-top:0}
+.how li b{background:none;color:#fff;font:400 12px var(--ui);width:auto;height:auto}
+.how li strong{color:#fff}
+.projects{border-top:1px solid rgba(255,255,255,.45);padding-top:16px}
+.pj-head h2{color:#fff}
+.pj-card{background:transparent;backdrop-filter:none;border-color:rgba(255,255,255,.4);border-radius:2px}
+.pj-card:hover{transform:none;border-color:#fff;background:rgba(255,255,255,.06)}
+.pj-card.current{border-color:#fff;box-shadow:none}
+.pj-thumb{border-radius:1px;background:rgba(0,0,0,.25)}
+.pj-info b{color:#fff;font-weight:500}
+.pj-more,.pj-menu button{color:#fff}
+.pj-more:hover,.pj-menu button:hover{background:rgba(255,255,255,.12)}
+.pj-menu .danger{color:#ffb4b4}
+.home .pj-status{color:#fff}
+/* the running line of text, like the company site */
+.ticker{overflow:hidden;border-top:1px solid rgba(255,255,255,.45);border-bottom:1px solid rgba(255,255,255,.45);padding:12px 0;white-space:nowrap;mask:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent)}
+.ticker-run{display:inline-flex;animation:tick 38s linear infinite}
+.ticker-run span{font:500 clamp(20px,2.4vw,34px)/1 var(--display);letter-spacing:-.025em;color:#fff;padding-right:.3em}
+@keyframes tick{to{transform:translateX(-50%)}}
+@media (prefers-reduced-motion:reduce){.ticker-run{animation:none}}
+@media (max-width:760px){
+  .home-nav{display:none}
+  .home-main{padding-top:18px}
+  .home-copy h1{font-size:clamp(32px,10vw,44px)}
+}
+
+/* ---------- lyric review ---------- */
+.ly-review{border-radius:4px}
+.ly-w{font-weight:500;letter-spacing:-.01em;border-radius:2px}
+.ly-w.sel,.ly-w.sel:hover{background:var(--stellar)}
+.ly-line{border-radius:4px}
+.ly-t{font:400 11.5px/1 var(--ui)}
+.ly-gap{font:italic 300 12px var(--ui);text-transform:none;letter-spacing:0}
+
+/* ---------- intro: flat Stellar blue, the logo drawn in one movement ---------- */
+.splash{background:var(--stellar)}
+.splash-sky{display:none}
+.splash-meta{position:absolute;left:clamp(16px,2.2vw,28px);bottom:clamp(16px,3vh,28px);display:grid;gap:2px;font:500 12px/1.2 var(--ui);color:#fff;opacity:0;animation:splash-name .8s ease 1.2s forwards}
+.splash-name{font:italic 300 clamp(15px,2vw,20px)/1 var(--display);letter-spacing:-.01em;text-transform:none;padding-left:0;font-stretch:normal}
+@keyframes splash-name{from{opacity:0;transform:translateY(8px)}to{opacity:.95;transform:none}}
+/* letters wipe in from the left */
+.lg-letters{opacity:1;clip-path:inset(0 100% 0 0);animation:lg-wipe .75s cubic-bezier(.65,0,.35,1) .15s forwards}
+@keyframes lg-wipe{to{clip-path:inset(0 0 0 0)}}
+/* the orbit is drawn like a comet: it starts low on the right, passes under the letters, comes over the top and
+   reaches the star (at 47 degrees, 87% of the way), then curls down the right side */
+.lg-orbit{-webkit-mask:conic-gradient(from 120deg at 50% 52%,#000 var(--sweep),transparent calc(var(--sweep) + .5deg));mask:conic-gradient(from 120deg at 50% 52%,#000 var(--sweep),transparent calc(var(--sweep) + .5deg));animation:lg-orbit 1.15s linear .55s both}
+@keyframes lg-orbit{from{--sweep:0deg}to{--sweep:332deg}}
+/* the star grows from its own centre the moment the line reaches it, and never rotates, so it stays on the line */
+.lg-star{opacity:0;transform-origin:81.62% 13.82%;animation:lg-star .5s cubic-bezier(.2,1.5,.4,1) 1.55s forwards,lg-twinkle 2.6s ease-in-out 2.2s infinite}
+@keyframes lg-star{0%{opacity:0;transform:scale(0)}35%{opacity:1}100%{opacity:1;transform:scale(1)}}
+@keyframes lg-twinkle{50%{transform:scale(1.07)}}
+.lg-flare{left:81.62%;top:13.82%;animation:lg-flare .8s ease-out 1.55s forwards}
+.splash.quick .lg-letters{animation-duration:.4s;animation-delay:0s}
+.splash.quick .lg-orbit{animation-duration:.6s;animation-delay:.1s}
+.splash.quick .lg-star,.splash.quick .lg-flare{animation-delay:.62s,1.3s}
+.splash.quick .splash-meta,.splash.quick .splash-name{animation-delay:.4s}
+@media (prefers-reduced-motion:reduce){.lg-letters{clip-path:none;animation:none}.splash-meta{animation:none;opacity:.95}}
+.brand span.wordmark{font:italic 600 21px/1 var(--display);letter-spacing:-.035em;text-transform:none;color:var(--text)}
+.brand span.brand-sub{font:400 13px/1 var(--ui);letter-spacing:0;text-transform:none;color:var(--muted)}
+.home .brand span.wordmark{color:#fff}
+.home .brand span.brand-sub{color:rgba(255,255,255,.7)}
+
+/* ---------- style hover preview ---------- */
+.style-peek{position:fixed;z-index:80;width:200px;pointer-events:none;background:var(--panel);border:1px solid var(--line-2);border-radius:6px;overflow:hidden;box-shadow:var(--shadow)}
+.style-peek canvas{display:block;width:200px;height:356px}
+.style-peek .sp-cap{display:grid;gap:1px;padding:8px 10px 10px}
+.style-peek b{font:500 15px/1.1 var(--display);letter-spacing:-.02em}
+.style-peek span{font:italic 300 12px/1.2 var(--ui);color:var(--muted)}
+.style-peek.in{animation:peek-in .16s ease-out}
+@keyframes peek-in{from{opacity:0;transform:translateY(4px) scale(.98)}}
