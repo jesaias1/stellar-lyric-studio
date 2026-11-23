@@ -32,7 +32,7 @@ window.SLSLyricsUI = (() => {
       const row = document.createElement("div"); row.className = "ly-line"; row.dataset.li = li;
       const t = document.createElement("button"); t.className = "ly-t"; t.title = "Play from this line"; t.innerHTML = IC.play + "<span>" + clock(L[0].t) + "</span>";
       const ws = document.createElement("div"); ws.className = "ly-words"; if(/[֐-ࣿ]/.test(L[0].w)) ws.dir = "rtl";
-      L.forEach(w => { const b = document.createElement("button"); b.className = "ly-w" + (w.u ? " u" : ""); b.textContent = w.w; if(w.u) b.title = "The AI wasn't sure about this word"; rowOf.push(rows.length); flat.push(w); els.push(b); ws.append(b); });
+      L.forEach(w => { const b = document.createElement("button"); b.className = "ly-w" + (w.u ? " u" : ""); b.textContent = w.w; if(w.u) b.title = w.g ? "This word couldn't be found in the vocal, so its timing is a guess" : "The AI wasn't sure about this word"; rowOf.push(rows.length); flat.push(w); els.push(b); ws.append(b); });
       const ops = document.createElement("div"); ops.className = "ly-ops";
       ops.innerHTML = (li > 0 ? `<button class="ly-op" data-op="join" title="Join with the line above" aria-label="Join with the line above">${IC.join}</button>` : "") + `<button class="ly-op" data-op="drop" title="Remove this line" aria-label="Remove this line">${IC.bin}</button>`;
       row.append(t, ws, ops); rows.push(row); frag.append(row);
@@ -49,7 +49,9 @@ window.SLSLyricsUI = (() => {
   function syncBars(){
     const words = S.P.words, unsure = words.filter(w => w.u).length, lines = new Set(words.map(w => w.l)).size, bar = $("#lyReview");
     if(unsure){ hadUnsure = true; bar.hidden = false; bar.classList.remove("clear");
-      $("#lyReviewTxt").textContent = unsure === 1 ? "1 word to check. The AI wasn't sure it heard it right." : `${unsure} words to check. The AI wasn't sure it heard them right.`;
+      const guessed = words.filter(w => w.u && w.g).length, n = unsure === 1 ? "1 word" : unsure + " words";
+      $("#lyReviewTxt").textContent = guessed === unsure ? `${n} to check. ${unsure === 1 ? "It" : "They"} couldn't be found in the vocal, so the timing is a guess.`
+        : guessed ? `${n} to check: the AI wasn't sure it heard some, and couldn't find others in the vocal.` : `${n} to check. The AI wasn't sure it heard ${unsure === 1 ? "it" : "them"} right.`;
       $("#lyNextU").hidden = false; $("#lyAcceptAll").hidden = false; }
     else if(hadUnsure && words.length){ bar.hidden = false; bar.classList.add("clear"); $("#lyReviewTxt").textContent = "Every word is checked."; $("#lyNextU").hidden = true; $("#lyAcceptAll").hidden = true; }
     else bar.hidden = true;
@@ -72,7 +74,8 @@ window.SLSLyricsUI = (() => {
     const row = rows[rowOf[i]]; els[i].classList.add("sel"); row.classList.add("open");
     const p = document.createElement("div"); p.className = "ly-edit" + (w.u ? " unsure" : "");
     p.innerHTML =
-      (w.u ? `<div class="ly-edit-note"><b>Not sure</b><span>${w.alt ? "The AI heard this two different ways." : "The AI could barely make this out, or isn't sure a word is sung here."} Listen, then keep it or fix it.</span></div>` : "") +
+      (w.u ? (w.g ? `<div class="ly-edit-note"><b>Timing guessed</b><span>This word couldn't be found in the vocal, so its time is estimated from the words around it. Hear it, and move it earlier or later if it's off.</span></div>`
+        : `<div class="ly-edit-note"><b>Not sure</b><span>${w.alt ? "The AI heard this two different ways." : "The AI could barely make this out, or isn't sure a word is sung here."} Listen, then keep it or fix it.</span></div>`) : "") +
       `<div class="ly-edit-main"><button class="btn ly-hear" data-op="hear" title="Play this word in the song">${IC.play}Hear it</button>` +
       `<input type="text" id="lyInput" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="Word" enterkeyhint="done">` +
       `<button class="btn primary ly-keep" data-op="keep">${IC.check}${w.u ? "Keep" : "Done"}</button></div>` +
@@ -91,7 +94,7 @@ window.SLSLyricsUI = (() => {
   /* Saves what is typed. Empty removes the word; several words typed into one box become several words. */
   function commit(){
     if(!open) return null; const w = open.w, text = $("#lyInput") ? $("#lyInput").value.trim() : w.w, parts = text.split(/\s+/).filter(Boolean);
-    delete w.u; delete w.alt;
+    delete w.u; delete w.g; delete w.alt;
     let last = w;
     if(!parts.length){ S.P.words = S.P.words.filter(x => x !== w); last = null; }
     else if(parts.length === 1) w.w = parts[0];
@@ -138,7 +141,7 @@ window.SLSLyricsUI = (() => {
     else if(e.key === "Backspace" && e.target.value === "" && !e.repeat){ e.preventDefault(); const i = flat.indexOf(open.w), pv = flat[i - 1]; commit(); if(pv && S.P.words.includes(pv)) openWord(pv); }
   });
   $("#lyNextU").onclick = () => { const cur = open ? open.w : null; if(open) commit(); const nx = nextUnsure(cur && S.P.words.includes(cur) ? cur : null); if(nx) openWord(nx); };
-  $("#lyAcceptAll").onclick = () => { if(open) commit(); const n = S.P.words.filter(w => w.u).length; S.P.words.forEach(w => { delete w.u; delete w.alt; }); dirty(); render(); toast(`${n} word${n === 1 ? "" : "s"} accepted. Undo with Ctrl+Z.`); };
+  $("#lyAcceptAll").onclick = () => { if(open) commit(); const n = S.P.words.filter(w => w.u).length; S.P.words.forEach(w => { delete w.u; delete w.g; delete w.alt; }); dirty(); render(); toast(`${n} word${n === 1 ? "" : "s"} accepted. Undo with Ctrl+Z.`); };
 
   /* ---------- follow the music ---------- */
   function tick(){

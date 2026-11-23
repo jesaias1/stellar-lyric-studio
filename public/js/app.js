@@ -50,7 +50,7 @@ window.SLSApp = (() => {
   $("#demoBtn").onclick = () => { go("lyrics"); toast("This is the demo track. Load your own song to have the lyrics written for you."); };
 
   /* ---------- start screen states ---------- */
-  function showHome(state){ home.hidden = false; $("#drop").hidden = state !== "drop"; $("#homeOpts").hidden = state !== "drop"; $("#work").hidden = state !== "work"; $("#oops").hidden = state !== "oops"; $(".how").hidden = state !== "drop"; if(state !== "drop") home.scrollTop = 0; }
+  function showHome(state){ home.hidden = false; $("#start").hidden = state !== "drop"; $("#homeOpts").hidden = state !== "drop"; $("#work").hidden = state !== "work"; $("#oops").hidden = state !== "oops"; $(".how").hidden = state !== "drop"; if(state !== "drop") home.scrollTop = 0; }
   function progress(p){
     const LABEL = { read: "Reading your song", listen: "Listening for the words", check: "Listening again to double-check", time: "Timing every word" }, order = ["read", "listen", "check", "time"];
     $("#workStep").textContent = LABEL[p.stage] + (p.total && p.stage !== "time" && p.stage !== "read" ? "…" : "");
@@ -59,8 +59,21 @@ window.SLSApp = (() => {
   }
   function oops(title, text, { retry = true, manual = true } = {}){ $("#oopsTitle").textContent = title; $("#oopsText").textContent = text; $("#oopsRetry").hidden = !retry; $("#oopsManual").hidden = !manual; showHome("oops"); }
   $("#oopsOther").onclick = () => showHome("drop");
-  $("#oopsManual").onclick = () => { go("lyrics"); paste(); };
-  $("#oopsRetry").onclick = () => { if(S.audio && S.songName !== "Demo track") listen(); else if(lastFile) pick(lastFile); else showHome("drop"); };
+  $("#oopsManual").onclick = () => { go("lyrics"); paste(homeLyrics.value.trim() || S.P.srcLyrics || ""); };
+
+  /* ---------- lyrics pasted on the start screen ---------- */
+  const homeLyrics = $("#homeLyrics");
+  function paintHomeLyrics(){
+    const lines = SLSTranscribe.cleanLyrics(homeLyrics.value), words = lines.join(" ").split(/\s+/).filter(Boolean).length, raw = homeLyrics.value.trim();
+    $("#homeLyricsInfo").textContent = raw ? `${lines.length} line${lines.length === 1 ? "" : "s"} · ${words} word${words === 1 ? "" : "s"} ready to time` : "";
+    $("#homeLyricsClear").hidden = !raw; $("#pasteCard").classList.toggle("has", !!raw);
+    $("#drop .drop-title").lastChild.textContent = raw ? "Now drop the song" : "Drop your song here";
+  }
+  homeLyrics.value = keep.get("sls-home-lyrics") || "";
+  homeLyrics.addEventListener("input", () => { keep.set("sls-home-lyrics", homeLyrics.value); paintHomeLyrics(); });
+  $("#homeLyricsClear").onclick = () => { homeLyrics.value = ""; keep.set("sls-home-lyrics", ""); paintHomeLyrics(); homeLyrics.focus(); };
+  paintHomeLyrics();
+  $("#oopsRetry").onclick = () => { if(S.audio && S.songName !== "Demo track") listen({ lyrics: homeLyrics.value.trim() || S.P.srcLyrics || "" }); else if(lastFile) pick(lastFile); else showHome("drop"); };
   $("#workCancel").onclick = () => { if(job) job.abort(); };
 
   /* ---------- language ---------- */
@@ -91,11 +104,16 @@ window.SLSApp = (() => {
     try { info = await loadSong(file); }
     catch { oops("That file couldn't be read", "Try an MP3, WAV, M4A or FLAC file. If it came from a streaming app it may be protected.", { retry: false, manual: false }); return; }
     started = true; SLSLyricsUI.forgetReview();
-    if(info.restored && S.P.words.length){ go("lyrics"); toast("Welcome back. Your last edit of this song is restored."); return; }
-    await listen();
+    const pasted = homeLyrics.value.trim();
+    if(info.restored && S.P.words.length && !pasted){ go("lyrics"); toast("Welcome back. Your last edit of this song is restored."); return; }
+    await listen({ lyrics: pasted });
   }
-  async function listen(){
+  /* lyrics: text to time to the song. Left out, "Listen again" reuses the lyrics this song was last timed with. */
+  async function listen({ lyrics } = {}){
     if(!S.audio || S.songName === "Demo track"){ toast("Load your own song first"); go("song"); return; }
+    if(lyrics == null) lyrics = S.P.srcLyrics || "";
+    const given = lyrics.trim() && SLSTranscribe.cleanLyrics(lyrics).length ? lyrics.trim() : "";
+    $("#workList [data-k=listen]").textContent = given ? "Find your lyrics in the song" : "Listen for the words";
     if(job) job.abort();
     const ctl = job = new AbortController();
     $("#workSong").textContent = S.songName; showHome("work"); progress({ stage: "read", pct: 0.02 }); paintSteps();
@@ -103,18 +121,27 @@ window.SLSApp = (() => {
       if(!api.hasPass()){ const ok = await askPass(); if(ok !== true){ if(ok && ok.code) throw ok; throw new api.ApiError("cancelled", "Cancelled.", 0); } }
       let out;
       for(;;){
-        try { out = await SLSTranscribe.run(S.audio, { language: langSel.value || null, signal: ctl.signal, onProgress: progress }); break; }
+        try { out = await SLSTranscribe.run(S.audio, { language: langSel.value || null, signal: ctl.signal, onProgress: progress, lyrics: given }); break; }
         catch(err){ if(err.code !== "unauthorized") throw err; const ok = await askPass("That passcode isn't right. Try again."); if(ok !== true){ if(ok && ok.code) throw ok; throw new api.ApiError("cancelled", "Cancelled.", 0); } }
       }
       if(ctl.signal.aborted) return;
-      S.P.words = out.words; S.P.lyrics = out.lyrics; S.P.lang = out.language;
+      if(given && !out.words.length){
+        // nothing in the song matched the pasted lyrics: keep them, spread evenly, and say so
+        S.P.srcLyrics = given; $("#lyricsText").value = SLSTranscribe.cleanLyrics(given).join("\n"); $("#applyLyrics").click();
+        go("lyrics"); toast("None of your lyrics could be found in the song, so they're spread evenly. Check the song and the language."); return;
+      }
+      S.P.words = out.words; S.P.lyrics = out.lyrics; S.P.lang = out.language; S.P.srcLyrics = given || "";
+      if(given){ homeLyrics.value = ""; keep.set("sls-home-lyrics", ""); paintHomeLyrics(); }   // used up: the next song starts with an empty box
       // start the clip where the singing starts
       if(out.words.length && S.audio.duration > 60){ const len = S.P.section.b - S.P.section.a, a = clamp(out.words[0].t - 0.6, 0, S.audio.duration - len); S.P.section = { a: +a.toFixed(2), b: +(a + len).toFixed(2) }; }
       sortWords(); syncUI(); dirty(); SLSLyricsUI.forgetReview();
       S.t = out.words.length ? Math.max(0, out.words[0].t - 0.5) : 0;
       go("lyrics");
+      const s = n => n === 1 ? "" : "s";
       if(!out.words.length) toast("No sung words were found. You can paste the lyrics instead.");
-      else { toast(out.unsure ? `Lyrics ready. ${out.unsure} word${out.unsure === 1 ? "" : "s"} to check.` : "Lyrics ready. Every word was heard the same way twice."); }
+      else if(out.mode === "aligned" && out.matched < 0.4) toast(`Only ${Math.round(out.matched * 100)}% of your lyrics were found in the song. Check they belong to this song, and pick the song's language.`);
+      else if(out.mode === "aligned") toast(out.unsure ? `Your lyrics are timed. ${out.unsure} word${s(out.unsure)} couldn't be found in the vocal: check those.` : "Your lyrics are timed. Every word was found in the vocal.");
+      else toast(out.unsure ? `Lyrics ready. ${out.unsure} word${s(out.unsure)} to check.` : "Lyrics ready. Every word was heard the same way twice.");
     } catch(err){
       if(ctl.signal.aborted || err.code === "cancelled"){ if(S.P.words.length) go(lastStep); else oops("Stopped", "The song is loaded, but the lyrics weren't written. You can try again or type them in.", {}); return; }
       const MSG = {
@@ -150,9 +177,17 @@ window.SLSApp = (() => {
   const closeMenu = () => { menu.hidden = true; more.setAttribute("aria-expanded", "false"); };
   more.onclick = e => { e.stopPropagation(); menu.hidden = !menu.hidden; more.setAttribute("aria-expanded", String(!menu.hidden)); };
   document.addEventListener("click", e => { if(!menu.hidden && !menu.contains(e.target)) closeMenu(); });
-  function paste(){ $("#pasteText").value = S.P.lyrics || ""; $("#pasteModal").hidden = false; setTimeout(() => $("#pasteText").focus(), 30); }
+  function paste(text){
+    const real = !!(S.audio && S.songName !== "Demo track");
+    $("#pasteText").value = text != null ? text : (S.P.srcLyrics || S.P.lyrics || "");
+    $("#pasteTime").hidden = !real;
+    $("#pasteHint").textContent = real ? "One line per lyric line. The AI listens to the song and gives every word its time. Labels like [Verse 1], Chorus x2 or (Artist name) are removed for you."
+      : "One line per lyric line. Load your own song to have them timed automatically. Labels like [Verse 1], Chorus x2 or (Artist name) are removed for you.";
+    $("#pasteModal").hidden = false; setTimeout(() => $("#pasteText").focus(), 30);
+  }
   $("#pasteCancel").onclick = () => { $("#pasteModal").hidden = true; };
-  $("#pasteOk").onclick = () => { $("#pasteModal").hidden = true; $("#lyricsText").value = $("#pasteText").value; $("#applyLyrics").click(); SLSLyricsUI.render(); };
+  $("#pasteOk").onclick = () => { $("#pasteModal").hidden = true; const t = $("#pasteText").value; S.P.srcLyrics = t.trim(); $("#lyricsText").value = SLSTranscribe.cleanLyrics(t).join("\n"); $("#applyLyrics").click(); SLSLyricsUI.render(); };
+  $("#pasteTime").onclick = () => { const t = $("#pasteText").value.trim(); if(!SLSTranscribe.cleanLyrics(t).length){ toast("Paste some lyrics first"); return; } $("#pasteModal").hidden = true; listen({ lyrics: t }); };
   menu.onclick = e => { const b = e.target.closest("[data-act]"); if(!b) return; closeMenu(); SLSLyricsUI.commit(); const a = b.dataset.act;
     if(a === "paste") paste();
     if(a === "import") $("#lrcFile").click();

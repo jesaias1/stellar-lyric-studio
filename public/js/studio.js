@@ -1201,7 +1201,7 @@ function syncUndoUI(){ const u = $("#undoBtn"), r = $("#redoBtn"); if(u) u.disab
 function applyProject(p, keepSong){
   const base = defaultProject();
   S.P = {...base, ...p, style:{...base.style, ...(p.style||{})}, hook:{...base.hook, ...(p.hook||{})}, cuts:{...base.cuts, ...(p.cuts||{})}, section:{...base.section, ...(p.section||{})}};
-  S.P.words = (p.words || []).map(w => { const o = {w:String(w.w), l:+w.l||0, t:+w.t||0, d:+w.d||0.3}; if(w.u) o.u = 1; if(w.alt) o.alt = String(w.alt); return o; });
+  S.P.words = (p.words || []).map(w => { const o = {w:String(w.w), l:+w.l||0, t:+w.t||0, d:+w.d||0.3}; if(w.u) o.u = 1; if(w.g) o.g = 1; if(w.alt) o.alt = String(w.alt); return o; });
   if(S.audio){ const dur = S.audio.duration; S.P.section.b = Math.min(S.P.section.b, dur); S.P.section.a = clamp(S.P.section.a, 0, Math.max(0, S.P.section.b - 1)); }
   if(!ASPECTS[S.P.aspect]) S.P.aspect = "9:16";
   const OLD = {punch:"redline", outline:"hollow", glow:"voltage", type:"typewriter"}; if(OLD[S.P.style.preset]) S.P.style.preset = OLD[S.P.style.preset];

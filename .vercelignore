@@ -6,3 +6,5 @@ brand
 samples
 wrangler.jsonc
 wrangler.dev.jsonc
+public/_test
+public/zz-local-test.wav

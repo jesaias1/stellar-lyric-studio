@@ -54,14 +54,21 @@
       <p>Drop a track and Stellar listens to it, writes the lyrics and times every word. You check them, pick a look and export a video ready for Instagram, TikTok and Shorts.</p>
     </div>
 
-    <!-- state 1: waiting for a song -->
+    <!-- state 1: waiting for a song (and, if you have them, the lyrics) -->
+    <div class="start" id="start">
+    <div class="paste-card" id="pasteCard">
+      <label class="paste-head" for="homeLyrics"><span class="paste-num">1</span><span><b>Paste the lyrics</b> <i>optional, most accurate</i></span></label>
+      <textarea id="homeLyrics" spellcheck="false" placeholder="Paste the lyrics here and the AI only has to find when each word is sung.&#10;&#10;Labels like [Verse 1], Chorus x2 or (Artist name) are removed for you.&#10;&#10;Leave it empty and the AI writes the lyrics itself."></textarea>
+      <div class="paste-foot"><span class="hint" id="homeLyricsInfo"></span><button class="link-btn" id="homeLyricsClear" hidden>Clear</button></div>
+    </div>
     <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose a song file">
       <div class="drop-orbit" aria-hidden="true"><i></i><b></b></div>
       <svg class="drop-ico" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 34V11l19-4v23"/><circle cx="13" cy="34" r="6"/><circle cx="32" cy="30" r="6"/></svg>
-      <div class="drop-title">Drop your song here</div>
+      <div class="drop-title"><span class="paste-num">2</span>Drop your song here</div>
       <div class="drop-sub">or <span class="drop-link">choose a file</span></div>
       <div class="drop-note">MP3, WAV, M4A or FLAC · lyrics in any language</div>
       <input id="homeFile" type="file" accept="audio/*,.mp3,.wav,.m4a,.flac,.ogg,.aac" hidden>
+    </div>
     </div>
     <div class="home-opts" id="homeOpts">
       <label class="lang"><span>Song language</span><select id="langSel" aria-label="Song language"></select></label>
@@ -95,8 +102,8 @@
     </div>
 
     <ol class="how">
-      <li><b>1</b><span><strong>Upload</strong> the song. Nothing else is needed.</span></li>
-      <li><b>2</b><span><strong>Check the lyrics.</strong> Words the AI wasn't sure about are marked for you.</span></li>
+      <li><b>1</b><span><strong>Upload</strong> the song, with the lyrics if you have them.</span></li>
+      <li><b>2</b><span><strong>Check the lyrics.</strong> Anything the AI wasn't sure about is marked for you.</span></li>
       <li><b>3</b><span><strong>Pick a style</strong> and export the video.</span></li>
     </ol>
   </div>
@@ -117,9 +124,9 @@
 <div class="modal" id="pasteModal" hidden>
   <div class="dialog" role="dialog" aria-labelledby="pasteTitle" style="width:min(560px,100%)">
     <h2 id="pasteTitle">Paste the lyrics</h2>
-    <div class="hint">One line per lyric line. If the number of words stays the same, the timing you already have is kept. Otherwise the words are spread across the song and you can fine-tune them on the timeline.</div>
+    <div class="hint" id="pasteHint">One line per lyric line. The AI listens to the song and gives every word its time. Labels like [Verse 1], Chorus x2 or (Artist name) are removed for you.</div>
     <textarea id="pasteText" spellcheck="false" style="min-height:240px"></textarea>
-    <div class="row"><button class="btn primary" id="pasteOk">Use these lyrics</button><button class="btn ghost" id="pasteCancel">Cancel</button></div>
+    <div class="row"><button class="btn primary" id="pasteTime">Time them to the song</button><button class="btn" id="pasteOk">Just use the text</button><button class="btn ghost" id="pasteCancel">Cancel</button></div>
   </div>
 </div>
 
