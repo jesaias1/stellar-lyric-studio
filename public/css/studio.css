@@ -592,3 +592,9 @@ body.cal-open .toast{z-index:1600}
 .pub-help[aria-expanded="true"]{border-color:var(--tape);color:var(--tape)}
 .pub-help[aria-expanded="true"] span{background:var(--tape);color:var(--on-tape)}
 .pub-sound-row{flex-direction:row!important;align-items:center;justify-content:space-between;gap:10px}
+/* "Post it again?" */
+.pub-again{z-index:2200}
+.pub-again .dialog{width:min(420px,100%)}
+.pub-again h2{margin:0;font-size:18px}
+.pub-again ul{margin:0 0 8px;padding-left:18px;display:grid;gap:6px;font-size:14px;line-height:1.4}
+.pub-again .ph-actions{justify-content:flex-end;gap:8px}

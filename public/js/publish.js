@@ -324,10 +324,45 @@ window.SLSPublish = (() => {
     return o.mode === "direct" ? { mode: "direct", caption, privacy: o.privacy, comment: !!o.comment, duet: !!o.duet, stitch: !!o.stitch, brandOrganic: !!(o.commercial && o.brandOrganic), brandContent: !!(o.commercial && o.brandContent), ai }
       : { mode: "draft", ...(o.seed ? { seed: { song: songTitle(), start: +S.P.section.a.toFixed(2), ...(soundUrl() ? { url: soundUrl() } : {}) } } : {}) };
   }
+  /* ---------- "Post it again?": the same video, or the same song on the same account in the last day ---------- */
+  const sent = new WeakMap();   // exported video -> Map(account id -> { at, sched })
+  function markSent(sel, sched){ const mp = sent.get(video.blob) || new Map(); sel.forEach(a => mp.set(a.id, { at: Date.now(), sched })); sent.set(video.blob, mp); }
+  const ago = t => { const s = (Date.now() - t) / 1000; return s < 60 ? "just now" : s < 3600 ? `${Math.round(s / 60)} min ago` : (d => `at ${p2(d.getHours())}:${p2(d.getMinutes())}`)(new Date(t)); };
+  async function repeats(sel){
+    const out = [], mine = sent.get(video.blob), seen = new Set();
+    sel.forEach(a => { const x = mine && mine.get(a.id); if(x){ seen.add(a.id); out.push(`<b>${esc(a.name)}</b> (${P[a.platform]}): this video was ${x.sched ? "scheduled" : "posted"} ${ago(x.at)}`); } });
+    if(window.SLSAuth && SLSAuth.mode === "accounts" && S.songName){
+      try {
+        const since = new Date(Date.now() - 24 * 3600e3).toISOString(), ids = sel.filter(a => !seen.has(a.id)).map(a => a.id);
+        const rows = ids.length ? await Promise.race([SLSAuth.rest(`posts?select=account_id,status,publish_at&project_name=eq.${encodeURIComponent(S.songName)}&account_id=in.(${ids.map(i => `"${i}"`).join(",")})&status=in.(scheduled,posting,working,posted)&publish_at=gte.${encodeURIComponent(since)}&order=publish_at.desc`), new Promise(r => setTimeout(() => r([]), 4000))]) : [];
+        (Array.isArray(rows) ? rows : []).forEach(r => { if(seen.has(r.account_id)) return; seen.add(r.account_id); const a = sel.find(x => x.id === r.account_id); if(!a) return;
+          const t = new Date(r.publish_at), fut = r.status === "scheduled" && t > new Date();
+          out.push(`<b>${esc(a.name)}</b> (${P[a.platform]}): “${esc(S.songName)}” ${fut ? `is already scheduled for ${niceWhen(t)}` : `was already posted ${ago(+t)}`}`); });
+      } catch(err){ console.warn("couldn't check earlier posts", err); }
+    }
+    return out;
+  }
+  function askAgain(lines, sched){
+    return new Promise(done => {
+      const d = document.createElement("div"); d.className = "modal pub-again"; d.innerHTML = `<div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="pubAgainH" aria-describedby="pubAgainB">
+        <h2 id="pubAgainH">${sched ? "Schedule it again?" : "Post it again?"}</h2>
+        <div id="pubAgainB"><ul>${lines.map(l => `<li>${l}</li>`).join("")}</ul><p class="hint">${sched ? "Scheduling again" : "Posting again"} puts a second copy on ${lines.length === 1 ? "that account" : "those accounts"}.</p></div>
+        <div class="row ph-actions"><button class="btn" type="button" data-a="no">Cancel</button><button class="btn primary" type="button" data-a="yes">${sched ? "Schedule again" : "Post again"}</button></div></div>`;
+      const end = ok => { d.remove(); removeEventListener("keydown", key, true); done(ok); };
+      const key = e => { if(e.key === "Escape"){ e.stopPropagation(); e.preventDefault(); end(false); } };
+      d.addEventListener("click", e => { const b = e.target.closest("[data-a]"); if(b) end(b.dataset.a === "yes"); else if(e.target === d) end(false); });
+      addEventListener("keydown", key, true); document.body.append(d); d.querySelector("[data-a=no]").focus();
+    });
+  }
+  let checking = false;
   $("#pubGo").onclick = async () => {
-    const sel = accounts().filter(a => selected.has(a.id) && !fits(a.platform)); if(!sel.length || posting) return;
+    const sel = accounts().filter(a => selected.has(a.id) && !fits(a.platform)); if(!sel.length || posting || checking) return;
     if(!(await SLSApp.ensurePass())) return;
+    checking = true; const go = $("#pubGo"); go.disabled = true;
+    let again; try { again = await repeats(sel); } finally { checking = false; go.disabled = false; }
+    if(again.length && !(await askAgain(again, later()))){ paint(); return; }
     if(later()) return schedule(sel);
+    markSent(sel, false);
     posting = true; paintGo(sel);
     const blob = video.blob, mine = sel.map(a => ({ id: a.id, platform: a.platform, name: a.name, state: "waiting", text: "Waiting…", pct: 0, meta: metaFor(a) }));
     jobs.unshift(...mine); paintJobs(); $("#pubJobs").scrollIntoView({ block: "nearest", behavior: "smooth" });
@@ -358,6 +393,7 @@ window.SLSPublish = (() => {
   /* ---------- scheduling: the video goes to storage once, and one row per account goes in the calendar ---------- */
   async function schedule(sel){
     const d = new Date($("#pubAt").value), bad = atProblem(); if(bad){ toast(bad); return; }
+    markSent(sel, true);
     posting = true; paintGo(sel);
     const blob = video.blob, type = blob.type || "video/mp4", mine = sel.map(a => ({ id: a.id, platform: a.platform, name: a.name, state: "uploading", text: "Uploading the video…", pct: 0, meta: metaFor(a), artist: a.label || "" }));
     jobs.unshift(...mine); paintJobs(); $("#pubJobs").scrollIntoView({ block: "nearest", behavior: "smooth" });
