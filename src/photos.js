@@ -4,8 +4,9 @@
  *   GET  /api/photos/search?q=&orientation=&from=free|pinterest|both&page=1&next=
  *        One search, as is. Free photos come from Pexels (PEXELS_KEY) and Pixabay (PIXABAY_KEY);
  *        Pinterest results come through SerpApi (SERPAPI_KEY), because Pinterest has no public search API.
- *   POST /api/photos/pick     {lyrics, prompt, count, aspect, from, exclude?, queries?, page?, next?}
- *                             -> {queries, picks, spare, errors, page, next, skipped}
+ *   POST /api/photos/pick     {lyrics, prompt, count, aspect, from, look?, exclude?, queries?, page?, next?}
+ *                             -> {queries, picks, spare, errors, page, next, skipped, pinLeft}
+ *        look: "mix" (art and film-style photos), "art" or "photo". pinLeft: Pinterest searches left this month.
  *        exclude: ids/links of images already used, never returned. queries+page+next: "find more", the same
  *        searches further down the results (page is the last page read, next the Pinterest page tokens).
  *        The whole grab in one go: an AI turns the keywords and the lyrics into a few searches, they run on
@@ -72,9 +73,11 @@ async function pexels(env, q, orientation, page, per) {
   })).filter(p => p.file) };
 }
 
-async function pixabay(env, q, orientation, page, per) {
+async function pixabay(env, q, orientation, page, per, look = "mix") {
   const o = orientation === "portrait" ? "vertical" : orientation === "landscape" ? "horizontal" : "all";
-  const r = await fetch(`https://pixabay.com/api/?key=${encodeURIComponent(env.PIXABAY_KEY)}&q=${encodeURIComponent(q.slice(0, 100))}&image_type=photo&orientation=${o}&per_page=${per}&page=${page}&safesearch=true`);
+  // paintings and drawings are "illustrations" on Pixabay; a query that asks for one gets those
+  const kind = look === "photo" ? "photo" : look === "art" || ART_Q.test(q) ? "illustration" : "photo";
+  const r = await fetch(`https://pixabay.com/api/?key=${encodeURIComponent(env.PIXABAY_KEY)}&q=${encodeURIComponent(q.slice(0, 100))}&image_type=${kind}&orientation=${o}&per_page=${per}&page=${page}&safesearch=true`);
   if (!r.ok) throw new Error(r.status === 429 ? "busy, try again in a minute" : `HTTP ${r.status}`);
   const d = await r.json();
   return { items: (d.hits || []).map(h => ({
@@ -102,20 +105,35 @@ async function pinterest(env, q, next) {
   return { items, next: (d.serpapi_pagination && d.serpapi_pagination.next_page_token) || d.next_page_token || null };
 }
 
-/* Runs one query on every source that is on. Results interleaved, so no source crowds out the others. */
-async function searchAll(env, q, orientation, from, { page = 1, next = null, per = 20 } = {}) {
-  const on = sources(env, from), key = `${q.toLowerCase()}|${orientation}|${from}|${page}|${next || ""}`, hit = cache.get(key);
+/* Runs one query on every source that is on. Results interleaved, so no source crowds out the others.
+   pin: false leaves Pinterest out (each Pinterest search costs one of the SerpApi account's monthly searches). */
+async function searchAll(env, q, orientation, from, { page = 1, next = null, per = 20, look = "mix", pin = true } = {}) {
+  const on = { ...sources(env, from) }; if (!pin) on.pinterest = false;
+  const key = `${q.toLowerCase()}|${orientation}|${from}|${page}|${next || ""}|${look}|${pin ? 1 : 0}`, hit = cache.get(key);
   if (hit && Date.now() - hit.at < 86400000) return hit.data;
   const jobs = [];
   if (on.pexels) jobs.push(pexels(env, q, orientation, page, per).catch(e => ({ error: "Pexels: " + e.message, items: [] })));
-  if (on.pixabay) jobs.push(pixabay(env, q, orientation, page, per).catch(e => ({ error: "Pixabay: " + e.message, items: [] })));
+  if (on.pixabay) jobs.push(pixabay(env, q, orientation, page, per, look).catch(e => ({ error: "Pixabay: " + e.message, items: [] })));
   if (on.pinterest && (page === 1 || next)) jobs.push(pinterest(env, q, next).then(x => ({ ...x, pin: true })).catch(e => ({ error: "Pinterest: " + e.message, items: [], pin: true })));
   const parts = await Promise.all(jobs), lists = parts.map(p => p.items), items = [];
   for (let i = 0; lists.some(l => i < l.length); i++) for (const l of lists) if (l[i]) items.push({ ...l[i], q });
-  const pin = parts.find(p => p.pin);
-  const data = { items, errors: parts.map(p => p.error).filter(Boolean), next: pin ? pin.next || null : null };
+  const pinPart = parts.find(p => p.pin);
+  const data = { items, errors: parts.map(p => p.error).filter(Boolean), next: pinPart ? pinPart.next || null : null };
   if (items.length) { cache.set(key, { at: Date.now(), data }); if (cache.size > 500) cache.delete(cache.keys().next().value); }
   return data;
+}
+
+// how many Pinterest searches the SerpApi account has left this month (asking costs nothing)
+let leftCache = { at: 0, n: null };
+async function searchesLeft(env) {
+  if (!env.SERPAPI_KEY) return null;
+  if (Date.now() - leftCache.at < 20000) return leftCache.n;
+  try {
+    const r = await fetch(`https://serpapi.com/account.json?api_key=${encodeURIComponent(env.SERPAPI_KEY)}`), d = await r.json();
+    const n = Number(d.total_searches_left ?? d.plan_searches_left);
+    leftCache = { at: Date.now(), n: Number.isFinite(n) ? n : null };
+  } catch { leftCache = { at: Date.now(), n: null }; }
+  return leftCache.n;
 }
 
 async function signAll(env, items) {
@@ -141,45 +159,72 @@ function jsonArray(out) {
   return JSON.parse(text.slice(text.indexOf("["), text.lastIndexOf("]") + 1));
 }
 
-async function writeQueries(ai, lyrics, prompt, n) {
+/* The look: "mix" (default) half painted or drawn art, half film-style photos; "art" only paintings, drawings
+   and illustration; "photo" only photos. The searches ask for a medium, because a plain subject search
+   ("snowy cabin night") mostly finds polished stock shots and glossy AI renders, while "snowy cabin night oil
+   painting" or "snowy street night 35mm film" finds the characterful pictures people actually pin. */
+const LOOKS = {
+  art: ["oil painting", "illustration", "gouache painting", "vintage illustration", "anime background art", "watercolor painting"],
+  photo: ["35mm film photo", "film photography", "cinematic film still", "analog photo"],
+};
+const ART_Q = /\b(painting|painted|illustration|drawing|art|artwork|gouache|watercolou?r|linocut|pastel|sketch|anime|storybook|impressionist|print)\b/i;
+function withMedium(q, look, k) {
+  if (ART_Q.test(q) || /\b(film|35mm|analog|photograph|photo|polaroid|still)\b/i.test(q)) return q;
+  const pool = look === "art" ? LOOKS.art : look === "photo" ? LOOKS.photo : (k % 2 ? LOOKS.photo : LOOKS.art);
+  return `${q} ${pool[(k * 3 + q.length) % pool.length]}`;
+}
+async function writeQueries(ai, lyrics, prompt, n, look = "mix") {
   const base = clean(prompt);
   const fallback = () => {
-    if (base) return [base];
-    const words = clean(lyrics).toLowerCase().match(/\p{L}{4,}/gu) || [];
-    const common = new Set("that this with your have from what when they there their been were will just like know about would could into onto over under through around again still only dont cant wont youre feel never ever always every more love baby yeah oh".split(" "));
-    const pick = [...new Set(words.filter(w => !common.has(w)))].slice(0, 3);
-    return pick.length ? [pick.join(" ") + " aesthetic"] : ["moody aesthetic night"];
+    let qs;
+    if (base) qs = [base, base, base].slice(0, Math.max(1, Math.min(n, 3)));
+    else {
+      const words = clean(lyrics).toLowerCase().match(/\p{L}{4,}/gu) || [];
+      const common = new Set("that this with your have from what when they there their been were will just like know about would could into onto over under through around again still only dont cant wont youre feel never ever always every more love baby yeah oh".split(" "));
+      const pick = [...new Set(words.filter(w => !common.has(w)))].slice(0, 3);
+      qs = [pick.length ? pick.join(" ") : "dreamy scenery", pick.length ? pick.slice(0, 2).join(" ") + " scenery" : "everyday life scenes"];
+    }
+    return qs.map((q, k) => k === 0 && base ? q : withMedium(q, look, k));
   };
-  if (!ai || (!base && !clean(lyrics))) return { queries: fallback(), ai: false };
-  const sys = `You help pick photos for a music lyric video on social media. Write exactly ${n} short image search queries (2 to 5 words each, in English, whatever language the lyrics are in) that will find beautiful, atmospheric photos for this song.` +
+  if (!ai || (!base && !clean(lyrics))) return { queries: [...new Set(fallback())], ai: false };
+  const medium = look === "art" ? "Every query names an art medium (for example oil painting, gouache, watercolor, vintage or storybook illustration, anime background art, linocut)."
+    : look === "photo" ? "Every query names a photo style that isn't stock (for example 35mm film, analog, grainy, cinematic film still, candid, vintage photograph)."
+    : "Mix the mediums: about half the queries name an art medium (oil painting, gouache, vintage or storybook illustration, anime background art, watercolor), the other half a photo style that isn't stock (35mm film, analog, cinematic film still, grainy, candid).";
+  const sys = `You help pick images for a music lyric video on social media. Write exactly ${n} short image search queries for Pinterest-style searches (3 to 7 words each, in English, whatever language the lyrics are in). Aim for characterful, artistic, interesting images, the kind people collect on mood boards: not polished stock photos, not people posing, not glossy 3D or fantasy renders. Match the song's own mood and colours: bright, warm and playful for an upbeat song, soft for a gentle one, dark only when the song is dark. Each query = a concrete scene or subject + a medium or style.` +
     (base ? ` The creator asked for: "${base}". Every query must stay inside that request (same subject, style or category); use the lyrics only to steer the mood, places, season and colours.` : " Base them on the imagery, mood, setting and season of the lyrics.") +
-    ` Make the queries different from each other so the results vary. No artist names, no song titles, no words like "lyrics" or "quote". Answer with a JSON array of ${n} strings and nothing else.`;
+    ` ${medium} Make the queries different from each other (different scenes, angles, mediums) so the results vary. No artist names, no song titles, no words like "lyrics", "quote", "wallpaper" or "stock". Answer with a JSON array of ${n} strings and nothing else.`;
   try {
-    const out = await ai({ messages: [{ role: "system", content: sys }, { role: "user", content: `Lyrics:\n${clean(lyrics) ? lyrics.slice(0, 4000) : "(no lyrics yet)"}` }], max_tokens: 200, temperature: 0.6 });
-    const qs = jsonArray(out).map(x => clean(x).replace(/["#]/g, "").slice(0, 60)).filter(Boolean);
+    const out = await ai({ messages: [{ role: "system", content: sys }, { role: "user", content: `Lyrics:\n${clean(lyrics) ? lyrics.slice(0, 4000) : "(no lyrics yet)"}` }], max_tokens: 240, temperature: 0.8 });
+    let qs = jsonArray(out).map(x => clean(x).replace(/["#]/g, "").slice(0, 70)).filter(Boolean);
     if (!qs.length) throw new Error("empty");
+    qs = qs.map((q, k) => withMedium(q, look, k));
     if (base && !qs.some(q => q.toLowerCase() === base.toLowerCase()) && base.split(" ").length <= 6) qs.unshift(base);   // the creator's own words always get searched
     return { queries: [...new Set(qs)].slice(0, n), ai: true };
   } catch (err) {
     console.error("photo queries failed:", String(err && err.message || err));
-    return { queries: fallback(), ai: false };
+    return { queries: [...new Set(fallback())], ai: false };
   }
 }
 
 /* Quality without looking at the picture: right orientation, enough pixels, and no signs of text, collages or products. */
 const BAD = /\b(quote|quotes|text|typography|lettering|infographic|meme|logo|poster|flyer|template|collage|mockup|tutorial|diy|recipe|outfit|product|sale|shop|printable|clipart|vector|illustration set|wallpaper with text)\b/i;
+// what makes a picture look like stock or a generated render, from its description
+const STOCK = /\b(stock (photo|image|footage)|royalty[- ]free|business(man|woman)?|corporate|office|smiling|happy (woman|man|couple|family)|copy ?space|isolated on|studio shot|model posing|banner|background image|hd wallpaper|4k wallpaper|8k|3d render|3d illustration|cgi|octane|unreal engine|hyper ?realistic|ultra ?realistic|ai[- ]generated|ai art|generative ai|midjourney|dall[- ]?e|stable diffusion|fantasy art|digital art)\b/i;
 function baseScore(it, orientation, i) {
   let s = 0;
   if (it.shape === orientation) s += 3; else if (it.shape === "square" || it.shape === "unknown") s += 1;
-  const short = Math.min(it.w || 0, it.h || 0); s += short ? Math.min(1.5, short / 900) : 0.5;
+  // enough pixels for a phone screen is enough: extra resolution mostly means stock
+  const short = Math.min(it.w || 0, it.h || 0); s += short ? Math.min(1, short / 700) : 0.6;
   if (BAD.test(it.title || "")) s -= 4;
+  if (STOCK.test(it.title || "")) s -= 2.5;
+  if (it.source === "Pinterest") s += 0.6;   // collected by people, so more often has character
   return s - i * 0.02;   // earlier in the search results is a little better
 }
 
 async function rankByText(ai, lyrics, prompt, items, want) {
   if (!ai || items.length <= 1) return null;
   const lines = items.map((it, i) => `${i + 1}. [${it.shape}] ${clean(it.title || "(no description)").slice(0, 120)}`).join("\n");
-  const sys = `You choose background photos for a music lyric video (lyrics are written over the photo). Below is a numbered list of photos, each with its orientation and description. Pick the ${want} that best fit the song's mood, imagery and the creator's request, best first, and that look good behind text: atmospheric, uncluttered, no text or quotes in the picture, no collages, no products, no infographics. Keep a visual mix (not ${want} near-identical shots). Answer with a JSON array of the chosen numbers only, best first.`;
+  const sys = `You choose background photos for a music lyric video (lyrics are written over the photo). Below is a numbered list of photos, each with its orientation and description. Pick the ${want} that best fit the song's mood, imagery and the creator's request, best first. Prefer interesting, characterful, artistic images (paintings, illustration, film photography, real moments) over polished generic stock photos (posed people, business, perfect glossy landscapes) and over glossy AI or 3D renders. Match the song's own mood (bright and colourful for an upbeat song, dark only for a dark one). They also need to work behind text: not too busy, no text or quotes in the picture, no collages, no products, no infographics. Keep a visual mix (different scenes and mediums, not ${want} near-identical shots) while the whole set still feels like one mood. Answer with a JSON array of the chosen numbers only, best first.`;
   const user = (clean(prompt) ? `Creator's request: ${clean(prompt)}\n\n` : "") + `Lyrics:\n${clean(lyrics) ? lyrics.slice(0, 3000) : "(none)"}\n\nPhotos:\n${lines}`;
   try {
     const out = await ai({ messages: [{ role: "system", content: sys }, { role: "user", content: user }], max_tokens: 400, temperature: 0.2 });
@@ -198,6 +243,7 @@ async function pickRoute(env, request, json, ai) {
   const b = await body(request), from = ["free", "pinterest", "both"].includes(b.from) ? b.from : "free";
   const count = Math.max(1, Math.min(40, Math.round(+b.count || 10))), orientation = ORIENT[b.aspect] || "portrait";
   const lyrics = String(b.lyrics || "").slice(0, 6000), prompt = clean(b.prompt).slice(0, 300);
+  const look = ["mix", "art", "photo"].includes(b.look) ? b.look : "mix";
   const on = sources(env, from);
   if (!on.pexels && !on.pixabay && !on.pinterest) return json({ error: "no_photos", message: noSourceMessage(env, from) }, 503);
   // images already used (in this video or an earlier one) or already shown: never offered again
@@ -210,7 +256,7 @@ async function pickRoute(env, request, json, ai) {
 
   // more searches when more pictures are needed, so there is plenty to choose from
   const nq = count > 16 ? 4 : 3;
-  const { queries, ai: wrote } = again ? { queries: again, ai: false } : await writeQueries(ai, lyrics, prompt, nq);
+  const { queries, ai: wrote } = again ? { queries: again, ai: false } : await writeQueries(ai, lyrics, prompt, nq, look);
   const per = Math.max(12, Math.min(30, Math.ceil(count * 2.2 / queries.length)));
   const used = it => exclude.has(it.id) || exclude.has(String(it.page || "").replace(/\?.*$/, "")) || exclude.has(it.file.replace(/\?.*$/, ""));
   const seen = new Set(), pool = [], errors = new Set(), tokens = {};
@@ -218,7 +264,8 @@ async function pickRoute(env, request, json, ai) {
   // up to three pages deep until there are enough new images to choose from
   for (let round = 0; round < 3 && page <= 20; round++, page++) {
     lastPage = page;
-    const runs = await Promise.all(queries.map(q => searchAll(env, q, orientation, from, { per, page, next: page > 1 ? next[q] || null : null })));
+    // Pinterest only on the first round: every Pinterest search uses one of the month's SerpApi searches
+    const runs = await Promise.all(queries.map(q => searchAll(env, q, orientation, from, { per, page, look, pin: round === 0, next: page > 1 ? next[q] || null : null })));
     runs.forEach((r, k) => { r.errors.forEach(e => errors.add(e)); tokens[queries[k]] = r.next || null; next[queries[k]] = r.next || null; });
     // one list, no duplicates, the first results of every query first
     for (let i = 0; runs.some(r => i < r.items.length); i++) for (const r of runs) {
@@ -228,10 +275,11 @@ async function pickRoute(env, request, json, ai) {
       if (used(it)) { skipped++; continue; }
       pool.push(it);
     }
-    const more = runs.some(r => r.items.length) && (on.pexels || on.pixabay || Object.values(next).some(Boolean));
+    const more = runs.some(r => r.items.length) && (on.pexels || on.pixabay);
     if (pool.length >= count * 1.6 || !more) break;
   }
-  if (!pool.length) return json({ queries, picks: [], spare: [], errors: [...errors], ai: wrote, page: lastPage, next: tokens, skipped,
+  const pinLeft = on.pinterest ? await searchesLeft(env) : null;
+  if (!pool.length) return json({ queries, picks: [], spare: [], errors: [...errors], ai: wrote, page: lastPage, next: tokens, skipped, pinLeft,
     message: skipped ? "Every image these searches found has been used already. Try other keywords." : `Nothing found for ${queries.map(q => `"${q}"`).join(", ")}. Try other keywords.` });
 
   // quality first, then the AI's judgement on the best of them
@@ -244,7 +292,7 @@ async function pickRoute(env, request, json, ai) {
   ranked = [...ranked, ...scored.slice(shortlist.length)];
 
   const picks = await signAll(env, ranked.slice(0, count)), spare = await signAll(env, ranked.slice(count, count + Math.max(12, count)));
-  return json({ queries, picks, spare, errors: [...errors], ai: !!order || wrote, sources: on, page: lastPage, next: tokens, skipped });
+  return json({ queries, picks, spare, errors: [...errors], ai: !!order || wrote, sources: on, page: lastPage, next: tokens, skipped, pinLeft });
 }
 
 async function rankRoute(request, json, ai) {

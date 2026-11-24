@@ -9,7 +9,7 @@ window.SLSPhotos = (() => {
   const keep = { get(k, d){ try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } }, set(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch {} } };
   const errText = err => err && err.message ? err.message : "Something went wrong.";
   const fmtLen = s => s >= 60 ? `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}` : `${Math.round(s)} s`;
-  const IDEAS = ["rainy city nights", "golden hour beach", "90s film photos", "neon Tokyo", "foggy forest", "snowy cabin", "desert road trip", "pink sunset clouds"];
+  const IDEAS = ["golden hour beach", "summer in Italy", "rainy city nights", "flower fields", "neon Tokyo", "snowy village", "desert road trip", "pink sunset clouds"];
 
   panel.innerHTML = `
     <div class="seg" id="phFrom"><button data-v="search">Search</button><button data-v="boards">My moodboards</button></div>
@@ -17,6 +17,7 @@ window.SLSPhotos = (() => {
       <label class="field"><span class="hint">What should the images look like? Keywords or a prompt.</span>
         <textarea id="phPrompt" rows="2" maxlength="300" placeholder="e.g. rainy city nights, neon, shot on film"></textarea></label>
       <div class="chips fx-ideas" id="phIdeas">${IDEAS.map(q => `<button type="button" data-q="${q}">${q}</button>`).join("")}</div>
+      <div class="field"><span class="hint">Look</span><div class="seg ph-src" id="phLook"><button data-v="mix" title="Paintings, illustration and film-style photos">Mixed</button><button data-v="art" title="Paintings, drawings and illustration">Art</button><button data-v="photo" title="Film-style and real photos, no stock">Photos</button></div></div>
       <div class="field"><span class="hint">From</span><div class="seg ph-src" id="phSrc"><button data-v="free">Free photos</button><button data-v="pinterest">Pinterest</button><button data-v="both">Both</button></div></div>
       <div class="hint ph-note" id="phSrcNote"></div>
     </div>
@@ -56,12 +57,13 @@ window.SLSPhotos = (() => {
   slsOn("change", () => { if(!panel.hidden) paintCount(); });
 
   /* ---------- where the images come from ---------- */
-  let mode = keep.get("sls-ph-mode", "search"), from = keep.get("sls-ph-from", "free"), health = null;
+  let mode = keep.get("sls-ph-mode", "search"), from = keep.get("sls-ph-from", "free"), look = keep.get("sls-ph-look", "mix"), health = null, pinLeft = null;
   const msg = (t) => { $("#phMsg").textContent = t || ""; };
   async function getHealth(){ if(health) return health; try { health = await api.health(); } catch { health = {}; } return health; }
   function paintMode(){
     $$("#phFrom button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === mode)));
     $$("#phSrc button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === from)));
+    $$("#phLook button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === look)));
     $("#phSearchBox").hidden = mode !== "search"; $("#phBoardBox").hidden = mode !== "boards";
     $("#phGo").textContent = mode === "boards" ? "Pick images from this moodboard" : "Find the best images";
     if(mode === "boards") paintBoards();
@@ -70,12 +72,16 @@ window.SLSPhotos = (() => {
       const notes = [];
       if(from !== "free" && h.photos && !p.pinterest) notes.push("Pinterest search isn't switched on yet. It needs a SerpApi key (SERPAPI_KEY) in the site's settings.");
       else if(from !== "pinterest" && h.photos && !free) notes.push("Free photo search isn't switched on yet. It needs a free Pixabay or Pexels key in the site's settings.");
-      if(from !== "free" && p.pinterest) notes.push("Pinterest images belong to the people who posted them. Fine for drafts and moods; for videos you publish, the free photos are the safe choice.");
+      if(from !== "free" && p.pinterest){
+        notes.push(`Each search with Pinterest on uses 3 to 4 of the SerpApi account's monthly searches${pinLeft != null ? ` (${pinLeft} left this month)` : ""}. Looking through the results costs nothing extra, and nothing is downloaded until you add the images.`);
+        notes.push("Pinterest images belong to the people who posted them. Fine for drafts and moods; for videos you publish, the free photos are the safe choice.");
+      }
       $("#phSrcNote").textContent = notes.join(" ");
     });
     msg("");
   }
   $("#phFrom").onclick = e => { const b = e.target.closest("button"); if(!b) return; mode = b.dataset.v; keep.set("sls-ph-mode", mode); paintMode(); };
+  $("#phLook").onclick = e => { const b = e.target.closest("button"); if(!b) return; look = b.dataset.v; keep.set("sls-ph-look", look); paintMode(); };
   $("#phSrc").onclick = e => { const b = e.target.closest("button"); if(!b) return; from = b.dataset.v; keep.set("sls-ph-from", from); paintMode(); };
   $("#phIdeas").onclick = e => { const b = e.target.closest("[data-q]"); if(!b) return; $("#phPrompt").value = b.dataset.q; $("#phPrompt").focus(); };
   $("#phPrompt").value = keep.get("sls-ph-prompt", "");
@@ -98,11 +104,12 @@ window.SLSPhotos = (() => {
     const n = count(), go = $("#phGo"); busy = true; go.disabled = true; go.textContent = "Finding images…";
     msg(`Searching ${from === "free" ? "free photos" : from === "pinterest" ? "Pinterest" : "free photos and Pinterest"} and picking the ${n} that fit your song best…`);
     try {
-      const d = await api.api("/api/photos/pick", { method: "POST", body: { prompt, lyrics, count: n, aspect: S.P.aspect, from, exclude: usedKeys() }, timeout: 120000 });
+      const d = await api.api("/api/photos/pick", { method: "POST", body: { prompt, lyrics, count: n, aspect: S.P.aspect, from, look, exclude: usedKeys() }, timeout: 120000 });
+      if(d.pinLeft != null){ pinLeft = d.pinLeft; paintMode(); }
       if(!d.picks.length){ msg(d.message || "Nothing found. Try other keywords."); return; }
       const toItem = photoItem(prompt);
       msg(d.errors && d.errors.length ? d.errors.join(" · ") : "");
-      review({ picks: d.picks.map(toItem), spare: d.spare.map(toItem), target: n, searched: d.queries, page: d.page || 1, next: d.next || {}, prompt, lyrics, from, skipped: d.skipped || 0 });
+      review({ picks: d.picks.map(toItem), spare: d.spare.map(toItem), target: n, searched: d.queries, page: d.page || 1, next: d.next || {}, prompt, lyrics, from, look, skipped: d.skipped || 0 });
     } catch(err){ msg(errText(err)); }
     finally { busy = false; go.disabled = false; go.textContent = "Find the best images"; }
   }
@@ -169,8 +176,9 @@ window.SLSPhotos = (() => {
     setBusy(true); b.textContent = "Finding more…";
     try {
       const d = await api.api("/api/photos/pick", { method: "POST", timeout: 120000, body: { prompt: R.prompt, lyrics: R.lyrics, from: R.from, aspect: S.P.aspect,
-        count: Math.max(6, R.target), queries: R.searched, page: R.page, next: R.next, exclude: [...usedKeys(), ...shown] } });
+        count: Math.max(6, R.target), queries: R.searched, page: R.page, next: R.next, look: R.look, exclude: [...usedKeys(), ...shown] } });
       if(!R) return;
+      if(d.pinLeft != null) pinLeft = d.pinLeft;
       R.page = d.page || R.page + 1; R.next = d.next || {};
       const fresh = [...d.picks, ...d.spare].map(photoItem(R.prompt));
       if(!fresh.length){ R.note = "No new images left for these searches. Close this and try other keywords."; paintReview(); return; }
