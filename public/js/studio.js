@@ -1068,21 +1068,25 @@ ov.addEventListener("pointerdown", e => {
   const xa = S.P.section.a/dur*w, xb = S.P.section.b/dur*w;
   let kind = Math.abs(x-xa) < 9 ? "a" : Math.abs(x-xb) < 9 ? "b" : (x > xa && x < xb) ? "move" : "jump";
   if(kind === "jump"){ const len = S.P.section.b - S.P.section.a; setSection(clamp(x/w*dur - len/2, 0, dur-len), null); kind = "move"; }
-  ovDrag = {kind, x0:x, a0:S.P.section.a, b0:S.P.section.b, w, dur};
+  // while a handle is dragged the preview shows that edge of the video (playback pauses and picks up after)
+  const resume = S.playing && !S.exporting; if(resume) pause();
+  ovDrag = {kind, x0:x, a0:S.P.section.a, b0:S.P.section.b, w, dur, resume};
 });
 ov.addEventListener("pointermove", e => {
   if(!ovDrag) { const r = ov.getBoundingClientRect(), x = e.clientX - r.left; if(S.audio){ const xa = S.P.section.a/S.audio.duration*r.width, xb = S.P.section.b/S.audio.duration*r.width; ov.style.cursor = (Math.abs(x-xa)<9||Math.abs(x-xb)<9) ? "ew-resize" : "grab"; } return; }
   const r = ov.getBoundingClientRect(), dx = (e.clientX - r.left - ovDrag.x0)/ovDrag.w*ovDrag.dur, d = ovDrag;
   if(d.kind === "move"){ const len = d.b0-d.a0, na = clamp(d.a0+dx, 0, d.dur-len); setSection(na, na+len, true); }
   else if(d.kind === "a"){ setSection(clamp(d.a0+dx, Math.max(0, d.b0-60), d.b0-2), d.b0, true); }
-  else { setSection(d.a0, clamp(d.b0+dx, d.a0+2, Math.min(d.dur, d.a0+60)), true); }
+  else { setSection(d.a0, clamp(d.b0+dx, d.a0+2, Math.min(d.dur, d.a0+60)), true, "end"); }
 });
-ov.addEventListener("pointerup", () => { if(ovDrag){ ovDrag = null; dirty(); } });
-function setSection(a, b, live){
+const ovUp = () => { if(ovDrag){ const r = ovDrag.resume; ovDrag = null; dirty(); if(r){ S.t = S.P.section.a; play({}); } } };
+ov.addEventListener("pointerup", ovUp); ov.addEventListener("pointercancel", ovUp);
+// show: "end" puts the preview on the last frame of the section (so you see where the video stops)
+function setSection(a, b, live, show){
   const len = b == null ? S.P.section.b - S.P.section.a : b - a;
   S.P.section = {a: Math.round(a*100)/100, b: Math.round((a+len)*100)/100};
-  S.t = S.P.section.a;
-  if(S.playing && !S.exporting) play({});
+  S.t = show === "end" ? S.P.section.b - 0.04 : S.P.section.a;
+  if(S.playing && !S.exporting && show !== "end") play({});
   tlDirty = true; updateMeta(); if(!live) saveDraft();
 }
 
@@ -1339,7 +1343,11 @@ $("#secLen").onclick = e => { const b = e.target.closest("button"); if(!b || !S.
 const secMax = () => S.audio ? S.audio.duration : 60;
 $("#secLenIn").onchange = e => { const len = clamp(+e.target.value || 15, 2, Math.min(60, secMax())), a = clamp(S.P.section.a, 0, secMax() - len); setSection(a, a + len); syncUI(); };
 $("#secStartIn").onchange = e => { const len = S.P.section.b - S.P.section.a, a = clamp(+e.target.value || 0, 0, Math.max(0, secMax() - len)); setSection(a, a + len); syncUI(); };
-$("#secEndIn").onchange = e => { const b = clamp(+e.target.value || 0, S.P.section.a + 2, Math.min(secMax(), S.P.section.a + 60)); setSection(S.P.section.a, b); syncUI(); };
+$("#secEndIn").onchange = e => { const b = clamp(+e.target.value || 0, S.P.section.a + 2, Math.min(secMax(), S.P.section.a + 60)); if(S.playing) pause(); setSection(S.P.section.a, b, false, "end"); syncUI(); };
+$("#secLenIn").oninput = e => { const v = +e.target.value; if(!(v >= 2) || S.playing) return; S.t = Math.min(S.P.section.a + Math.min(v, 60), secMax()) - 0.04; };
+// hook timing: the preview follows the slider (start shows the hook appearing, length shows its last moment)
+$("#hStart").addEventListener("input", () => { if(!S.playing) S.t = S.P.section.a + (S.P.hook.start || 0) + 0.05; });
+$("#hDur").addEventListener("input", () => { if(!S.playing) S.t = Math.min(S.P.section.b - 0.04, S.P.section.a + (S.P.hook.start || 0) + S.P.hook.dur - 0.05); });
 $("#cutOrder").onclick = e => { const b = e.target.closest("button"); if(!b) return; S.P.cuts.order = b.dataset.v; S.P.cuts.slots = null; syncCutUI(); dirty(); };
 $("#cutTrans").onclick = e => { const b = e.target.closest("button"); if(!b) return; S.P.cuts.transition = b.dataset.v; syncCutUI(); saveDraft(); if(!S.playing){ const {segs} = segInfo(); const k = segs.findIndex(x => x.a > S.t); if(k > 0){ S.t = segs[k].a - 0.6; play({}); } } };
 function addCutAt(t0){ if(S.locks.cuts){ toast("The cuts track is locked"); return false; } toManualCuts(); const t = snapTime(t0, 2), {a,b} = S.P.section; if(t <= a + 0.15 || t >= b - 0.15){ toast("Move the playhead inside the soundbite first"); return false; }
