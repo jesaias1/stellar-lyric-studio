@@ -167,7 +167,11 @@
   });
   back.addEventListener("click", close);
   $("#navArtists").onclick = e => { e.preventDefault(); open(); };
-  $("#artistsBtn").onclick = e => { e.stopPropagation(); open(); };   // it sits inside the drop zone, which opens the file picker
+  $("#artistsBtn").onclick = () => open();
+  // the start screen's artist square shows a few of the artists' faces once someone is logged in
+  (async () => { try { await SLSAuth.ready; const box = $("#artistFaces"); if(!box) return;
+    const list = artists || ((await SLSBackend.api("/api/catalog")).artists || []); if(!artists) artists = list;
+    box.innerHTML = list.filter(a => a.picture && !a.group).slice(0, 4).map(a => `<img src="${esc(a.picture)}" alt="" loading="lazy" onerror="this.remove()">`).join(""); } catch {} })();
 
   const api = { open, close, playing: "" };
   window.SLSArtists = api;

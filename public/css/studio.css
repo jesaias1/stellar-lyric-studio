@@ -416,11 +416,24 @@ body.auth-locked #splash{z-index:2100}
 .ar-body:has(.ar-songs){overflow:hidden}
 .ar-group{font-size:12px;font-weight:600;letter-spacing:.02em;text-transform:uppercase;color:var(--muted);margin:14px 2px 8px}
 .ar-group:first-child{margin-top:2px}
-/* the artist picker button inside the drop zone: used a lot, so a real button */
-.artist-pick{margin-top:14px;display:inline-flex;align-items:center;gap:9px;padding:12px 20px;border-radius:999px;border:0;background:#fff;color:var(--stellar,#0010da);font:600 15px/1 var(--ui);cursor:pointer;box-shadow:0 6px 18px rgba(0,0,20,.18);transition:transform .15s,box-shadow .15s}
-.artist-pick svg{width:18px;height:18px}
-.artist-pick:hover{transform:translateY(-1px);box-shadow:0 10px 24px rgba(0,0,20,.24)}
-.artist-pick:focus-visible{outline:3px solid rgba(255,255,255,.6);outline-offset:3px}
+/* start screen: three equal squares (paste lyrics, drop a song, pick an artist's song) */
+@media (min-width:761px){
+  .start{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+  .start > .paste-card,.start > .drop,.start > .artist-tile{aspect-ratio:1/1;min-height:0}
+  .start > .paste-card textarea{min-height:0}
+}
+.artist-tile{position:relative;width:100%;border:2px solid rgba(255,255,255,.55);border-radius:26px;padding:34px 20px 28px;background:color-mix(in srgb,var(--panel) 72%,transparent);backdrop-filter:blur(8px);display:grid;justify-items:center;align-content:center;gap:6px;cursor:pointer;color:inherit;font:inherit;text-align:center;transition:border-color .2s,box-shadow .2s,transform .2s,background .2s}
+.home .artist-tile{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.6);border-radius:6px;backdrop-filter:none}
+.home .artist-tile:hover{background:rgba(255,255,255,.06)}
+.artist-tile:hover{border-color:#fff;transform:translateY(-2px);box-shadow:0 14px 34px rgba(0,0,20,.22)}
+.artist-tile:focus-visible{outline:3px solid rgba(255,255,255,.7);outline-offset:3px}
+.artist-tile .drop-title{display:flex;align-items:center;gap:10px}
+.artist-tile .paste-num{width:auto;padding:0 8px;font-size:11px}
+.artist-faces{display:flex;justify-content:center;min-height:0;margin-bottom:4px}
+.artist-faces:empty{display:none}
+.artist-faces:not(:empty) + .drop-ico{display:none}
+.artist-faces img{width:52px;height:52px;border-radius:50%;object-fit:cover;border:2px solid #fff;margin-left:-14px;background:#fff;box-shadow:0 4px 12px rgba(0,0,20,.25)}
+.artist-faces img:first-child{margin-left:0}
 
 /* ---------- resizable panels (desktop design step; see js/panels.js) ---------- */
 .pn-h{display:none}

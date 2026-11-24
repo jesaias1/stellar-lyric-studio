@@ -83,9 +83,15 @@
       <div class="drop-title"><span class="paste-num">2</span>Drop your song here</div>
       <div class="drop-sub">or <span class="drop-link">choose a file</span></div>
       <div class="drop-note">MP3, WAV, M4A or FLAC · lyrics in any language</div>
-      <button class="artist-pick" id="artistsBtn" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4.5 20.5c1.3-3.6 4.2-5.5 7.5-5.5s6.2 1.9 7.5 5.5"/></svg>Pick a Stellar Music artist's song</button>
       <input id="homeFile" type="file" accept="audio/*,.mp3,.wav,.m4a,.flac,.ogg,.aac" hidden>
     </div>
+    <button class="artist-tile" id="artistsBtn" type="button">
+      <span class="artist-faces" id="artistFaces" aria-hidden="true"></span>
+      <svg class="drop-ico" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="24" cy="17" r="8"/><path d="M9 41c2.6-7.2 8.4-11 15-11s12.4 3.8 15 11"/></svg>
+      <span class="drop-title"><span class="paste-num">or</span>Pick an artist's song</span>
+      <span class="drop-sub">Songs from Stellar Music's artists</span>
+      <span class="drop-note">30-second previews from Apple Music</span>
+    </button>
     </div>
     <div class="home-opts" id="homeOpts">
       <label class="lang"><span>Song language</span><select id="langSel" aria-label="Song language"></select></label>
