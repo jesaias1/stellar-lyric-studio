@@ -116,11 +116,45 @@ window.SLSPublish = (() => {
      instead of starting a new "original sound"). The studio knows where in the song the clip starts. */
   const clock = t => { t = Math.max(0, t || 0); const m = Math.floor(t / 60); return m + ":" + String(Math.floor(t - m * 60)).padStart(2, "0"); };
   const songTitle = () => String(S.songName || "").replace(/\.[a-z0-9]{2,4}$/i, "").replace(/\s*\((preview|lyrics?)\)\s*$/i, "").trim();
-  function seedSteps(name, title, start){
-    return `<ol class="pub-seed"><li>Open TikTok on <b>${esc(name)}</b> and tap the notification to open the draft.</li>
-      <li>Tap <b>Sounds</b>, search <b>${esc(title || "the song")}</b> and pick the official sound (the artist's name, not "original sound").</li>
+  function seedSteps(name, title, start, url){
+    return `<ol class="pub-seed" aria-label="Sound seeding in TikTok">${url ? `<li>On the phone, open the <a href="${esc(url)}" target="_blank" rel="noopener">official sound</a> in TikTok and tap <b>Add to Favourites</b> (the bookmark).</li>` : ""}
+      <li>Open TikTok on <b>${esc(name)}</b> and tap the notification to open the draft.</li>
+      ${url ? `<li>Tap <b>Sounds</b>, then <b>Favourites</b>, and pick the official sound.</li>` : `<li>Tap <b>Sounds</b>, search <b>${esc(title || "the song")}</b> and pick the official sound (the artist's name, not "original sound").</li>`}
       <li>Trim the sound so it starts at <b>${clock(start)}</b>, where this clip starts in the song.</li>
       <li>Tap <b>Volume</b> and set <b>Original sound</b> to 0 %, then post.</li></ol>`;
+  }
+  /* the song's official TikTok sound link, saved once for the whole team (Supabase table song_sounds) */
+  const songKey = () => songTitle().toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim().slice(0, 200);
+  const SOUND_URL = /^https:\/\/([a-z]+\.)?tiktok\.com\/\S+$/i;
+  const sounds = {}, helpOpen = {}; let soundDraft = "", soundEdit = false;
+  async function loadSound(){
+    const k = songKey(); if(!k || sounds[k] || SLSAuth.mode !== "accounts") return;
+    sounds[k] = { loading: true };
+    try { const rows = await SLSAuth.rest(`song_sounds?select=tiktok_url,title&key=eq.${encodeURIComponent(k)}`); sounds[k] = { url: rows && rows[0] ? rows[0].tiktok_url : "" }; }
+    catch { sounds[k] = { url: "", error: true }; }
+    paint();
+  }
+  const soundUrl = () => (sounds[songKey()] || {}).url || "";
+  function soundBlock(){
+    const k = songKey(), st = sounds[k] || {}, title = songTitle();
+    if(SLSAuth.mode !== "accounts" || !k) return "";
+    if(st.loading) return `<div class="pub-sound hint">Looking for the song's official TikTok sound…</div>`;
+    if(st.url && !soundEdit) return `<div class="pub-sound pub-sound-row"><span><b>Sound seeding</b> · official sound for “${esc(title)}” saved · <a href="${esc(st.url)}" target="_blank" rel="noopener">open in TikTok ↗</a></span><button class="link-btn" type="button" data-sound="change">Change</button></div>`;
+    return `<div class="pub-sound"><label class="field"><span><b>Sound seeding</b> · the official TikTok sound link for “${esc(title)}” <span class="hint">(optional, saved once for the whole team)</span></span>
+      <span class="row" style="gap:6px"><input type="url" id="pubSoundUrl" placeholder="https://www.tiktok.com/music/…" value="${esc(soundDraft || st.url || "")}" style="flex:1"><button class="btn small" type="button" data-sound="save">Save</button>${st.url ? `<button class="btn small ghost" type="button" data-sound="cancel">Cancel</button>` : ""}</span></label>
+      <details class="pub-howto"><summary>How to get the link (30 seconds)</summary><ol>
+        <li>In TikTok, open any video that uses the song's <b>official</b> sound (it shows the artist's name, not "original sound").</li>
+        <li>Tap the spinning record at the bottom right to open the sound.</li>
+        <li>Tap <b>Share</b> (the arrow), then <b>Copy link</b>.</li>
+        <li>Paste it here and press <b>Save</b>. Everyone on the team gets it for this song from now on.</li></ol></details></div>`;
+  }
+  async function saveSound(){
+    const v = ($("#pubSoundUrl") || {}).value ? $("#pubSoundUrl").value.trim() : "";
+    if(!SOUND_URL.test(v)){ toast("Paste a TikTok link: it starts with https://www.tiktok.com/ or https://vm.tiktok.com/"); return; }
+    const k = songKey();
+    try { await SLSAuth.rest("song_sounds", { method: "POST", body: { key: k, title: songTitle(), tiktok_url: v }, prefer: "resolution=merge-duplicates,return=minimal" });
+      sounds[k] = { url: v }; soundDraft = ""; soundEdit = false; paint(); toast("Saved: the official sound is now linked to this song for everyone."); }
+    catch(err){ toast("The link couldn't be saved: " + (err.message || "try again")); }
   }
   // only the mode is remembered: TikTok wants privacy and the rest chosen fresh every time, with nothing preset
   const saveTT = () => keep.set("sls-pub-tt", Object.fromEntries(Object.entries(tt).map(([k, v]) => [k, { mode: v.mode, seed: v.seed }])));
@@ -135,12 +169,13 @@ window.SLSPublish = (() => {
   }
   const PRIV = { PUBLIC_TO_EVERYONE: "Everyone", MUTUAL_FOLLOW_FRIENDS: "Friends", FOLLOWER_OF_CREATOR: "Followers", SELF_ONLY: "Only me" };
   function paintTikTok(list){
-    const len = S.P.section.b - S.P.section.a;
-    $("#pubTT").innerHTML = list.map(a => {
+    const len = S.P.section.b - S.P.section.a, seeding = list.some(a => ttOpt(a.id).seed);
+    if(seeding) loadSound();
+    $("#pubTT").innerHTML = (seeding ? soundBlock() : "") + list.map(a => {
       const o = ttOpt(a.id), direct = (a.scopes || []).includes("direct"), c = creator[a.id] || {};
       if(o.mode === "direct" && (!direct || o.seed)) o.mode = "draft";
       let body = "";
-      if(o.seed) body = `<div class="hint">It goes to the TikTok drafts of <b>${esc(a.name)}</b>, ready for the official sound:</div>${seedSteps(a.name, songTitle(), S.P.section.a)}`;
+      if(o.seed) body = `<div class="hint pub-seed-sum">${later() ? "At the chosen time it" : "It"} lands in the TikTok drafts of <b>${esc(a.name)}</b>, where the official sound is added before posting. <button class="pub-help" type="button" data-help="${esc(a.id)}" aria-expanded="${!!helpOpen[a.id]}"><span aria-hidden="true">?</span>How sound seeding works</button></div>${helpOpen[a.id] ? seedSteps(a.name, songTitle(), S.P.section.a, soundUrl()) : ""}`;
       else if(o.mode === "draft") body = `<div class="hint">It lands in the TikTok inbox of <b>${esc(a.name)}</b>: open TikTok, tap the notification, then add sounds or edit and post. At most 5 drafts can wait at a time.</div>`;
       else if(c.loading) body = `<div class="hint">Checking what ${esc(a.name)} can post…</div>`;
       else if(c.error) body = `<div class="hint pub-warn">${esc(c.error)}</div>`;
@@ -159,8 +194,8 @@ window.SLSPublish = (() => {
             ${!o.brandOrganic && !o.brandContent ? `<div class="hint pub-warn">Pick at least one, or turn disclosure off.</div>` : ""}</div>` : ""}`;
       }
       return `<div class="pub-tt" data-id="${esc(a.id)}"><div class="row" style="justify-content:space-between"><b class="pub-tt-h">${ICON.tiktok} ${esc(a.name)}</b>
-        <div class="seg"><button data-tt="mode" data-v="draft" data-id="${esc(a.id)}" aria-pressed="${o.mode === "draft"}">Send to drafts</button><button data-tt="mode" data-v="direct" data-id="${esc(a.id)}" aria-pressed="${o.mode === "direct"}" ${direct && !o.seed ? "" : `disabled title="${o.seed ? "Turn off “Use the official sound” to post directly" : "This TikTok login only allows drafts"}"`}>Post directly</button></div></div>
-        <label class="ph-only pub-seed-on"><input type="checkbox" data-tt="seed" data-id="${esc(a.id)}" ${o.seed ? "checked" : ""}> Use the official sound <span class="hint">(for released songs: the post is linked to the song's sound on TikTok)</span></label>${body}</div>`;
+        <div class="seg"><button data-tt="mode" data-v="draft" data-id="${esc(a.id)}" aria-pressed="${o.mode === "draft"}">Send to drafts</button><button data-tt="mode" data-v="direct" data-id="${esc(a.id)}" aria-pressed="${o.mode === "direct"}" ${direct && !o.seed ? "" : `disabled title="${o.seed ? "Turn off sound seeding to post directly" : "This TikTok login only allows drafts"}"`}>Post directly</button></div></div>
+        <label class="ph-only pub-seed-on"><input type="checkbox" data-tt="seed" data-id="${esc(a.id)}" ${o.seed ? "checked" : ""}> <b>Sound seeding</b> <span class="hint">links the post to the song's official TikTok sound, so it counts for the song instead of starting a new "original sound" (for released songs)</span></label>${body}</div>`;
     }).join("");
     const anyDirect = list.some(a => ttOpt(a.id).mode === "direct"), branded = list.some(a => ttOpt(a.id).mode === "direct" && ttOpt(a.id).commercial && ttOpt(a.id).brandContent);
     $("#pubConsent").innerHTML = anyDirect ? `By posting to TikTok, you agree to TikTok's ${branded ? `<a href="https://www.tiktok.com/legal/page/global/bc-policy/en" target="_blank" rel="noopener">Branded Content Policy</a> and ` : ""}<a href="https://www.tiktok.com/legal/page/global/music-usage-confirmation/en" target="_blank" rel="noopener">Music Usage Confirmation</a>.` : "";
@@ -176,7 +211,12 @@ window.SLSPublish = (() => {
     if(o.brandContent && o.privacy === "SELF_ONLY") return "Branded content can't be private on TikTok.";
     return "";
   }
+  $("#pubTT").addEventListener("input", e => { if(e.target.id === "pubSoundUrl") soundDraft = e.target.value; });
+  $("#pubTT").addEventListener("keydown", e => { if(e.target.id === "pubSoundUrl" && e.key === "Enter"){ e.preventDefault(); saveSound(); } });
   $("#pubTT").addEventListener("click", e => {
+    const sb = e.target.closest("[data-sound]");
+    const hb = e.target.closest("[data-help]"); if(hb){ helpOpen[hb.dataset.help] = !helpOpen[hb.dataset.help]; paint(); return; }
+    if(sb){ const k = sb.dataset.sound; if(k === "save") saveSound(); if(k === "change"){ soundEdit = true; paint(); } if(k === "cancel"){ soundEdit = false; soundDraft = ""; paint(); } return; }
     const b = e.target.closest("button[data-tt='mode']"); if(!b || b.disabled) return;
     ttOpt(b.dataset.id).mode = b.dataset.v; saveTT(); paint(); loadCreators();
   });
@@ -282,7 +322,7 @@ window.SLSPublish = (() => {
     if(a.platform === "instagram") return { caption, feed: $("#pubFeed").checked, ai };
     const o = ttOpt(a.id);
     return o.mode === "direct" ? { mode: "direct", caption, privacy: o.privacy, comment: !!o.comment, duet: !!o.duet, stitch: !!o.stitch, brandOrganic: !!(o.commercial && o.brandOrganic), brandContent: !!(o.commercial && o.brandContent), ai }
-      : { mode: "draft", ...(o.seed ? { seed: { song: songTitle(), start: +S.P.section.a.toFixed(2) } } : {}) };
+      : { mode: "draft", ...(o.seed ? { seed: { song: songTitle(), start: +S.P.section.a.toFixed(2), ...(soundUrl() ? { url: soundUrl() } : {}) } } : {}) };
   }
   $("#pubGo").onclick = async () => {
     const sel = accounts().filter(a => selected.has(a.id) && !fits(a.platform)); if(!sel.length || posting) return;

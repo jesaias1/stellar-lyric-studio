@@ -148,3 +148,22 @@ create extension if not exists pg_cron;
 create extension if not exists pg_net;
 select cron.unschedule('sls-posts') where exists (select 1 from cron.job where jobname = 'sls-posts');
 select cron.schedule('sls-posts', '*/5 * * * *', $$ select net.http_post(url := 'https://lyrics.stellarmusic.dk/api/cron', headers := '{"content-type": "application/json"}'::jsonb, body := '{}'::jsonb) $$);
+
+-- ---------- the official TikTok sound of each song, saved once and shared by the whole team ----------
+-- key: the song's title, simplified (see songKey in public/js/publish.js). Everyone logged in can read and save.
+create table if not exists public.song_sounds (
+  key text primary key check (char_length(key) between 1 and 200),
+  title text not null default '' check (char_length(title) <= 200),
+  tiktok_url text not null check (char_length(tiktok_url) <= 500 and tiktok_url ~ '^https://([a-z]+\.)?tiktok\.com/'),
+  updated_by uuid default auth.uid() references auth.users(id) on delete set null,
+  updated_at timestamptz not null default now()
+);
+alter table public.song_sounds enable row level security;
+drop policy if exists "team reads sounds" on public.song_sounds;
+drop policy if exists "team saves sounds" on public.song_sounds;
+drop policy if exists "team changes sounds" on public.song_sounds;
+create policy "team reads sounds" on public.song_sounds for select to authenticated using (true);
+create policy "team saves sounds" on public.song_sounds for insert to authenticated with check (true);
+create policy "team changes sounds" on public.song_sounds for update to authenticated using (true) with check (true);
+revoke all on public.song_sounds from anon;
+grant select, insert, update on public.song_sounds to authenticated;
