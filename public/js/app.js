@@ -118,7 +118,11 @@ window.SLSApp = (() => {
         catch(err){ if(err.code !== "unauthorized" || tries > 2) throw err; await SLSAuth.ready; await new Promise(r => { const off = SLSAuth.onChange(u => { if(u){ off(); r(); } }); }); }
       }
       if(ctl.signal.aborted) return;
-      if(out.words.length){ progress({ stage: "bites", pct: 0.98 }); await findBites(out); if(ctl.signal.aborted) return; }
+      // the best parts are a bonus: after 30 s the lyrics open without them rather than keep anyone waiting
+      S.P.bites = []; S.P.bitesHook = false;
+      if(out.words.length){ progress({ stage: "bites", pct: 0.98 });
+        const got = await Promise.race([findBites(out), new Promise(r => setTimeout(() => r(null), 30000))]); if(ctl.signal.aborted) return;
+        if(got){ S.P.bites = got.bites; S.P.bitesHook = got.hook; } }
       if(given && !out.words.length){
         // nothing in the song matched the pasted lyrics: keep them, spread evenly, and say so
         S.P.srcLyrics = given; $("#lyricsText").value = SLSTranscribe.cleanLyrics(given).join("\n"); $("#applyLyrics").click();
@@ -163,18 +167,16 @@ window.SLSApp = (() => {
   const clock = t => { t = Math.max(0, t); const m = Math.floor(t / 60); return m + ":" + String(Math.floor(t - m * 60)).padStart(2, "0"); };
   const esc = v => String(v).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   async function findBites(out){
-    S.P.bites = []; S.P.bitesHook = false;
-    if(!window.SLSSoundbites || !S.audio) return;
+    if(!window.SLSSoundbites || !S.audio) return { bites: [], hook: false };
     try {
       if(out.part && out.occurrences && out.occurrences.length){
         const occ = out.occurrences, all = occ.flatMap((o, k) => o.words.map(w => ({ ...w, l: w.l + k * 1000 })));
         const r = await SLSSoundbites.find(S.audio, all, { title: S.songName, ranges: occ.map(o => ({ a: o.a, b: o.b })) });
-        S.P.bites = r.parts.map(p => ({ ...p, words: occ[p.occ].words, lyrics: occ[p.occ].lyrics })); S.P.bitesHook = true;
-      } else {
-        const r = await SLSSoundbites.find(S.audio, out.words, { title: S.songName, lyrics: out.lyrics || "", ask: body => api.api("/api/hooks", { method: "POST", body, timeout: 15000 }) });
-        S.P.bites = r.parts;
+        return { bites: r.parts.map(p => ({ ...p, words: occ[p.occ].words, lyrics: occ[p.occ].lyrics })), hook: true };
       }
-    } catch(err){ console.error("finding the best parts failed:", err); S.P.bites = []; }
+      const r = await SLSSoundbites.find(S.audio, out.words, { title: S.songName, lyrics: out.lyrics || "", ask: body => api.api("/api/hooks", { method: "POST", body, timeout: 15000 }) });
+      return { bites: r.parts, hook: false };
+    } catch(err){ console.error("finding the best parts failed:", err); return { bites: [], hook: false }; }
   }
   const biteOn = p => Math.abs(S.P.section.a - p.a) < 0.3 && Math.abs(S.P.section.b - Math.min(p.b, p.a + 60)) < 0.3;
   function useBite(i, { quiet = false, hear = false } = {}){

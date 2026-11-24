@@ -111,8 +111,9 @@ function seek(t){
   if(S.playing && !S.exporting){ play({}); }
 }
 function syncPlayIcon(){
-  $("#playIcon").innerHTML = S.playing ? '<path d="M4 2.5h3v11H4zM9 2.5h3v11H9z"/>' : '<path d="M4 2.5v11l9-5.5z"/>';
-  $("#playBtn").setAttribute("aria-label", S.playing ? "Pause" : "Play");
+  const icon = S.playing ? '<path d="M4 2.5h3v11H4zM9 2.5h3v11H9z"/>' : '<path d="M4 2.5v11l9-5.5z"/>';
+  $("#playIcon").innerHTML = icon; $("#playBtn").setAttribute("aria-label", S.playing ? "Pause" : "Play");
+  const mp = document.getElementById("msheetPlay"); if(mp){ mp.firstElementChild.innerHTML = icon; mp.setAttribute("aria-label", S.playing ? "Pause" : "Play"); }
 }
 
 /* demo song: an original 96 BPM loop synthesised in the browser */
@@ -1385,7 +1386,7 @@ let sheetOpen = null, sheetMoved = [];
 const isPhone = () => window.matchMedia("(max-width:700px) and (pointer:coarse)").matches;
 function closeSheet(){
   sheetMoved.reverse().forEach(m => { if(m.next && m.next.parentNode === m.parent) m.parent.insertBefore(m.el, m.next); else m.parent.appendChild(m.el); if(m.wasHidden != null) m.el.hidden = m.wasHidden; });
-  sheetMoved = []; sheetOpen = null; $("#msheet").hidden = true; $$("#mtools button").forEach(b => b.setAttribute("aria-pressed", "false"));
+  sheetMoved = []; sheetOpen = null; $("#msheet").hidden = true; $("#msheet").classList.remove("tall"); $$("#mtools button").forEach(b => b.setAttribute("aria-pressed", "false"));
 }
 function openSheet(name){
   if(sheetOpen === name){ closeSheet(); return; } closeSheet();
@@ -1398,6 +1399,16 @@ function openSheet(name){
 }
 $("#mtools").onclick = e => { const b = e.target.closest("[data-sheet]"); if(b) openSheet(b.dataset.sheet); };
 $("#msheetDone").onclick = closeSheet;
+$("#msheetPlay").onclick = () => $("#playBtn").click();   // the sheet covers the transport, so it has its own play button
+/* the handle: tap for a taller panel, swipe down to close it */
+{ let y0 = null, moved = 0; const sh = $("#msheet");
+  $("#msheetGrab").onclick = () => { if(Math.abs(moved) < 8) sh.classList.toggle("tall"); moved = 0; };
+  const down = e => { moved = 0; if(!e.target.closest(".msheet-grab, .msheet-h") || e.target.closest("button:not(.msheet-grab)")) return; y0 = e.clientY; };
+  sh.addEventListener("pointerdown", down);
+  addEventListener("pointermove", e => { if(y0 == null) return; moved = e.clientY - y0; if(moved > 0) sh.style.transform = `translateY(${moved}px)`; });
+  addEventListener("pointerup", () => { if(y0 == null) return; y0 = null; sh.style.transform = "";
+    if(moved > 70){ if(sh.classList.contains("tall")) sh.classList.remove("tall"); else closeSheet(); } else if(moved < -40) sh.classList.add("tall"); });
+  addEventListener("pointercancel", () => { y0 = null; sh.style.transform = ""; }); }
 window.matchMedia("(max-width:700px) and (pointer:coarse)").addEventListener("change", ev => { if(!ev.matches) closeSheet(); sizeTimeline(); fitStage(); });
 function showTab(name){ document.body.dataset.mtab = name; $$(".tabs [data-tab]").forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === name)));
   if(name === "style"){ renderPresetThumbs(); return; } $$("[data-pane]").forEach(p => p.hidden = p.dataset.pane !== name);

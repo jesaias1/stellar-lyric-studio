@@ -233,13 +233,14 @@ window.SLSAuth = (() => {
       if(!u) return;
       const label = shownName(u), real = u.email && !u.email.endsWith("@" + USER_DOMAIN) ? u.email : "";
       el.innerHTML = `<button class="btn ghost small acct-btn" type="button" aria-haspopup="menu" aria-expanded="false" title="${esc(real || label)}"><span class="acct-dot" aria-hidden="true">${esc(label.slice(0, 1).toUpperCase())}</span><span class="acct-name">${esc(label)}</span></button>
-        <div class="tmenu acct-menu" role="menu" hidden><div class="acct-who"><b>${esc(label)}</b><span>${esc(real || (mode === "passcode" ? "Shared passcode" : "Your account"))}</span></div><button role="menuitem" type="button" data-act="out">Log out</button></div>`;
+        <div class="tmenu acct-menu" role="menu" hidden><div class="acct-who"><b>${esc(label)}</b><span>${esc(real || (mode === "passcode" ? "Shared passcode" : "Your account"))}</span></div><button role="menuitem" type="button" data-act="cal">Release calendar</button><button role="menuitem" type="button" data-act="out">Log out</button></div>`;
     });
   }
   document.addEventListener("click", e => {
     const b = e.target.closest(".acct-btn");
     document.querySelectorAll(".acct-menu").forEach(m => { if(!b || m !== b.nextElementSibling){ m.hidden = true; m.previousElementSibling && m.previousElementSibling.setAttribute("aria-expanded", "false"); } });
     if(b){ const m = b.nextElementSibling; m.hidden = !m.hidden; b.setAttribute("aria-expanded", String(!m.hidden)); return; }
+    if(e.target.closest(".acct-menu [data-act=cal]") && window.SLSCalendar){ SLSCalendar.open(); return; }
     const out = e.target.closest(".acct-menu [data-act=out]");
     if(out) signOut();
   });

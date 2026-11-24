@@ -25,7 +25,7 @@ window.SLSExport = (() => {
     <h2 id="exTitle">Export video</h2>
     <div id="exSetup" class="ex-setup">
       <div class="ex-sum" id="exSum"></div>
-      <div class="field"><span class="label">File type</span><div class="ex-formats" id="exFormats"></div></div>
+      <div class="field"><span class="label">File type</span><div class="ex-formats" id="exFormats"></div><button class="link-btn ex-more" id="exMore" type="button">More file types</button></div>
       <div class="ex-row"><div class="field"><span class="label">Resolution</span><div class="seg" id="exRes"></div></div>
         <div class="field"><span class="label">Frame rate</span><div class="seg" id="exFps"></div></div>
         <div class="field"><span class="label">Quality</span><div class="seg" id="exQ"></div></div></div>
@@ -70,7 +70,7 @@ window.SLSExport = (() => {
     $("#exSum").innerHTML = `<b>${esc(S.songName)}</b><span>${fmt(S.P.section.a)} to ${fmt(S.P.section.b)} · ${len.toFixed(1)} s · ${S.P.aspect} · ${w}×${h}</span>`;
     seg("#exRes", RES, opt.res); seg("#exFps", FPS, opt.fps, x => x + " fps"); seg("#exQ", QUAL, opt.q);
     $("#exFormats").innerHTML = FORMATS.map(f => { const ok = !support || support[f.id];
-      return `<button class="ex-f" data-v="${f.id}" aria-pressed="${f.id === opt.format}" ${ok ? "" : "disabled"}><b>${f.label}</b><span>${ok ? f.note : "This browser can't encode it"}</span></button>`; }).join("");
+      return `<button class="ex-f${f.id === opt.format || f.id === FORMATS[0].id ? " keep" : ""}" data-v="${f.id}" aria-pressed="${f.id === opt.format}" ${ok ? "" : "disabled"}><b>${f.label}</b><span>${ok ? f.note : "This browser can't encode it"}</span></button>`; }).join("");
     if(support && !support[opt.format]){ const first = FORMATS.find(f => support[f.id]); if(first){ opt.format = first.id; return paint(); } }
     const mbps = { MEDIUM: 0.09, HIGH: 0.16, VERY_HIGH: 0.3 }[opt.q] * w * h * opt.fps / 1e6 / 30 * (FORMATS.find(f => f.id === opt.format).video === "avc" ? 1 : 0.65);
     $("#exEst").textContent = support === null ? "Checking what this computer can encode…" : support === false ? "This browser can't encode video files, so the video will be recorded in real time instead (WebM or MP4, depending on the browser). Chrome or Edge can export every format."
@@ -82,6 +82,7 @@ window.SLSExport = (() => {
     $("#exSetup").hidden = false; $("#exRun").hidden = true; $("#exDone").hidden = true; modal.hidden = false;
     support = null; paint(); const s = await check(); support = s || false; paint();
   }
+  $("#exMore").onclick = () => { const all = $("#exFormats").classList.toggle("all"); $("#exMore").textContent = all ? "Fewer file types" : "More file types"; };
   modal.addEventListener("click", e => {
     const b = e.target.closest("button[data-v]"); if(!b || b.disabled) return; const p = b.parentElement.id, v = b.dataset.v;
     if(p === "exFormats" || b.classList.contains("ex-f")) opt.format = v; else if(p === "exRes") opt.res = +v; else if(p === "exFps") opt.fps = +v; else if(p === "exQ") opt.q = v; else return;

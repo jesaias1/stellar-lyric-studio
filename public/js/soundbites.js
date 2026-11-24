@@ -22,7 +22,9 @@ window.SLSSoundbites = (() => {
   /* ---------- the song, measured ---------- */
   async function mono(buf){
     const n = Math.ceil(buf.duration * SR);
-    try { const oc = new OfflineAudioContext(1, n, SR), src = oc.createBufferSource(); src.buffer = buf; src.connect(oc.destination); src.start(); return (await oc.startRendering()).getChannelData(0); }
+    // the browser's resampler, but never waited on for more than 8 s: on some phones (Safari in particular) it can stall
+    try { const oc = new OfflineAudioContext(1, n, SR), src = oc.createBufferSource(); src.buffer = buf; src.connect(oc.destination); src.start();
+      return (await Promise.race([oc.startRendering(), new Promise((_, no) => setTimeout(() => no(new Error("slow")), 8000))])).getChannelData(0); }
     catch {
       const ch = []; for(let c = 0; c < buf.numberOfChannels; c++) ch.push(buf.getChannelData(c));
       const step = buf.sampleRate / SR, out = new Float32Array(n);

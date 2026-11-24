@@ -598,3 +598,63 @@ body.cal-open .toast{z-index:1600}
 .pub-again h2{margin:0;font-size:18px}
 .pub-again ul{margin:0 0 8px;padding-left:18px;display:grid;gap:6px;font-size:14px;line-height:1.4}
 .pub-again .ph-actions{justify-content:flex-end;gap:8px}
+
+/* ---------- phones: nothing may be wider than the screen ----------
+   One element sticking out (it was the Export button) makes the phone treat the whole page as wider, and then
+   every sheet and pop-up is cut off on the right and slides under the bottom bar. */
+.app,.home{overflow-x:clip}
+@media (max-width:760px), (max-width:1050px) and (pointer:coarse){
+  .top{gap:6px;padding-left:max(10px,env(safe-area-inset-left,0px));padding-right:max(10px,env(safe-area-inset-right,0px));min-width:0}
+  .top .brand{flex:none}
+  .top .brand .logo-sls{height:26px;width:auto}
+  .top #calBtn{display:none}
+  .top .steps{gap:2px;min-width:0;flex:0 1 auto;overflow:hidden}
+  .top .steps button{padding:8px 5px;min-height:36px}
+  .top .acct-btn{padding:4px;min-width:36px;min-height:36px;justify-content:center}
+  .top #exportBtn{flex:none;padding:8px 12px;min-height:36px}
+}
+.ex-more{display:none;justify-self:start}
+.msheet-grab{display:none}
+@media (max-width:760px), (max-width:1050px) and (pointer:coarse){
+  /* pop-ups come up from the bottom, full width, with their main button always in reach */
+  .modal:not(.pub-again){padding:0;place-items:end stretch}
+  .modal:not(.pub-again) > .dialog{width:100%;max-width:none;max-height:calc(100dvh - 16px);border-radius:18px 18px 0 0;padding:20px 20px calc(16px + env(safe-area-inset-bottom,0px));animation:sheetUp .22s ease-out}
+  .ex-setup > .row:last-child,#exDone > .row{position:sticky;bottom:calc(-16px - env(safe-area-inset-bottom,0px));z-index:2;margin:0 -20px calc(-16px - env(safe-area-inset-bottom,0px));padding:12px 20px calc(12px + env(safe-area-inset-bottom,0px));background:var(--panel);border-top:1px solid var(--line);flex-wrap:wrap}
+  .modal:not(.pub-again) > .dialog .ph-actions{bottom:calc(-16px - env(safe-area-inset-bottom,0px));margin:0 -20px calc(-16px - env(safe-area-inset-bottom,0px));padding:12px 20px calc(12px + env(safe-area-inset-bottom,0px));flex-wrap:wrap}
+  .modal:not(.pub-again) > .dialog .ph-actions .btn.primary{flex:1;justify-content:center;min-height:44px}
+  .ex-setup > .row:last-child .btn.primary,#exDone > .row .btn.primary{flex:1;justify-content:center;min-height:44px}
+  #exDone > .row .btn{min-height:40px}
+  /* export: the usual file type first, the rest one tap away */
+  .ex-more{display:inline-block}
+  .ex-formats:not(.all) .ex-f:not(.keep){display:none}
+  .ex-row{flex-wrap:wrap}
+  /* best parts on the lyrics step: a row you swipe through, so the lyrics stay in view */
+  .bites{margin:0 0 6px;gap:6px}
+  .bites-head{padding:0 12px}
+  #bitesSub{display:none}
+  .bites-row{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:8px;padding:0 12px 2px;scrollbar-width:none;grid-template-columns:none}
+  .bites-row::-webkit-scrollbar{display:none}
+  .bites-row .bite{flex:0 0 min(78%,300px);scroll-snap-align:start;padding:9px 11px;gap:4px}
+  .bites-row .bite-why{display:none}
+  .bites-row .bite-btns .btn{min-height:34px}
+  .bites-pop{position:fixed;left:8px;right:8px;top:auto;bottom:calc(84px + env(safe-area-inset-bottom,0px));width:auto;max-height:70dvh;overflow:auto}
+  .bites-pop .bites-row{flex-direction:column;overflow:visible;padding:0}
+  .bites-pop .bites-row .bite{flex:none}
+}
+@media (max-width:760px) and (max-height:740px), (max-width:1050px) and (pointer:coarse) and (max-height:740px){
+  body[data-step="lyrics"] .viewport{height:24vh}
+}
+@media (max-width:700px) and (pointer:coarse){
+  .msheet{max-height:52dvh;transition:max-height .2s ease,transform .15s ease;animation:sheetUp .2s ease-out}
+  .msheet.tall{max-height:86dvh}
+  .msheet-grab{display:block;align-self:center;width:56px;height:20px;margin:0 auto -6px;border:0;background:none;padding:0;position:relative;cursor:grab;touch-action:none}
+  .msheet-grab::after{content:"";position:absolute;left:12px;right:12px;top:8px;height:4px;border-radius:4px;background:var(--line-2)}
+  .msheet-h{touch-action:none;padding-top:6px}
+  .msheet-r{display:flex;align-items:center;gap:8px}
+  .msheet-play{width:34px;height:34px}
+  .msheet-play svg{width:13px;height:13px}
+  #msheetDone{min-height:34px;padding-inline:14px}
+}
+@keyframes sheetUp{from{transform:translateY(24px);opacity:.6}to{transform:none;opacity:1}}
+@media (prefers-reduced-motion:reduce){.msheet,.modal > .dialog{animation:none!important;transition:none!important}}
+@media (max-width:760px), (max-width:1050px) and (pointer:coarse){ .ex-formats{grid-template-columns:minmax(0,1fr)!important} }
