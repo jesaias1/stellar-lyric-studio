@@ -317,6 +317,11 @@ body.auth-locked #splash{z-index:2100}
 .auth-f[hidden],.auth-rem[hidden]{display:none}
 .auth-f input{background:rgba(255,255,255,.96);color:#0b0b10;border:1px solid transparent;border-radius:10px;padding:12px 13px;font:15px/1.2 var(--ui);outline:none}
 .auth-f input:focus{border-color:#fff;box-shadow:0 0 0 3px rgba(255,255,255,.35)}
+.auth-pw{position:relative;display:flex}
+.auth-pw input{flex:1;min-width:0;padding-right:68px}
+.auth-eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);min-height:32px;padding:0 10px;border:0;border-radius:8px;background:#e9e9ef;color:#0b0b10;font:600 13px/1 var(--ui);cursor:pointer}
+.auth-eye:hover{background:#dcdce5}
+.auth-eye:focus-visible{outline:2px solid #0b0b10;outline-offset:1px}
 /* the studio's dark input style (and the browser's autofill colour) must not reach the login fields */
 .auth-gate .auth-f input,.auth-gate .auth-f input:focus{background:#fff!important;color:#0b0b10!important;-webkit-text-fill-color:#0b0b10}
 .auth-gate .auth-f input:-webkit-autofill,.auth-gate .auth-f input:-webkit-autofill:focus{-webkit-box-shadow:0 0 0 60px #fff inset!important;box-shadow:0 0 0 60px #fff inset!important}

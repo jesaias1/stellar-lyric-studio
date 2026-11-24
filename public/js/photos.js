@@ -296,6 +296,7 @@ window.SLSPhotos = (() => {
       <div class="mb-pin-app"><a class="btn small mb-open-pin" href="https://www.pinterest.com/" target="_blank" rel="noopener">Open Pinterest</a><button class="btn small" id="mbPaste" type="button">Paste board link</button>
         <span class="hint">In Pinterest, open the board, tap Share, then Copy link. Come back and tap Paste board link.</span></div>
       <div class="hint" id="mbMsg"></div>
+      <div class="hint" id="mbOrderHint" hidden>Drag the images to put them in order. On a phone, press and hold an image first.</div>
       <div class="ph-grid mb-grid" id="mbGrid"></div>
       <div class="row ph-actions"><button class="btn primary" id="mbDone" type="button">Done</button><button class="btn ghost" id="mbDel" type="button">Delete moodboard</button></div>
     </div>`;
@@ -308,11 +309,77 @@ window.SLSPhotos = (() => {
     if(B.fresh) setTimeout(() => $("#mbName").focus(), 30);
   }
   function paintEditor(){
-    $("#mbGrid").innerHTML = B.items.map((it, i) => `<div class="ph-tile mb-tile"><img alt="" src="${it.thumb}"><button class="ph-x" type="button" data-rm="${i}" aria-label="Remove">✕</button></div>`).join("");
+    $("#mbGrid").innerHTML = B.items.map(it => `<div class="ph-tile mb-tile" data-k="${esc(it.k)}"><img alt="" src="${it.thumb}" draggable="false"><button class="ph-x" type="button" data-rm="${esc(it.k)}" aria-label="Remove">✕</button></div>`).join("");
     $("#mbTitle").textContent = B.items.length ? `Moodboard · ${B.items.length} image${B.items.length === 1 ? "" : "s"}` : "Moodboard";
+    $("#mbOrderHint").hidden = B.items.length < 2;
   }
   async function saveBoard(){ B.name = $("#mbName").value.trim() || B.name || "My moodboard"; const { fresh, ...rec } = B; rec.at = Date.now(); await DB.put(rec); B.fresh = false; selected = B.id; keep.set("sls-mb-sel", selected); $("#mbDel").hidden = false; }
-  $("#mbGrid").onclick = async e => { const x = e.target.closest("[data-rm]"); if(!x || edBusy) return; const [it] = B.items.splice(+x.dataset.rm, 1); paintEditor(); try { await DB.delBlob(it.k); await saveBoard(); } catch {} };
+  $("#mbGrid").onclick = async e => {
+    const x = e.target.closest("[data-rm]"); if(!x || edBusy || mbDrag.justDropped) return;
+    const i = B.items.findIndex(it => it.k === x.dataset.rm); if(i < 0) return;
+    const [it] = B.items.splice(i, 1); paintEditor(); try { await DB.delBlob(it.k); await saveBoard(); } catch {}
+  };
+  /* drag the images into the order you want them: with the mouse straight away, on a phone press and hold first
+     (so a normal swipe still scrolls). The order is saved with the moodboard and is the order the grabber uses. */
+  const mbDrag = (() => {
+    const grid = $("#mbGrid"), st = { justDropped: false };
+    let d = null;   // the drag going on: { tile, ghost, id, x0, y0, dx, dy, live, timer, touch }
+    const HOLD = 280, SLOP = 8;
+    const clear = () => { if(!d) return; clearTimeout(d.timer); cancelAnimationFrame(d.raf); if(d.ghost) d.ghost.remove(); if(d.tile) d.tile.classList.remove("dragging"); grid.classList.remove("sorting"); d = null; };
+    function lift(){
+      const r = d.tile.getBoundingClientRect(), g = d.tile.cloneNode(true);
+      g.classList.add("mb-ghost"); g.style.width = r.width + "px"; g.style.height = r.height + "px"; g.style.left = r.left + "px"; g.style.top = r.top + "px";
+      document.body.append(g); d.ghost = g; d.dx = d.x0 - r.left; d.dy = d.y0 - r.top; d.live = true;
+      d.tile.classList.add("dragging"); grid.classList.add("sorting");
+      if(d.touch && navigator.vibrate) try { navigator.vibrate(12); } catch {}
+    }
+    function moveTo(x, y){
+      d.x = x; d.y = y; d.ghost.style.transform = `translate(${x - d.dx - parseFloat(d.ghost.style.left)}px,${y - d.dy - parseFloat(d.ghost.style.top)}px) scale(1.06)`;
+      const over = document.elementFromPoint(x, y), t = over && over.closest(".mb-tile");
+      if(!t || t === d.tile || t.parentNode !== grid) return;
+      const tiles = [...grid.children], from = tiles.indexOf(d.tile), to = tiles.indexOf(t);
+      grid.insertBefore(d.tile, from < to ? t.nextSibling : t);
+    }
+    // near the top or bottom of the image grid while dragging: scroll it
+    function edgeScroll(){
+      if(!d || !d.live) return;
+      const r = grid.getBoundingClientRect(), edge = Math.min(48, r.height / 4);
+      const v = d.y < r.top + edge ? -(r.top + edge - d.y) : d.y > r.bottom - edge ? d.y - (r.bottom - edge) : 0;
+      if(v){ grid.scrollTop += Math.max(-14, Math.min(14, v / 3)); moveTo(d.x, d.y); }
+      d.raf = requestAnimationFrame(edgeScroll);
+    }
+    grid.addEventListener("pointerdown", e => {
+      if(edBusy || d || e.button > 0 || e.target.closest("[data-rm]")) return;
+      const tile = e.target.closest(".mb-tile"); if(!tile || B.items.length < 2) return;
+      d = { tile, id: e.pointerId, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, live: false, touch: e.pointerType !== "mouse" };
+      if(d.touch) d.timer = setTimeout(() => { if(d && !d.live){ lift(); moveTo(d.x, d.y); edgeScroll(); } }, HOLD);
+    });
+    addEventListener("pointermove", e => {
+      if(!d || e.pointerId !== d.id) return;
+      d.x = e.clientX; d.y = e.clientY;
+      if(!d.live){
+        if(Math.hypot(e.clientX - d.x0, e.clientY - d.y0) < SLOP) return;
+        if(d.touch){ clear(); return; }   // moved before the hold: it's a scroll
+        lift(); edgeScroll();
+      }
+      e.preventDefault(); moveTo(e.clientX, e.clientY);
+    }, { passive: false });
+    // once a touch drag has started, stop the page from scrolling under the finger
+    grid.addEventListener("touchmove", e => { if(d && d.live) e.preventDefault(); }, { passive: false });
+    grid.addEventListener("contextmenu", e => { if(d) e.preventDefault(); });
+    const drop = async e => {
+      if(!d || e.pointerId !== d.id) return;
+      const wasLive = d.live; clear(); if(!wasLive || !B || ed.hidden) return;   // the window was closed mid-drag (Escape)
+      st.justDropped = true; setTimeout(() => { st.justDropped = false; }, 0);
+      const byK = new Map(B.items.map(it => [it.k, it])), order = [...grid.children].map(t => byK.get(t.dataset.k)).filter(Boolean);
+      if(order.length !== B.items.length || order.every((it, i) => it === B.items[i])) return;
+      B.items = order; paintEditor();
+      try { await saveBoard(); } catch(err){ mbMsg("Couldn't save the new order: " + errText(err)); }
+    };
+    addEventListener("pointerup", drop);
+    addEventListener("pointercancel", e => { if(d && e.pointerId === d.id){ const live = d.live; clear(); if(live) paintEditor(); } });
+    return st;
+  })();
   const closeEd = async () => { if(edBusy) return; if(B && (!B.fresh || B.items.length)) { try { await saveBoard(); } catch {} } ed.hidden = true; B = null; if(mode === "boards") paintBoards(); };
   $("#mbDone").onclick = closeEd; $("#mbX").onclick = closeEd;
   ed.addEventListener("click", e => { if(e.target === ed) closeEd(); });
@@ -324,14 +391,17 @@ window.SLSPhotos = (() => {
   };
   function confirmDelete(){ const b = $("#mbDel"); if(b.dataset.sure){ return true; } b.dataset.sure = "1"; b.textContent = "Tap again to delete it and its images"; setTimeout(() => { delete b.dataset.sure; b.textContent = "Delete moodboard"; }, 3000); return false; }
 
-  /* images in: big photos are scaled down to 2400 px (plenty for a 1080p video), a small thumbnail is kept for the lists */
+  /* images in: kept as they are, so they stay sharp in the video. Only very big photos (over 4096 px, enough for a
+     4K video with room to zoom) or very heavy files are scaled down, in halving steps so fine detail survives.
+     A small thumbnail is kept for the lists. */
+  const MB_MAX = 4096, MB_HEAVY = 15e6;
   async function addImage(blob, info = {}){
     const url = URL.createObjectURL(blob), img = new Image(); img.src = url;
     try { await img.decode(); } catch { URL.revokeObjectURL(url); return false; }
     const w = img.naturalWidth, h = img.naturalHeight, big = Math.max(w, h);
     let keepBlob = blob;
-    if(big > 2400 || blob.size > 3e6){ const k = Math.min(1, 2400 / big), cv = document.createElement("canvas"); cv.width = Math.round(w * k); cv.height = Math.round(h * k);
-      cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height); keepBlob = await new Promise(r => cv.toBlob(r, "image/jpeg", 0.9)) || blob; }
+    if(big > MB_MAX || blob.size > MB_HEAVY){ const k = Math.min(1, MB_MAX / big), cv = stepDown(img, w, h, Math.round(w * k), Math.round(h * k));
+      keepBlob = await new Promise(r => cv.toBlob(r, "image/jpeg", 0.95)) || blob; }
     const tc = document.createElement("canvas"); tc.width = 120; tc.height = 160; coverDraw(tc.getContext("2d"), img, 120, 160, w, h, 1, 0, 0);
     URL.revokeObjectURL(url);
     const it = { k: `${B.id}/${uid()}`, name: (info.name || "").replace(/\.[^.]+$/, "").slice(0, 40), title: info.title || "", thumb: tc.toDataURL("image/jpeg", 0.75),
@@ -379,7 +449,13 @@ window.SLSPhotos = (() => {
       const fresh = d.images.filter(im => !im.page || !have.has(im.page));
       for(const [i, im] of fresh.entries()){
         mbMsg(`Importing ${i + 1} of ${fresh.length}…`);
-        try { const blob = await api.blob(im.file); if(await addImage(blob, { title: im.title, source: "Pinterest", page: im.page, credit: "Pinterest" })) ok++; } catch(err){ console.warn("pin unavailable", err); }
+        const info = { title: im.title, source: "Pinterest", page: im.page, credit: "Pinterest" };
+        // the full-size picture first; if Pinterest doesn't have it (or it won't open), the smaller one
+        let added = false;
+        for(const f of [im.file, im.alt].filter(Boolean)){
+          try { if(await addImage(await api.blob(f), info)){ added = true; break; } } catch(err){ console.warn("pin unavailable", err); }
+        }
+        if(added) ok++;
         paintEditor();
       }
       await saveBoard(); $("#mbPin").value = "";

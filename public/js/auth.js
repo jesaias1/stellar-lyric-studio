@@ -168,7 +168,7 @@ window.SLSAuth = (() => {
         <h2 id="authTitle">Log in</h2>
         <p class="auth-why" id="authWhy"></p>
         <label class="auth-f" data-for="in"><span>Username</span><input id="authEmail" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="40" required></label>
-        <label class="auth-f" data-for="in"><span>Team code</span><input id="authCode" name="team-code" type="text" autocomplete="off" autocapitalize="characters" maxlength="120" spellcheck="false"></label>
+        <label class="auth-f" data-for="in"><span>Team code</span><span class="auth-pw"><input id="authCode" name="team-code" type="password" autocomplete="off" autocapitalize="characters" maxlength="120" spellcheck="false"><button class="auth-eye" id="authCodeShow" type="button" aria-pressed="false" aria-label="Show the team code">Show</button></span></label>
         <label class="auth-f" data-for="pass"><span>Studio passcode</span><input id="authPasscode" type="password" autocomplete="current-password" maxlength="200"></label>
         <label class="auth-rem" data-for="in"><input type="checkbox" id="authRemember" checked> Remember me on this device</label>
         <div class="auth-err" id="authErr" role="alert" hidden></div>
@@ -188,6 +188,10 @@ window.SLSAuth = (() => {
     $g("#authNote").textContent = t === "in" ? "New here? Pick any username and type the team code from Stellar Music: your account is made right away. Next time, the same username and code open it again, on any device." : "";
   }
   const showErr = t => { const e = $g("#authErr"); e.textContent = t || ""; e.hidden = !t; };
+  // the team code shows as dots so nobody can read it over your shoulder; Show reveals it while you check it
+  const showCode = on => { const i = $g("#authCode"), b = $g("#authCodeShow"); i.type = on ? "text" : "password"; b.textContent = on ? "Hide" : "Show";
+    b.setAttribute("aria-pressed", String(on)); b.setAttribute("aria-label", on ? "Hide the team code" : "Show the team code"); };
+  $g("#authCodeShow").onclick = e => { e.preventDefault(); const i = $g("#authCode"); showCode(i.type === "password"); i.focus(); };
   $g("#authForm").onsubmit = async e => {
     e.preventDefault(); showErr("");
     const go = $g("#authGo"); if(go.disabled) return;
@@ -211,7 +215,7 @@ window.SLSAuth = (() => {
     finally { go.disabled = false; }
   };
   function done(){
-    gate.hidden = true; gateOpen = false; $g("#authPasscode").value = ""; $g("#authCode").value = "";
+    gate.hidden = true; gateOpen = false; $g("#authPasscode").value = ""; $g("#authCode").value = ""; showCode(false);
     document.body.classList.remove("auth-locked");
     accounts.init(); emit();
     readyResolve(user());

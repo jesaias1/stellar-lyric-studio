@@ -336,8 +336,9 @@ async function boardRoute(env, request, json) {
     if (!src || !/^https:\/\/i\.pinimg\.com\//.test(src)) continue;
     const title = clean(decode((it.match(/<title>([\s\S]*?)<\/title>/) || [])[1] || "").replace(/<[^>]+>/g, ""));
     const link = clean(decode((it.match(/<link>([\s\S]*?)<\/link>/) || [])[1] || ""));
-    const big = src.replace(/\/\d+x\//, "/736x/");
-    images.push({ id: "pb" + big.split("/").pop().replace(/\W/g, "").slice(0, 32), title, page: link, thumb: src, file: await mediaLink(env, big) });
+    // the full-size picture (sharp in a 1080p or 4K video), with the 736 px one as a fallback when that isn't there
+    const big = src.replace(/\/\d+x\//, "/736x/"), full = src.replace(/\/\d+x\//, "/originals/");
+    images.push({ id: "pb" + big.split("/").pop().replace(/\W/g, "").slice(0, 32), title, page: link, thumb: src, file: await mediaLink(env, full), alt: await mediaLink(env, big) });
   }
   if (!images.length) return json({ error: "board_unavailable", message: "Pinterest didn't hand over this board. Only public boards work, and Pinterest sometimes blocks servers. You can save the images from the board and drop them in here instead." }, 502);
   const name = clean(decode((xml.match(/<channel>[\s\S]*?<title>([\s\S]*?)<\/title>/) || [])[1] || "")) || board.replace(/-/g, " ");

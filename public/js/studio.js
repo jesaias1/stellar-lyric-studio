@@ -709,8 +709,36 @@ const FX0 = { fit: "fill", z: 1, x: 0, y: 0 };
 const fxOf = i => ({ ...FX0, ...(S.P.cuts.fx || {}), ...(slotOf(i).fx || {}) });
 const motionOf = i => slotOf(i).mo || S.P.cuts.motion || "zoom";
 let _blurC = null;
+/* Big photos stay sharp: a single drawImage that shrinks a picture a lot skips pixels and the video shimmers or looks
+   soft. stepDown halves a picture step by step to the size wanted; sharpSrc keeps one such smaller copy per photo,
+   at the size the frame draws it (with room for the slow zoom), so every frame starts from a clean picture. */
+function stepDown(src, sw, sh, tw, th){
+  let cur = src, w = sw, h = sh;
+  do {
+    const nw = Math.max(tw, Math.round(w / 2)), nh = Math.max(th, Math.round(h / 2));
+    const cv = document.createElement("canvas"); cv.width = nw; cv.height = nh;
+    const g = cv.getContext("2d"); g.imageSmoothingEnabled = true; g.imageSmoothingQuality = "high"; g.drawImage(cur, 0, 0, nw, nh);
+    cur = cv; w = nw; h = nh;
+  } while(w > tw || h > th);
+  return cur;
+}
+function sharpSrc(el, iw, ih, w, h){
+  if(!(typeof HTMLImageElement !== "undefined" && el instanceof HTMLImageElement) || !el.complete || !iw || !ih) return el;   // not loaded yet: no copy
+  // halvings that still leave at least the drawn size (plus 25% so the slow zoom doesn't flip between two copies)
+  let n = 0; while(iw / 2 ** (n + 1) >= w * 1.25 && ih / 2 ** (n + 1) >= h * 1.25 && n < 6) n++;
+  if(!n) return el;
+  const m = el._slsSharp; if(m && m.n === n && m.iw === iw) return m.c;
+  try { const c = stepDown(el, iw, ih, Math.round(iw / 2 ** n), Math.round(ih / 2 ** n)); el._slsSharp = { n, iw, c }; return c; }
+  catch { return el; }
+}
 function framedDraw(c, el, W, H, iw, ih, fx, kb){
   const z = clamp(fx.z || 1, 0.5, 4) * (kb ? kb.s : 1), px = clamp((fx.x || 0) + (kb ? kb.x : 0), -1, 1), py = clamp((fx.y || 0) + (kb ? kb.y : 0), -1, 1);
+  // photos: the best smoothing and a clean smaller copy (video frames change every frame, so they're drawn as they come)
+  c.imageSmoothingEnabled = true; c.imageSmoothingQuality = typeof HTMLImageElement !== "undefined" && el instanceof HTMLImageElement ? "high" : "low";
+  { // the drawn size before the slow zoom, which only grows it a little: the smaller copy is picked from that
+    const z0 = clamp(fx.z || 1, 0.5, 4), s0 = fx.fit === "fit" ? Math.min(W / iw, H / ih) * z0 : Math.max(W / iw, H / ih) * (z0 < 1 ? z0 : Math.max(1, z0) * (kb ? 1.16 : 1));
+    el = sharpSrc(el, iw, ih, iw * s0, ih * s0);
+  }
   if(fx.fit === "fit"){
     // a soft, dark copy fills the frame behind the whole picture (drawn tiny and stretched: a cheap blur)
     _blurC = _blurC || document.createElement("canvas"); _blurC.width = 24; _blurC.height = Math.max(8, Math.round(24 * H / W));
