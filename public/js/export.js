@@ -200,7 +200,10 @@ window.SLSExport = (() => {
   $("#exGo").onclick = run;
   $("#exSave").onclick = async () => {
     if(!result) return;
-    const name = `${(S.songName || "lyric-video").replace(/[^\w\- ]+/g, "").trim() || "lyric-video"}-${S.P.aspect.replace(":", "x")}-${result.h > result.w ? result.w : result.h}p.${result.f.ext}`;
+    // Song_Title_2026-11-24.mp4: the song title and today's date, so exports are easy to find and tell apart
+    const d = new Date(), day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const title = String(S.songName || "Lyric video").replace(/\.[a-z0-9]{2,4}$/i, "").normalize("NFC").replace(/[\\/:*?"<>|#%&{}$!'@+`=]+/g, "").trim().replace(/\s+/g, "_").slice(0, 80) || "Lyric_video";
+    const name = `${title}_${day}.${result.f.ext}`;
     const ok = await saveFile(name, result.blob);
     if(ok) toast("Video saved"); else if(ok === false) $("#exNote").textContent = "Saving isn't available in this view. Right-click the video and choose Save video as.";
   };

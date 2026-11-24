@@ -284,5 +284,27 @@ window.SLSApp = (() => {
   }
   /* the "working" card on the start screen, for other parts of the app (opening a project) */
   function working(title, step){ $("#workSong").textContent = title; showHome("work"); $("#workStep").textContent = step; $("#workBar").style.width = "35%"; $$("#workList li").forEach(li => { li.className = ""; }); paintSteps(); }
+  /* ---------- new versions: a phone keeps an installed app open in the background for days, so check when it
+     comes back. On the start screen it reloads by itself (work is saved first); elsewhere it offers a reload. ---------- */
+  (function updates(){
+    const mine = (document.querySelector('meta[name="sls-build"]') || {}).content || ""; if(!mine) return;
+    let offered = false, last = 0;
+    async function check(){
+      if(document.hidden || offered || Date.now() - last < 15e3) return; last = Date.now();
+      let live = ""; try { const r = await fetch("/version.txt", { cache: "no-store" }); if(r.ok) live = (await r.text()).trim(); } catch {}
+      if(!live || live === mine) return;
+      const busy = S.exporting || !!document.querySelector(".modal:not([hidden])") || S.playing;
+      try { if(typeof saveDraft === "function") saveDraft(); if(window.SLSProjects && SLSProjects.save) await SLSProjects.save(); } catch {}
+      if(!home.hidden && !busy){ location.reload(); return; }
+      offered = true;
+      const bar = document.createElement("div"); bar.className = "update-bar"; bar.setAttribute("role", "status");
+      bar.innerHTML = `<span>A new version of the studio is out. Your work is saved.</span><button class="btn small primary" type="button">Reload</button><button class="btn small ghost" type="button" aria-label="Later">Later</button>`;
+      bar.querySelector(".primary").onclick = async () => { try { saveDraft(); if(window.SLSProjects && SLSProjects.save) await SLSProjects.save(); } catch {} location.reload(); };
+      bar.querySelector(".ghost").onclick = () => bar.remove();
+      document.body.append(bar);
+    }
+    document.addEventListener("visibilitychange", check); addEventListener("focus", check); setInterval(check, 10 * 60e3);
+  })();
+
   return { go, pick, listen, paste, ensurePass, working, useBite, paintBites, get step(){ return home.hidden ? body.dataset.step : "song"; }, get lastStep(){ return lastStep; } };
 })();

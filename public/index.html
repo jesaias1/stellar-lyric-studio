@@ -3,6 +3,7 @@
 <!-- the editor can switch between light and dark (js/app.js); the blue start screen looks the same in both -->
 <head>
 <meta charset="utf-8">
+<meta name="sls-build" content="202611241502">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Stellar Lyric Studio</title>
 <meta name="description" content="Turn a song into a lyric video for social media. Upload the track and the lyrics write and time themselves.">
@@ -57,7 +58,7 @@
 <section class="home" id="home" aria-label="Start">
   <div class="home-bar">
     <div class="brand"><img class="logo-sls" src="img/logo-sls.webp" alt="SLS" width="185" height="144" draggable="false"><span class="brand-sub">Stellar Lyric Studio</span></div>
-    <nav class="home-nav" aria-label="Start screen"><a href="#projects" id="navProjects">projects</a><a href="#" id="navArtists">artists</a><a href="#" id="navCalendar">calendar</a><a href="#" id="navDemo">demo</a><a href="https://stellarmusic.dk" target="_blank" rel="noopener">stellar music</a></nav>
+    <nav class="home-nav" aria-label="Start screen"><a href="#projects" id="navProjects">projects</a><a href="#" id="navArtists">artists</a><a href="#" id="navCalendar">calendar</a><a href="#" id="navDemo">sample song</a><a href="https://stellarmusic.dk" target="_blank" rel="noopener">stellar music</a></nav>
     <div class="home-bar-r">
       <button class="btn ghost small" id="homeBack" hidden>Back to my project</button>
       <div class="acct" data-sls-user hidden></div>
@@ -95,7 +96,7 @@
     </div>
     <div class="home-opts" id="homeOpts">
       <label class="lang"><span>Song language</span><select id="langSel" aria-label="Song language"></select></label>
-      <span class="home-links"><button class="link-btn" id="demoBtn">No song handy? Open the demo</button></span>
+      <span class="home-links"><button class="link-btn" id="demoBtn" title="Opens the editor with a short made-up song, to see how it works">Just looking? Try the editor with a sample song</button></span>
     </div>
 
     <!-- state 2: working on it -->

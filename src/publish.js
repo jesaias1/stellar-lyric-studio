@@ -40,6 +40,8 @@ export function publishHealth(env) {
     instagram: !!(env.INSTAGRAM_APP_ID && env.INSTAGRAM_APP_SECRET),
     instagramStorage: !!(env.PUBLISH || env.TEMPLATES || env.BLOB_READ_WRITE_TOKEN),
     tiktok: !!(env.TIKTOK_CLIENT_KEY && env.TIKTOK_CLIENT_SECRET),
+    // until TikTok approves the app (then set TIKTOK_AUDITED=1), it only lets direct posts be private ("Only me")
+    tiktokAudited: /^(1|true|yes)$/i.test(env.TIKTOK_AUDITED || ""),
     // on Vercel a request can carry only 4.5 MB, so the browser puts the video in Vercel Blob first (api/index.js)
     blob: !!env.BLOB_READ_WRITE_TOKEN,
   } };
@@ -351,7 +353,7 @@ function tiktokError(e, status) {
     spam_risk_too_many_posts: "This TikTok account has reached its posting limit for today.",
     spam_risk_user_banned_from_posting: "TikTok doesn't let this account post right now.",
     reached_active_user_cap: "TikTok's daily limit of accounts posting through this app is reached (5 a day until TikTok audits the app).",
-    unaudited_client_can_only_post_to_private_accounts: "Until TikTok audits the app, direct posts only work for accounts that are set to private. Use “Send to drafts” instead.",
+    unaudited_client_can_only_post_to_private_accounts: "Until TikTok approves the app, direct posts can only be private (Only me). Pick Only me, or use Send to drafts.",
     privacy_level_option_mismatch: "That privacy choice isn't available for this account.",
     scope_not_authorized: "This TikTok login doesn't allow that. Link the account again, or use the other posting mode.",
     access_token_invalid: "TikTok didn't accept the login. Remove the account and link it again.",

@@ -192,11 +192,12 @@ window.SLSPublish = (() => {
       else if(c.loading) body = `<div class="hint">Checking what ${esc(a.name)} can post…</div>`;
       else if(c.error) body = `<div class="hint pub-warn">${esc(c.error)}</div>`;
       else {
-        const opts = c.privacy_level_options || [], tooLong = c.max_video_post_duration_sec && len > c.max_video_post_duration_sec;
+        // before TikTok approves the app it refuses every direct post that isn't private
+        const audited = !!(health && health.publish && health.publish.tiktokAudited), opts = (c.privacy_level_options || []).filter(v => audited || v === "SELF_ONLY"), tooLong = c.max_video_post_duration_sec && len > c.max_video_post_duration_sec;
         const branded = !!o.brandContent;
         body = `<div class="hint">Posting as <b>${esc(c.creator_nickname || a.name)}</b>${c.creator_username ? ` (@${esc(c.creator_username)})` : ""}. TikTok can take a few minutes to process it before it shows on the profile.</div>
           ${tooLong ? `<div class="hint pub-warn">This account can post up to ${c.max_video_post_duration_sec} s; the video is ${len.toFixed(0)} s.</div>` : ""}
-          <label class="field"><span class="hint">Who can see it</span><select data-tt="privacy" data-id="${esc(a.id)}"><option value="">Choose…</option>${opts.map(v => `<option value="${v}" ${o.privacy === v ? "selected" : ""} ${branded && v === "SELF_ONLY" ? "disabled" : ""}>${PRIV[v] || v}${branded && v === "SELF_ONLY" ? " (not for branded content)" : ""}</option>`).join("")}</select></label>
+          ${audited ? "" : `<span class="hint pub-warn">Until TikTok approves the app, direct posts can only be private (Only me). Make it public in TikTok afterwards, or use Send to drafts.</span>`}<label class="field"><span class="hint">Who can see it</span><select data-tt="privacy" data-id="${esc(a.id)}"><option value="">Choose…</option>${opts.map(v => `<option value="${v}" ${o.privacy === v ? "selected" : ""} ${branded && v === "SELF_ONLY" ? "disabled" : ""}>${PRIV[v] || v}${branded && v === "SELF_ONLY" ? " (not for branded content)" : ""}</option>`).join("")}</select></label>
           <div class="pub-checks"><span class="hint">Allow</span>
             ${[["comment", "Comments", c.comment_disabled], ["duet", "Duet", c.duet_disabled], ["stitch", "Stitch", c.stitch_disabled]].map(([k, l, dis]) => `<label class="ph-only${dis ? " dim" : ""}" title="${dis ? "Turned off in this account's TikTok settings" : ""}"><input type="checkbox" data-tt="${k}" data-id="${esc(a.id)}" ${o[k] && !dis ? "checked" : ""} ${dis ? "disabled" : ""}> ${l}</label>`).join("")}</div>
           <label class="ph-only"><input type="checkbox" data-tt="commercial" data-id="${esc(a.id)}" ${o.commercial ? "checked" : ""}> Disclose commercial content <span class="hint">(promotes a brand, product or service)</span></label>
@@ -328,6 +329,8 @@ window.SLSPublish = (() => {
       <span class="hint">${esc(j.text)}${j.cal ? ` <button class="btn small" type="button" data-cal="${esc(j.cal)}">Open calendar</button>` : ""}${j.url ? ` · <a href="${esc(j.url)}" target="_blank" rel="noopener">Open</a>` : ""}</span>${j.state === "uploading" ? `<span class="bar"><i style="width:${(j.pct * 100).toFixed(0)}%"></i></span>` : ""}</div>`).join("");
   }
   const b64 = obj => btoa(unescape(encodeURIComponent(JSON.stringify(obj)))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  // which part of the song the post uses (and whether it's the matched TikTok sound), kept with the post for comparing results
+  const clipInfo = () => ({ a: +S.P.section.a.toFixed(2), b: +S.P.section.b.toFixed(2), ...(S.P.ttSound && Math.abs(S.P.ttSound.a - S.P.section.a) < 0.3 ? { tiktok: true } : {}) });
   function metaFor(a){
     const caption = $("#pubCaption").value.trim(), ai = $("#pubAi").checked;
     if(a.platform === "youtube") return { title: $("#pubYtTitle").value.trim() || S.songName, caption, privacy: ytPriv, ai, tags: ["lyrics", "lyric video", S.songName].filter(Boolean) };
@@ -415,7 +418,7 @@ window.SLSPublish = (() => {
     mine.forEach(j => Object.assign(j, { text: "Saving to the calendar…", pct: 0 })); paintJobs();
     const iso = d.toISOString();
     try {
-      const rows = await SLSAuth.rest("posts", { method: "POST", prefer: "return=representation", body: mine.map(j => ({ platform: j.platform, account_id: j.id, account_name: j.name, project_name: S.songName || "", artist: j.artist, video_url: src, video_type: type, cover_url: null, meta: j.meta, publish_at: iso, status: "scheduled" })) });
+      const rows = await SLSAuth.rest("posts", { method: "POST", prefer: "return=representation", body: mine.map(j => ({ platform: j.platform, account_id: j.id, account_name: j.name, project_name: S.songName || "", artist: j.artist, video_url: src, video_type: type, cover_url: null, meta: { ...j.meta, clip: clipInfo() }, publish_at: iso, status: "scheduled" })) });
       if(!Array.isArray(rows) || rows.length < mine.length) throw new Error("The calendar didn't save it.");
       mine.forEach(j => Object.assign(j, { state: "added", cal: iso, text: `Scheduled for ${niceWhen(d)} on ${j.name} (${P[j.platform]}). See it in the calendar.` }));
       toast(mine.length === 1 ? "Scheduled." : `Scheduled on ${mine.length} accounts.`);
@@ -431,7 +434,7 @@ window.SLSPublish = (() => {
     try {
       if(!window.SLSAuth || SLSAuth.mode !== "accounts" || (j.state !== "added" && j.state !== "failed")) return;
       const a = accounts().find(x => x.id === j.id) || {}, ok = j.state === "added";
-      await SLSAuth.rest("posts", { method: "POST", body: { platform: j.platform, account_id: j.id, account_name: j.name, project_name: S.songName || "", artist: a.label || "", video_url: null, video_type: (video && video.blob.type) || "video/mp4", cover_url: null, meta: j.meta, publish_at: new Date().toISOString(), status: ok ? "posted" : "failed", ref: j.ref || null, result_url: ok ? (j.url || null) : null, note: String(j.text || "").slice(0, 500) } });
+      await SLSAuth.rest("posts", { method: "POST", body: { platform: j.platform, account_id: j.id, account_name: j.name, project_name: S.songName || "", artist: a.label || "", video_url: null, video_type: (video && video.blob.type) || "video/mp4", cover_url: null, meta: { ...j.meta, clip: clipInfo() }, publish_at: new Date().toISOString(), status: ok ? "posted" : "failed", ref: j.ref || null, result_url: ok ? (j.url || null) : null, note: String(j.text || "").slice(0, 500) } });
       window.dispatchEvent(new Event("sls-posts-changed"));
     } catch(err){ console.warn("post history not saved", err); }
   }
