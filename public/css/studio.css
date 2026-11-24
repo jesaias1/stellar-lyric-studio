@@ -658,3 +658,23 @@ body.cal-open .toast{z-index:1600}
 @keyframes sheetUp{from{transform:translateY(24px);opacity:.6}to{transform:none;opacity:1}}
 @media (prefers-reduced-motion:reduce){.msheet,.modal > .dialog{animation:none!important;transition:none!important}}
 @media (max-width:760px), (max-width:1050px) and (pointer:coarse){ .ex-formats{grid-template-columns:minmax(0,1fr)!important} }
+
+/* ---------- timeline toolbar: never squashed together ----------
+   The left group scrolls instead of sliding under the right one, and when the timeline is narrow the
+   keyboard-style extras step aside (they all have shortcuts or another way in). */
+.tltools{container-type:inline-size}
+.tlt-l{flex:1 1 auto;overflow-x:auto;scrollbar-width:none}
+.tlt-l::-webkit-scrollbar{display:none}
+.tlt-r{flex:none}
+.tlt.on{border-color:transparent}
+@container (max-width:640px){
+  #delLeftBtn,#delRightBtn,#markerBtn,#zoom,.tlt-r .tlt-sep{display:none}
+}
+@container (max-width:470px){
+  #snapBtn,#overlapBtn,#zoomOut,#zoomIn,.tmenu-wrap,.tmenu-wrap + .tlt-sep{display:none}
+}
+@media (max-width:700px) and (pointer:coarse){
+  .tltools{justify-content:space-between;padding-inline:10px}
+  .tlt{min-width:38px;height:36px}
+  .tlt svg{width:20px;height:20px}
+}

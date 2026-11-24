@@ -647,13 +647,18 @@ function styleOpts(st, pr){
 }
 
 /* ============ footage ============ */
+/* Built-in backgrounds: solid colours with a slow, soft light moving over them. Royal (the Stellar blue) is the
+   default; the others are a tap away in Clips. "glow": a soft light drifting around and breathing, "sweep": a wide
+   band of light passing slowly across, "still": just the colour and a little film grain. */
 const GEN = [
-  {name:"Dusk", pal:["#2b1b4d","#ff7e6b","#ffd29a"], kind:"blobs"},
-  {name:"Night drive", pal:["#06131f","#1d4f73","#7fe0ff"], kind:"bands"},
-  {name:"Bloom", pal:["#3a0f2b","#c2386b","#ffb3c7"], kind:"rings"},
-  {name:"Lagoon", pal:["#062421","#139a87","#c6fff2"], kind:"blobs"},
-  {name:"Haze", pal:["#1c1a17","#8a7d63","#efe3c4"], kind:"bands"},
-  {name:"Ultra", pal:["#0d0a2b","#5a3cff","#d6ccff"], kind:"rings"}
+  {name:"Royal", pal:["#0626c7","#3a5cff"], kind:"glow"},
+  {name:"Midnight", pal:["#07080f","#262a48"], kind:"glow"},
+  {name:"Deep blue", pal:["#030b45","#0b35d6"], kind:"sweep"},
+  {name:"Violet", pal:["#1f0d4a","#5a2fd0"], kind:"glow"},
+  {name:"Crimson", pal:["#6e0b1b","#c8203c"], kind:"glow"},
+  {name:"Forest", pal:["#08281d","#1b6b4d"], kind:"sweep"},
+  {name:"Sunset", pal:["#a8370c","#f07a2a"], kind:"sweep"},
+  {name:"Graphite", pal:["#1b1c20","#2c2e35"], kind:"still"}
 ];
 let noiseCanvas = null;
 function noise(){
@@ -665,23 +670,27 @@ function noise(){
 }
 function drawGen(c, W, H, g, lt, segI){
   lt = Math.max(0, lt || 0);
-  const [a,b,d] = g.pal, grd = c.createLinearGradient(0,0,0,H); grd.addColorStop(0,a); grd.addColorStop(1,b);
-  c.fillStyle = grd; c.fillRect(0,0,W,H);
+  const [base, light] = g.pal, M = Math.max(W, H);
+  c.fillStyle = base; c.fillRect(0, 0, W, H);
   c.save();
-  if(g.kind === "blobs"){
-    c.globalCompositeOperation = "screen";
-    for(let i=0;i<4;i++){ const x = W*(0.5+0.38*Math.sin(lt*0.5+i*1.7+segI)), y = H*(0.5+0.36*Math.cos(lt*0.37+i*2.3)), r = Math.max(W,H)*(0.22+0.07*i);
-      const rg = c.createRadialGradient(x,y,0,x,y,r); rg.addColorStop(0, i%2? d : b); rg.addColorStop(1,"rgba(0,0,0,0)"); c.fillStyle = rg; c.globalAlpha = .55; c.fillRect(0,0,W,H); }
-  } else if(g.kind === "bands"){
-    c.translate(W/2,H/2); c.rotate(-0.5 + segI*0.2); const bw = Math.max(W,H)*0.09, off = (lt*bw*1.5) % (bw*2);
-    c.fillStyle = d; for(let k=-14;k<14;k++){ c.globalAlpha = 0.08 + 0.1*((k+20)%3===0); c.fillRect(k*bw*2 + off - bw, -H*1.5, bw*0.6, H*3); }
-  } else {
-    c.globalCompositeOperation = "screen"; c.strokeStyle = d; const cx0 = W*(0.5+0.1*Math.sin(lt*0.3)), cy0 = H*0.45, step = Math.max(W,H)*0.07;
-    for(let k=0;k<16;k++){ const rr = Math.max(0, ((k*step + lt*step*0.8) % (step*16) + step*16) % (step*16)); c.globalAlpha = 0.5*(1 - rr/(step*16)); c.lineWidth = step*0.18; c.beginPath(); c.arc(cx0, cy0, rr, 0, Math.PI*2); c.stroke(); }
+  if(g.kind === "glow"){
+    // one soft light, drifting slowly in a wide loop and breathing a little
+    const x = W * (0.5 + 0.22 * Math.sin(lt * 0.21 + segI)), y = H * (0.42 + 0.16 * Math.cos(lt * 0.17 + segI * 0.7)), r = M * (0.62 + 0.04 * Math.sin(lt * 0.6));
+    const rg = c.createRadialGradient(x, y, 0, x, y, r); rg.addColorStop(0, light); rg.addColorStop(1, base);
+    c.globalAlpha = 0.85; c.fillStyle = rg; c.fillRect(0, 0, W, H);
+  } else if(g.kind === "sweep"){
+    // a wide band of light crossing diagonally, about every 12 seconds
+    const p = ((lt / 12) + segI * 0.37) % 1, cx = -0.6 * M + p * 2.2 * M;
+    c.translate(W / 2, H / 2); c.rotate(-0.55); c.translate(-W / 2, -H / 2);
+    const lg = c.createLinearGradient(cx - M * 0.5, 0, cx + M * 0.5, 0); lg.addColorStop(0, "rgba(0,0,0,0)"); lg.addColorStop(0.5, light); lg.addColorStop(1, "rgba(0,0,0,0)");
+    c.globalAlpha = 0.55; c.fillStyle = lg; c.fillRect(-M, -M, M * 3, M * 3);
   }
   c.restore();
-  c.save(); c.globalAlpha = 0.07; c.globalCompositeOperation = "overlay";
-  const n = noise(), ox = Math.floor(lt*60*37)%256, oy = Math.floor(lt*60*91)%256;
+  // a soft darker edge, so the middle (where the lyrics are) reads best
+  const vg = c.createRadialGradient(W / 2, H / 2, M * 0.25, W / 2, H / 2, M * 0.75); vg.addColorStop(0, "rgba(0,0,0,0)"); vg.addColorStop(1, "rgba(0,0,0,.28)");
+  c.fillStyle = vg; c.fillRect(0, 0, W, H);
+  c.save(); c.globalAlpha = g.kind === "still" ? 0.09 : 0.05; c.globalCompositeOperation = "overlay";
+  const n = noise(), ox = Math.floor(lt*24*37)%256, oy = Math.floor(lt*24*91)%256;
   c.fillStyle = c.createPattern(n, "repeat"); c.translate(-ox,-oy); c.fillRect(0,0,W+256,H+256); c.restore();
 }
 /* Transitions. Each cut can have its own; otherwise the one chosen for all ("Mix" picks a different one per cut). */
@@ -962,6 +971,11 @@ function setZoom(z, anchorX){
 }
 const xOf = t => (t - S.P.section.a) / (S.P.section.b - S.P.section.a) * tlW;
 const tOf = x => S.P.section.a + x / tlW * (S.P.section.b - S.P.section.a);
+// the word cut short with "…" to fit a block on the timeline, or nothing when not even two letters fit
+function fitWord(c, w, room){
+  const ch = [...w]; for(let n = ch.length - 1; n >= 2; n--){ const t = ch.slice(0, n).join("") + "…"; if(c.measureText(t).width <= room) return t; }
+  return ch.length <= 2 && c.measureText(w).width <= room ? w : "";
+}
 function drawTimelineStatic(){
   const c = tlStatic.getContext("2d"), k = dpr(); c.setTransform(k,0,0,k,0,0); c.clearRect(0,0,tlW,ROWS.end); const T0 = ROWS.texts[0][0], W0 = ROWS.words[0], C0 = ROWS.cuts[0];
   const css = getComputedStyle(document.documentElement), col = n => css.getPropertyValue(n).trim();
@@ -985,13 +999,24 @@ function drawTimelineStatic(){
     c.fillStyle = col("--hook"); c.globalAlpha = sel ? 1 : .75; roundRect(c, xs, ty + 3, Math.max(6, xe - xs - 1), 16, 4); c.fill(); c.globalAlpha = 1;
     if(sel){ c.strokeStyle = "#fff"; c.lineWidth = 1.5; roundRect(c, xs, ty + 3, Math.max(6, xe - xs - 1), 16, 4); c.stroke(); }
     c.fillStyle = "#fff"; c.font = `600 10.5px ${FONTS.sans}`; c.textBaseline = "middle"; c.save(); c.beginPath(); c.rect(xs, ty + 2, Math.max(4, xe - xs - 4), 18); c.clip(); c.fillText("T  " + it.text.replace(/\n/g, " "), xs + 5, ty + 11.5); c.restore(); });
-  // words
+  // words: like a subtitle track. Words sung together in a line form one bar with the line written across it and a
+  // thin mark between words; a pause splits the bar. The selected word gets its own outline.
   c.font = `600 11px ${FONTS.sans}`;
-  S.P.words.forEach((w,i) => { const x = xOf(w.t), x2 = xOf(w.t + w.d); if(x2 < 0 || x > tlW) return;
-    const sel = isSel(w), tapNext = S.tap && S.tap.i === i;
-    c.fillStyle = col("--lyric"); c.globalAlpha = sel ? 1 : .88; roundRect(c, x, W0 + 4, Math.max(4, x2-x-1), 26, 5); c.fill(); c.globalAlpha = 1;
-    if(sel || tapNext){ c.strokeStyle = tapNext ? col("--tape") : col("--text"); c.lineWidth = 1.5; roundRect(c, x, W0 + 4, Math.max(4, x2-x-1), 26, 5); c.stroke(); }
-    c.fillStyle = "#ffffff"; c.save(); c.beginPath(); c.rect(x, W0 + 4, Math.max(4, x2-x-2), 26); c.clip(); c.fillText(w.w, x + 5, W0 + 17); c.restore(); });
+  { const ws = S.P.words, runs = []; let cur = null;
+    ws.forEach((w, i) => { const prev = ws[i - 1];
+      if(cur && prev && prev.l === w.l && w.t - (prev.t + prev.d) < 0.2) cur.push(i); else runs.push(cur = [i]); });
+    for(const run of runs){
+      const w0 = ws[run[0]], w1 = ws[run[run.length - 1]], x = xOf(w0.t), x2 = xOf(w1.t + w1.d); if(x2 < 0 || x > tlW) continue;
+      const cw = Math.max(3, x2 - x - 2), r = Math.min(6, cw / 2);
+      c.fillStyle = col("--lyric"); c.globalAlpha = .9; roundRect(c, x, W0 + 4, cw, 26, r); c.fill(); c.globalAlpha = 1;
+      c.fillStyle = "rgba(255,255,255,.28)"; for(let k = 1; k < run.length; k++){ const xb = Math.round(xOf(ws[run[k]].t)) - 1; if(xb > x + 3 && xb < x + cw - 3) c.fillRect(xb, W0 + 23, 1, 5); }
+      const text = run.map(i => ws[i].w).join(" "), label = c.measureText(text).width + 12 <= cw ? text : fitWord(c, text, cw - 10);
+      if(label){ c.fillStyle = "#ffffff"; c.save(); c.beginPath(); c.rect(x, W0 + 4, cw, 26); c.clip(); c.fillText(label, x + 6, W0 + 17); c.restore(); }
+    }
+    ws.forEach((w, i) => { const sel = isSel(w), tapNext = S.tap && S.tap.i === i; if(!sel && !tapNext) return;
+      const x = xOf(w.t), x2 = xOf(w.t + w.d); if(x2 < 0 || x > tlW) return; const cw = Math.max(3, x2 - x - 2);
+      c.fillStyle = "rgba(255,255,255,.18)"; roundRect(c, x, W0 + 4, cw, 26, Math.min(6, cw / 2)); c.fill();
+      c.strokeStyle = tapNext ? col("--tape") : col("--text"); c.lineWidth = 1.5; roundRect(c, x, W0 + 4, cw, 26, Math.min(6, cw / 2)); c.stroke(); }); }
   // cuts
   const {segs, order} = segInfo();
   segs.forEach((s,i) => { const x = xOf(s.a), x2 = xOf(s.b), clip = S.clips.find(cl=>cl.id===order[i]); const sel = S.sel && S.sel.type==="seg" && S.sel.i===i;
@@ -2197,7 +2222,7 @@ function boot(){
   $("#presets").onclick = e => { const b = e.target.closest(".preset"); if(!b) return; S.P.style.preset = b.dataset.id; S.P.style.case = "auto"; syncUI(); saveDraft(); };
   $("#presets").addEventListener("pointerover", e => { const b = e.target.closest(".preset"); hoverStyle = b ? b.dataset.id : null; });
   $("#presets").addEventListener("pointerleave", () => hoverStyle = null);
-  S.clips = GEN.map((g,i) => ({id:"g"+i, name:g.name, kind:"gen", gen:g, on:true}));
+  S.clips = GEN.map((g,i) => ({id:"g"+i, name:g.name, kind:"gen", gen:g, on:i === 0}));   // Royal blue on its own to start
   addThumbsForGen();
   S.audio = makeDemoSong(); S.peaks = computePeaks(S.audio); S.songName = "Demo track";
   const p = defaultProject();
