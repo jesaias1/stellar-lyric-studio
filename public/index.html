@@ -3,7 +3,7 @@
 <!-- the editor can switch between light and dark (js/app.js); the blue start screen looks the same in both -->
 <head>
 <meta charset="utf-8">
-<meta name="sls-build" content="202611241535">
+<meta name="sls-build" content="202611241551">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Stellar Lyric Studio</title>
 <meta name="description" content="Turn a song into a lyric video for social media. Upload the track and the lyrics write and time themselves.">
@@ -369,7 +369,11 @@
     <main class="stage">
       <div class="stagebar">
         <span class="label">Frame</span>
-        <div class="seg" id="aspect"><button data-v="9:16">9:16</button><button data-v="4:5">4:5</button><button data-v="1:1">1:1</button><button data-v="16:9">16:9</button></div>
+        <div class="seg seg-words" id="orient" role="group" aria-label="Vertical or horizontal"><button data-v="v" type="button">Vertical</button><button data-v="h" type="button">Horizontal</button></div>
+        <div class="seg" id="aspect" role="group" aria-label="Frame shape"><button data-v="tall" type="button">9:16</button><button data-v="mid" type="button">4:5</button><button data-v="sq" type="button">1:1</button><button data-v="own" type="button" class="seg-word">Custom</button></div>
+        <form class="own-size" id="ownSize" hidden autocomplete="off" novalidate><input type="number" id="ownW" inputmode="numeric" min="240" max="4096" step="2" placeholder="Width" aria-label="Width in pixels">
+          <span aria-hidden="true">×</span><input type="number" id="ownH" inputmode="numeric" min="240" max="4096" step="2" placeholder="Height" aria-label="Height in pixels"><span class="hint">px</span>
+          <button class="btn small" type="submit">Use</button><span class="own-err" id="ownErr" role="alert"></span></form>
         <span class="label">Length</span>
         <div class="seg" id="secLen"><button data-v="10">10s</button><button data-v="15">15s</button><button data-v="20">20s</button><button data-v="30">30s</button></div>
         <label class="row hint" style="gap:6px">or <input type="number" id="secLenIn" min="2" max="60" step="0.5" style="width:74px;padding:5px 8px" aria-label="Soundbite length in seconds"> s</label>

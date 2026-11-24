@@ -220,7 +220,7 @@ window.SLSProjects = (() => {
       $("#pjGrid").innerHTML = list.map(p => `
         <div class="pj-card${cur && cur.id === p.id ? " current" : ""}${p.away ? " away" : ""}" data-id="${esc(p.id)}"${p.away ? ' data-away="1"' : ""}>
           <button class="pj-open" data-act="open" title="Open ${esc(p.name)}">
-            <span class="pj-thumb ${p.aspect === "16:9" ? "wide" : ""}">${p.thumb ? `<img alt="" src="${p.thumb}">` : `<i>${esc((p.name || "?").slice(0, 1))}</i>`}</span>
+            <span class="pj-thumb ${p.aspect && isWide(p.aspect) ? "wide" : ""}">${p.thumb ? `<img alt="" src="${p.thumb}">` : `<i>${esc((p.name || "?").slice(0, 1))}</i>`}</span>
             <span class="pj-info"><b>${esc(p.name)}</b><span>${p.songName && p.songName !== p.name ? esc(p.songName) + " · " : ""}${p.words ? p.words + " words · " : ""}${esc(p.style || "")}</span><span class="hint">${p.away ? "In your account · add the song to open it" : (cur && cur.id === p.id ? "Open now · " : "") + "Edited " + ago(p.updatedAt) + (STEP[p.step] ? " · " + STEP[p.step] : "") + (inCloud.has(p.id) ? " · saved to your account" : "")}</span></span>
           </button>
           <button class="pj-more" data-act="menu" aria-label="More for ${esc(p.name)}">⋯</button>

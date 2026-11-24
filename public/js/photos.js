@@ -104,7 +104,7 @@ window.SLSPhotos = (() => {
     const n = count(), go = $("#phGo"); busy = true; go.disabled = true; go.textContent = "Finding images…";
     msg(`Searching ${from === "free" ? "free photos" : from === "pinterest" ? "Pinterest" : "free photos and Pinterest"} and picking the ${n} that fit your song best…`);
     try {
-      const d = await api.api("/api/photos/pick", { method: "POST", body: { prompt, lyrics, count: n, aspect: S.P.aspect, from, look, exclude: usedKeys() }, timeout: 120000 });
+      const d = await api.api("/api/photos/pick", { method: "POST", body: { prompt, lyrics, count: n, aspect: aspectKey(), from, look, exclude: usedKeys() }, timeout: 120000 });
       if(d.pinLeft != null){ pinLeft = d.pinLeft; paintMode(); }
       if(!d.picks.length){ msg(d.message || "Nothing found. Try other keywords."); return; }
       const toItem = photoItem(prompt);
@@ -175,7 +175,7 @@ window.SLSPhotos = (() => {
     const b = $("#phMore"), shown = [...R.picks, ...R.spare].flatMap(p => [p.id, p.src && p.src.page]).filter(Boolean);
     setBusy(true); b.textContent = "Finding more…";
     try {
-      const d = await api.api("/api/photos/pick", { method: "POST", timeout: 120000, body: { prompt: R.prompt, lyrics: R.lyrics, from: R.from, aspect: S.P.aspect,
+      const d = await api.api("/api/photos/pick", { method: "POST", timeout: 120000, body: { prompt: R.prompt, lyrics: R.lyrics, from: R.from, aspect: aspectKey(),
         count: Math.max(6, R.target), queries: R.searched, page: R.page, next: R.next, look: R.look, exclude: [...usedKeys(), ...shown] } });
       if(!R) return;
       if(d.pinLeft != null) pinLeft = d.pinLeft;

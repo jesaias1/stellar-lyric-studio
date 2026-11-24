@@ -78,6 +78,12 @@ input[type=color]{width:34px;height:28px;border:1px solid var(--line-2);border-r
 .seg{display:flex;gap:4px;background:var(--ink);border:1px solid var(--line-2);border-radius:8px;padding:3px}
 .seg button{flex:1;border:0;background:none;border-radius:6px;padding:5px 8px;font:600 12px var(--mono);color:var(--muted)}
 .seg button[aria-pressed="true"]{background:var(--raise);color:var(--text)}
+.seg-words button,.seg .seg-word{font-family:var(--ui)}
+.own-size{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.own-size input[type=number]{width:84px;flex:none;padding:5px 8px}
+.own-err{flex-basis:100%;font-size:12px;color:var(--danger,#e5484d)}
+.own-err:empty{display:none}
+.ex-own{font:600 12px var(--mono);padding:5px 8px;color:var(--text)}
 
 /* templates */
 .tlist{display:grid;gap:8px}

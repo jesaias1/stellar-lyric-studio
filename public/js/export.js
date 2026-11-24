@@ -45,7 +45,8 @@ window.SLSExport = (() => {
   </div>`;
 
   const dims = () => {   // output size: the frame's shape at the chosen short side, even numbers for the encoder
-    const [bw, bh] = ASPECTS[S.P.aspect], k = opt.res / Math.min(bw, bh), ev = n => Math.max(2, Math.round(n * k / 2) * 2);
+    const own = customSize(S.P.aspect); if(own) return own;   // your own size: exactly that, whatever the resolution choice
+    const [bw, bh] = frameSize(), k = opt.res / Math.min(bw, bh), ev = n => Math.max(2, Math.round(n * k / 2) * 2);
     return [ev(bw), ev(bh)];
   };
   async function load(){
@@ -67,8 +68,11 @@ window.SLSExport = (() => {
   const seg = (id, list, cur, lab = x => x.label ?? x) => { $(id).innerHTML = list.map(x => `<button data-v="${x.id ?? x}" aria-pressed="${String((x.id ?? x) === cur)}">${lab(x)}</button>`).join(""); };
   async function paint(){
     const len = S.P.section.b - S.P.section.a, [w, h] = dims();
-    $("#exSum").innerHTML = `<b>${esc(S.songName)}</b><span>${fmt(S.P.section.a)} to ${fmt(S.P.section.b)} · ${len.toFixed(1)} s · ${S.P.aspect} · ${w}×${h}</span>`;
-    seg("#exRes", RES, opt.res); seg("#exFps", FPS, opt.fps, x => x + " fps"); seg("#exQ", QUAL, opt.q);
+    const own = customSize(S.P.aspect);
+    $("#exSum").innerHTML = `<b>${esc(S.songName)}</b><span>${fmt(S.P.section.a)} to ${fmt(S.P.section.b)} · ${len.toFixed(1)} s · ${own ? "your own size" : S.P.aspect} · ${w}×${h}</span>`;
+    if(own) $("#exRes").innerHTML = `<span class="ex-own">${w}×${h}, your own size</span>`;   // exported exactly as you set it
+    else seg("#exRes", RES, opt.res);
+    seg("#exFps", FPS, opt.fps, x => x + " fps"); seg("#exQ", QUAL, opt.q);
     $("#exFormats").innerHTML = FORMATS.map(f => { const ok = !support || support[f.id];
       return `<button class="ex-f${f.id === opt.format || f.id === FORMATS[0].id ? " keep" : ""}" data-v="${f.id}" aria-pressed="${f.id === opt.format}" ${ok ? "" : "disabled"}><b>${f.label}</b><span>${ok ? f.note : "This browser can't encode it"}</span></button>`; }).join("");
     if(support && !support[opt.format]){ const first = FORMATS.find(f => support[f.id]); if(first){ opt.format = first.id; return paint(); } }

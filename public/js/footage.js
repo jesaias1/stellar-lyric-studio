@@ -32,7 +32,7 @@ window.SLSFootage = (() => {
   let health = null;
   const getHealth = async () => { if(health) return health; try { health = await api.health(); } catch { health = {}; } return health; };
   $$(".fx-tabs button").forEach(b => b.onclick = () => { $$(".fx-tabs button").forEach(x => x.setAttribute("aria-selected", String(x === b))); $$(".fx-body").forEach(p => p.hidden = p.dataset.fxp !== b.dataset.fx); if(b.dataset.fx === "ai") paintAI(); });
-  const orient = () => ({ "9:16": "portrait", "4:5": "portrait", "1:1": "square", "16:9": "landscape" })[S.P.aspect] || "portrait";
+  const orient = () => frameKind();   // portrait, square or landscape, from the frame (your own size too)
   const fmtDur = s => s ? `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}` : "";
   const errText = err => err && err.message ? err.message : "Something went wrong.";
 
@@ -111,7 +111,7 @@ window.SLSFootage = (() => {
   async function price(){
     const n = prompts.length; if(!n){ $("#aiCost").textContent = ""; return; }
     $("#aiGo").textContent = `Generate ${n} clip${n === 1 ? "" : "s"}`;
-    try { const d = await api.api("/api/bg/estimate", { method: "POST", body: { duration: len, aspect: S.P.aspect }, timeout: 20000 }); estimate = d.usd != null ? +d.usd : null; }
+    try { const d = await api.api("/api/bg/estimate", { method: "POST", body: { duration: len, aspect: aspectKey() }, timeout: 20000 }); estimate = d.usd != null ? +d.usd : null; }
     catch { estimate = null; }
     $("#aiCost").textContent = estimate != null ? `About $${(estimate * n).toFixed(2)} on your Higgsfield balance ($${estimate.toFixed(2)} per clip)` : "Charged to your Higgsfield balance";
   }
@@ -125,7 +125,7 @@ window.SLSFootage = (() => {
     if(!prompts.some(p => p.trim())) return; if(!(await SLSApp.ensurePass())) return;
     const go = $("#aiGo"); go.disabled = true;
     for(const p of prompts.filter(x => x.trim())){
-      try { const d = await api.api("/api/bg/generate", { method: "POST", body: { prompt: p, duration: len, aspect: S.P.aspect }, timeout: 60000 }); jobs.push({ id: d.id, prompt: p, state: d.status || "queued", at: Date.now() }); }
+      try { const d = await api.api("/api/bg/generate", { method: "POST", body: { prompt: p, duration: len, aspect: aspectKey() }, timeout: 60000 }); jobs.push({ id: d.id, prompt: p, state: d.status || "queued", at: Date.now() }); }
       catch(err){ jobs.push({ id: "x" + Date.now(), prompt: p, state: "failed", error: errText(err), at: Date.now() }); if(/balance|key|connected/i.test(errText(err))) break; }
       saveJobs(); drawJobs();
     }

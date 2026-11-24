@@ -30,8 +30,8 @@ window.SLSSafe = (() => {
   bar.innerHTML = `<span class="label">Preview as</span><div class="seg seg-wrap" id="safeSeg"></div>`;
   $(".stagebar").append(bar);
   function paintSwitch(){
-    const list = Object.entries(P).filter(([, p]) => p.aspects.includes(S.P.aspect));
-    if(mode !== "off" && !P[mode].aspects.includes(S.P.aspect)) mode = list.length ? list[0][0] : "off";
+    const key = aspectKey(S.P.aspect, true), list = Object.entries(P).filter(([, p]) => p.aspects.includes(key));
+    if(mode !== "off" && !P[mode].aspects.includes(key)) mode = list.length ? list[0][0] : "off";
     $("#safeSeg").innerHTML = `<button data-v="off" aria-pressed="${mode === "off"}">Clean</button>` + list.map(([k, p]) => `<button data-v="${k}" aria-pressed="${mode === k}">${p.name}</button>`).join("");
   }
   $("#safeSeg").onclick = e => { const b = e.target.closest("button"); if(!b) return; mode = b.dataset.v; try { localStorage.setItem("sls-safe", mode); } catch {} paintSwitch(); last = ""; };
@@ -59,7 +59,7 @@ window.SLSSafe = (() => {
     ov.style.width = w + "px"; ov.style.height = h + "px"; ov.width = Math.round(w * k); ov.height = Math.round(h * k);
     const c = ov.getContext("2d"); c.setTransform(k, 0, 0, k, 0, 0); c.clearRect(0, 0, w, h);
     const p = P[mode]; warn.hidden = true;
-    if(!p || !p.aspects.includes(S.P.aspect)) return;
+    if(!p || !p.aspects.includes(aspectKey(S.P.aspect, true))) return;
     const R = ([x, y, ww, hh]) => [x * w, y * h, ww * w, hh * h], u = Math.min(w, h) / 100;
     for(const b of p.bars){
       const [x, y, bw, bh] = R(b.r);

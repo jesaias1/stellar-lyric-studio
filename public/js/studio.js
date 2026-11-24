@@ -15,7 +15,38 @@ const store = {
 const HOOKS = {change:[], pick:[], step:[]};
 const slsOn = (k, f) => HOOKS[k].push(f);
 const slsEmit = (k, ...a) => { for(const f of HOOKS[k]){ try { f(...a); } catch(err){ console.error(err); } } };
-const ASPECTS = { "9:16":[720,1280], "4:5":[864,1080], "1:1":[1080,1080], "16:9":[1280,720] };
+const ASPECTS = { "9:16":[720,1280], "4:5":[864,1080], "1:1":[1080,1080], "16:9":[1280,720], "5:4":[1080,864] };
+/* The frame: one of the shapes above, or your own size written "1080x1350" (width x height in pixels).
+   Your own size is exported exactly as typed (rounded to even numbers, which video needs). */
+const SIZE_MIN = 240, SIZE_MAX = 4096, SIZE_RATIO = 4;   // each side 240 to 4096 px, at most 4 times wider than tall or the other way
+const MIRROR = { "9:16":"16:9", "16:9":"9:16", "4:5":"5:4", "5:4":"4:5", "1:1":"1:1" };
+const evenPx = n => Math.max(2, Math.round(n / 2) * 2);
+function sizeProblem(w, h){
+  if(!(w > 0) || !(h > 0)) return "Type a width and a height in pixels.";
+  if(w < SIZE_MIN || h < SIZE_MIN) return `Each side needs at least ${SIZE_MIN} px.`;
+  if(w > SIZE_MAX || h > SIZE_MAX) return `Each side can be at most ${SIZE_MAX} px.`;
+  if(w / h > SIZE_RATIO || h / w > SIZE_RATIO) return `That's too long and thin: at most ${SIZE_RATIO} times wider than tall, or taller than wide.`;
+  return "";
+}
+function customSize(a){ const m = /^(\d{2,4})x(\d{2,4})$/.exec(a || ""); if(!m) return null; const w = evenPx(+m[1]), h = evenPx(+m[2]); return sizeProblem(w, h) ? null : [w, h]; }
+const aspectOK = a => !!ASPECTS[a] || !!customSize(a);
+// the frame the editor works in: the shapes as listed; your own size scaled to about the same number of pixels as 9:16
+function frameSize(a = S.P.aspect){
+  if(ASPECTS[a]) return ASPECTS[a];
+  const c = customSize(a); if(!c) return ASPECTS["9:16"];
+  const k = Math.min(1, Math.sqrt(720 * 1280 / (c[0] * c[1]))); return [evenPx(c[0] * k), evenPx(c[1] * k)];
+}
+const frameKind = (a = S.P.aspect) => { const [w, h] = frameSize(a); return h > w * 1.15 ? "portrait" : w > h * 1.15 ? "landscape" : "square"; };
+const isWide = (a = S.P.aspect) => { const [w, h] = frameSize(a); return w > h; };
+// the nearest of the four classic shapes (for stock search, AI backgrounds and safe zones); exact: only a shape that matches within 1%
+function aspectKey(a = S.P.aspect, exact = false){
+  if(ASPECTS[a] && a !== "5:4") return a;
+  const [w, h] = frameSize(a), r = Math.log(w / h);
+  let best = "9:16", d = Infinity;
+  for(const k of ["9:16", "4:5", "1:1", "16:9"]){ const [kw, kh] = ASPECTS[k], dk = Math.abs(Math.log(kw / kh) - r); if(dk < d){ d = dk; best = k; } }
+  return exact && d > 0.01 ? null : best;
+}
+const aspectLabel = (a = S.P.aspect) => { const c = customSize(a); return c ? `Your size ${c[0]}×${c[1]}` : a; };
 
 /* ============ state ============ */
 const S = {
@@ -1382,9 +1413,9 @@ function syncUI(){ setTimeout(syncTextEditor, 0);
   $$("#cutMode button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === P.cuts.mode)));
   syncCutUI();
   $("#cutCount").value = P.cuts.count; $("#cutCountVal").textContent = P.cuts.count;
-  $$("#aspect button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === P.aspect)));
-  const [W,H] = ASPECTS[P.aspect]; if(stage.width !== W || stage.height !== H){ stage.width = W; stage.height = H; fitStage(); }
-  $("#stageHint").textContent = `${W}×${H}`;
+  syncFrameUI();
+  const [W,H] = frameSize(P.aspect); if(stage.width !== W || stage.height !== H){ stage.width = W; stage.height = H; fitStage(); }
+  const own = customSize(P.aspect); $("#stageHint").textContent = own ? `${own[0]}×${own[1]}` : `${W}×${H}`;
   updateMeta(); updateTapPad(); syncWordCard(); syncSegCard(); tlDirty = true; slsEmit("change");
 }
 let draftTimer;
@@ -1412,7 +1443,7 @@ function applyProject(p, keepSong){
   S.P = {...base, ...p, style:{...base.style, ...(p.style||{})}, hook:{...base.hook, ...(p.hook||{})}, cuts:{...base.cuts, ...(p.cuts||{})}, section:{...base.section, ...(p.section||{})}};
   S.P.words = (p.words || []).map(w => { const o = {w:String(w.w), l:+w.l||0, t:+w.t||0, d:+w.d||0.3}; if(w.u) o.u = 1; if(w.g) o.g = 1; if(w.alt) o.alt = String(w.alt); return o; });
   if(S.audio){ const dur = S.audio.duration; S.P.section.b = Math.min(S.P.section.b, dur); S.P.section.a = clamp(S.P.section.a, 0, Math.max(0, S.P.section.b - 1)); }
-  if(!ASPECTS[S.P.aspect]) S.P.aspect = "9:16";
+  if(!aspectOK(S.P.aspect)) S.P.aspect = "9:16";
   const OLD = {punch:"redline", outline:"hollow", glow:"voltage", type:"typewriter"}; if(OLD[S.P.style.preset]) S.P.style.preset = OLD[S.P.style.preset];
   if(!PRESETS.some(p => p.id === S.P.style.preset)) S.P.style.preset = "stack";
   S.t = S.P.section.a; S.sel = null; sortWords(); syncUI(); saveDraft();
@@ -1599,7 +1630,46 @@ $("#lrcFile").onchange = async e => { const f = e.target.files[0]; e.target.valu
   selectNone(); syncUI(); dirty(); toast(`${r.words.length} words imported from ${f.name}`); };
 $("#lrcOut").onclick = async () => { if(!S.P.words.length) return toast("No timed lyrics yet"); const ok = await saveFile(`${(S.songName||"lyrics").replace(/[^\w\- ]+/g,"").trim()}.lrc`, toLRC()); if(ok === false) toast("Saving files isn't available in this view"); };
 $("#srtOut").onclick = async () => { if(!S.P.words.length) return toast("No timed lyrics yet"); const ok = await saveFile(`${(S.songName||"lyrics").replace(/[^\w\- ]+/g,"").trim()}.srt`, toSRT()); if(ok === false) toast("Saving files isn't available in this view"); };
-$("#aspect").onclick = e => { const b = e.target.closest("button"); if(!b) return; S.P.aspect = b.dataset.v; syncUI(); saveDraft(); };
+/* Frame: Vertical / Horizontal, then the shape (9:16, 4:5, 1:1 or the same turned on its side), or Custom: your own size */
+let framePref = null, ownOpen = false;   // framePref: "v" or "h" for a square frame; ownOpen: the size box is showing
+const familyOf = a => customSize(a) ? "own" : a === "9:16" || a === "16:9" ? "tall" : a === "4:5" || a === "5:4" ? "mid" : "sq";
+const orientOf = a => { const [w, h] = frameSize(a); return w > h ? "h" : h > w ? "v" : (framePref || "v"); };
+function syncFrameUI(){
+  const a = S.P.aspect, o = orientOf(a), fam = familyOf(a), h = o === "h";
+  $$("#orient button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === o)));
+  const lab = { tall: h ? "16:9" : "9:16", mid: h ? "5:4" : "4:5", sq: "1:1", own: "Custom" };
+  $$("#aspect button").forEach(b => { b.textContent = lab[b.dataset.v]; b.setAttribute("aria-pressed", String(b.dataset.v === (ownOpen ? "own" : fam))); });
+  $("#ownSize").hidden = !(ownOpen || fam === "own");
+  if(fam === "own" && !ownOpen && !$("#ownSize").contains(document.activeElement)) fillOwn();   // a project opened with your own size shows it
+}
+function setFrame(a){ if(!aspectOK(a) || a === S.P.aspect){ syncFrameUI(); return; } S.P.aspect = a; syncUI(); saveDraft(); }
+function fillOwn(){   // the size box starts from the frame you have: your own size, or the shape at 1080 px on its short side
+  const c = customSize(S.P.aspect), [w, h] = c || (([fw, fh]) => { const k = 1080 / Math.min(fw, fh); return [evenPx(fw * k), evenPx(fh * k)]; })(frameSize());
+  $("#ownW").value = w; $("#ownH").value = h; $("#ownErr").textContent = "";
+}
+$("#orient").onclick = e => {
+  const b = e.target.closest("button[data-v]"); if(!b) return; const want = b.dataset.v, a = S.P.aspect;
+  framePref = want;
+  if(orientOf(a) === want && familyOf(a) !== "sq"){ syncFrameUI(); return; }
+  const c = customSize(a);
+  if(c){ if(c[0] !== c[1]) setFrame(`${c[1]}x${c[0]}`); else syncFrameUI(); }   // your own size, turned on its side
+  else setFrame(MIRROR[a] || a);
+  if(!$("#ownSize").hidden) fillOwn();   // the size box shows the frame you now have
+};
+$("#aspect").onclick = e => {
+  const b = e.target.closest("button[data-v]"); if(!b) return; const fam = b.dataset.v, h = orientOf(S.P.aspect) === "h";
+  if(fam === "own"){ ownOpen = true; fillOwn(); syncFrameUI(); setTimeout(() => $("#ownW").focus(), 0); return; }
+  ownOpen = false;
+  setFrame(fam === "tall" ? (h ? "16:9" : "9:16") : fam === "mid" ? (h ? "5:4" : "4:5") : "1:1");
+};
+$("#ownSize").onsubmit = e => {
+  e.preventDefault();
+  const w = evenPx(+$("#ownW").value), h = evenPx(+$("#ownH").value), bad = sizeProblem(+$("#ownW").value, +$("#ownH").value);
+  if(bad){ $("#ownErr").textContent = bad; return; }
+  $("#ownErr").textContent = ""; $("#ownW").value = w; $("#ownH").value = h;
+  framePref = w > h ? "h" : h > w ? "v" : framePref; ownOpen = false;
+  setFrame(`${w}x${h}`); toast(`Frame: ${w}×${h} px. The video is exported at exactly this size.`);
+};
 $("#shuffleBtn").onclick = () => { S.P.cuts.seed = (S.P.cuts.seed * 7919 + 13) % 100000; resetSlots(); syncSegCard(); dirty(); };
 $("#segStart").oninput = e => { if(S.sel?.type !== "seg") return; const i = S.sel.i, v = +e.target.value; setSlot(i, {in: v}); const inf = segInfo(); if(!S.playing) S.t = inf.segs[i].a + 0.001;
   const clip = S.clips.find(c => c.id === inf.order[i]); $("#segStartVal").textContent = `${fmt(v)} of ${fmt(clip?.el?.duration||0)}`; };
@@ -2221,8 +2291,8 @@ function pickMime(){
 }
 $("#exportBtn").onclick = () => {
   if(S.tap) return; pause();
-  const m = pickMime(), [W,H] = ASPECTS[S.P.aspect], len = S.P.section.b - S.P.section.a;
-  $("#exInfo").textContent = m ? `${S.P.aspect} · ${W}×${H} · ${len.toFixed(1)}s · ${m.startsWith("video/mp4") ? "MP4" : "WebM"}` : "This browser can't record video. Use a recent Chrome, Edge or Safari.";
+  const m = pickMime(), [W,H] = frameSize(), len = S.P.section.b - S.P.section.a;
+  $("#exInfo").textContent = m ? `${aspectLabel()} · ${W}×${H} · ${len.toFixed(1)}s · ${m.startsWith("video/mp4") ? "MP4" : "WebM"}` : "This browser can't record video. Use a recent Chrome, Edge or Safari.";
   $("#exStart").disabled = !m;
   $("#exSetup").hidden = false; $("#exRun").hidden = true; $("#exDone").hidden = true; $("#exportModal").hidden = false;
 };

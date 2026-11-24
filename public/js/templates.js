@@ -74,7 +74,7 @@ window.SLSTemplates = (() => {
       if(!PRESETS.some(p => p.id === P.style.preset)) P.style.preset = "stack"; done.push("style"); }
     if(d.text){ P.hook = { ...P.hook, ...clone(d.text.hook) }; P.texts = clone(d.text.texts) || []; P.tTracks = clone(d.text.tTracks) || [{}]; done.push("text"); }
     if(d.cuts){ P.cuts = { ...P.cuts, ...clone(d.cuts), points: null, slots: null }; done.push("cuts"); }
-    if(d.format){ if(ASPECTS[d.format.aspect]) P.aspect = d.format.aspect; if(d.format.length && S.audio){ const len = Math.min(d.format.length, S.audio.duration), a = clamp(P.section.a, 0, S.audio.duration - len); P.section = { a, b: +(a + len).toFixed(2) }; } done.push("format"); }
+    if(d.format){ if(aspectOK(d.format.aspect)) P.aspect = d.format.aspect; if(d.format.length && S.audio){ const len = Math.min(d.format.length, S.audio.duration), a = clamp(P.section.a, 0, S.audio.duration - len); P.section = { a, b: +(a + len).toFixed(2) }; } done.push("format"); }
     if(d.lyrics){ const L = clone(d.lyrics); Object.assign(P, { lyrics: L.lyrics, words: L.words || [], bpm: L.bpm ?? P.bpm, offset: L.offset ?? P.offset, markers: L.markers || [], srcLyrics: L.srcLyrics, lang: L.lang });
       if(L.section) P.section = L.section; if(L.points) P.cuts.points = L.points; if(L.slots) P.cuts.slots = L.slots; if(L.points) P.cuts.mode = "manual"; done.push("lyrics");
       if(S.audio && L.song && L.song.name && L.song.name !== S.songName) toast(`These lyrics were timed on "${L.song.name}". Load that song for the timing to match.`); }
