@@ -74,7 +74,8 @@ async function route(request, env, url) {
   // Meta's callbacks for when someone removes the app from Instagram, or asks for their data to be deleted.
   // Nothing about Instagram accounts is kept on the server (logins are sealed into the person's studio account),
   // so these only acknowledge and point to how deletion works.
-  if (path === "/api/meta/deauthorize" && method === "POST") return json({ ok: true });
+  if (path === "/api/meta/deauthorize" && (method === "POST" || method === "GET")) return json({ ok: true });
+  if (path === "/api/meta/delete" && method === "GET") return json({ ok: true, info: "Send a POST with Meta's signed_request to request deletion." });
   if (path === "/api/meta/delete" && method === "POST") {
     const code = "sls-" + crypto.randomUUID().slice(0, 8);
     const base = (env.PUBLIC_URL || url.origin).replace(/\/+$/, "");

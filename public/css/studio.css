@@ -421,3 +421,22 @@ body.auth-locked #splash{z-index:2100}
 .artist-pick svg{width:18px;height:18px}
 .artist-pick:hover{transform:translateY(-1px);box-shadow:0 10px 24px rgba(0,0,20,.24)}
 .artist-pick:focus-visible{outline:3px solid rgba(255,255,255,.6);outline-offset:3px}
+
+/* ---------- resizable panels (desktop design step; see js/panels.js) ---------- */
+.pn-h{display:none}
+html.pn-on .pn-h:not([hidden]){display:block;position:fixed;z-index:30;background:transparent;touch-action:none;outline:0}
+html.pn-on .pn-v{width:8px;cursor:col-resize}
+html.pn-on .pn-t{height:8px;cursor:row-resize}
+.pn-h::after{content:"";position:absolute;background:var(--tape);opacity:0;transition:opacity .12s}
+.pn-v::after{left:3px;width:2px;top:0;bottom:0}
+.pn-t::after{top:3px;height:2px;left:0;right:0}
+.pn-h:hover::after,.pn-h.drag::after,.pn-h:focus-visible::after{opacity:1}
+body.pn-drag{user-select:none;-webkit-user-select:none}
+body.pn-drag *{cursor:inherit!important}
+body.pn-drag[data-pn-dir="col"]{cursor:col-resize}
+body.pn-drag[data-pn-dir="row"]{cursor:row-resize}
+body.pn-drag canvas,body.pn-drag .viewport{pointer-events:none}
+@media (min-width:761px){
+  html.pn-on body[data-step="design"] .main{grid-template-columns:var(--left-w,clamp(220px,22vw,300px)) minmax(0,1fr) var(--right-w,clamp(220px,22vw,296px))}
+  html.pn-tl body[data-step="design"][data-tl="open"] .timeline{height:var(--tl-h);overflow-y:auto;overflow-x:hidden;align-content:start}
+}
