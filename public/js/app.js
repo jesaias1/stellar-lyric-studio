@@ -222,7 +222,7 @@ window.SLSApp = (() => {
   /* drop zone */
   const drop = $("#drop"), homeFile = $("#homeFile");
   drop.onclick = () => homeFile.click();
-  drop.onkeydown = e => { if(e.key === "Enter" || e.key === " "){ e.preventDefault(); homeFile.click(); } };
+  drop.onkeydown = e => { if(e.target !== drop) return; if(e.key === "Enter" || e.key === " "){ e.preventDefault(); homeFile.click(); } };
   homeFile.onchange = () => { const f = homeFile.files[0]; homeFile.value = ""; pick(f); };
   let dragDepth = 0;
   const isFile = e => e.dataTransfer && [...e.dataTransfer.types].includes("Files");

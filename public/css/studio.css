@@ -414,3 +414,10 @@ body.auth-locked #splash{z-index:2100}
 @media (max-width:520px){.ar-pane{width:100vw;border-left:0}}
 .ar-songs{flex:1;min-height:0;overflow:auto;margin:0 -8px;padding:0 8px 8px;align-content:start}
 .ar-body:has(.ar-songs){overflow:hidden}
+.ar-group{font-size:12px;font-weight:600;letter-spacing:.02em;text-transform:uppercase;color:var(--muted);margin:14px 2px 8px}
+.ar-group:first-child{margin-top:2px}
+/* the artist picker button inside the drop zone: used a lot, so a real button */
+.artist-pick{margin-top:14px;display:inline-flex;align-items:center;gap:9px;padding:12px 20px;border-radius:999px;border:0;background:#fff;color:var(--stellar,#0010da);font:600 15px/1 var(--ui);cursor:pointer;box-shadow:0 6px 18px rgba(0,0,20,.18);transition:transform .15s,box-shadow .15s}
+.artist-pick svg{width:18px;height:18px}
+.artist-pick:hover{transform:translateY(-1px);box-shadow:0 10px 24px rgba(0,0,20,.24)}
+.artist-pick:focus-visible{outline:3px solid rgba(255,255,255,.6);outline-offset:3px}

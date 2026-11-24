@@ -1,7 +1,7 @@
 /**
  * The Stellar Music artists (stellarmusic.dk/mgmt) and their songs, from Apple Music's free 30-second previews.
  *
- *   GET /api/catalog        -> {artists: [{id, name, picture}]}
+ *   GET /api/catalog        -> {artists: [{id, name, group, picture}]}   group "ai": an AI-assisted artist
  *   GET /api/catalog/:id    -> {artist, songs: [{id, title, artist, album, year, cover, duration, preview, link}]}
  *
  * Uses the public iTunes Search API (no key). preview is a signed /api/media link to the AAC preview, so the
@@ -18,6 +18,13 @@ export const ARTISTS = [
   { id: "scarlet-pleasure", name: "Scarlet Pleasure", apple: 823560885 },
   { id: "aleksiah", name: "aleksiah", apple: 1653982021 },
   { id: "maximillian", name: "Maximillian", apple: 1275654641 },
+  { id: "kyu", name: "kyu", apple: 1804489634 },
+  // AI-assisted artists
+  { id: "ingrid-eikeland", name: "Ingrid Eikeland", apple: 1753478838, group: "ai" },
+  { id: "jacub", name: "Jacub", apple: 1481996138, group: "ai" },
+  { id: "giacomochi6", name: "Giacomochi6", apple: 6820511194, group: "ai" },
+  { id: "aurora-fjallstrom", name: "Aurora Fjällström", apple: 1862557339, group: "ai" },
+  { id: "shockfactor", name: "ShockFactor", apple: 1742415602, group: "ai" },
 ];
 const COUNTRY = "dk", HOURS = 6;
 const cache = new Map();
@@ -27,7 +34,7 @@ const keep = (k, v) => { cache.set(k, { at: Date.now(), v }); if (cache.size > 2
 export async function catalogRoute(request, env, path, method, { json }) {
   if (method !== "GET" || !path.startsWith("/api/catalog")) return null;
   if (path === "/api/catalog") {
-    const artists = await Promise.all(ARTISTS.map(async a => ({ id: a.id, name: a.name, picture: await picture(a) })));
+    const artists = await Promise.all(ARTISTS.map(async a => ({ id: a.id, name: a.name, group: a.group || "", picture: await picture(a) })));
     return json({ artists });
   }
   const m = path.match(/^\/api\/catalog\/([a-z0-9-]{1,40})$/);

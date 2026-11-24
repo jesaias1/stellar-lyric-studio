@@ -32,7 +32,7 @@
       if(my !== token) return;
     }
     body.innerHTML = artists.length
-      ? `<div class="ar-grid">${artists.map(a => `<button class="ar-card" type="button" data-id="${esc(a.id)}">${photo(a, "big")}<span class="ar-name">${esc(a.name)}</span></button>`).join("")}</div>`
+      ? [["", "Stellar Music artists"], ["ai", "AI-assisted artists"]].map(([g, label]) => { const list = artists.filter(a => (a.group || "") === g); return list.length ? `<div class="ar-group">${label}</div><div class="ar-grid">${list.map(a => `<button class="ar-card" type="button" data-id="${esc(a.id)}">${photo(a, "big")}<span class="ar-name">${esc(a.name)}</span></button>`).join("")}</div>` : ""; }).join("")
       : `<div class="ar-state"><p>No artists yet.</p></div>`;
     const f = body.querySelector(".ar-card"); if(f && isOpen) f.focus({ preventScroll: true });
   }
@@ -167,7 +167,7 @@
   });
   back.addEventListener("click", close);
   $("#navArtists").onclick = e => { e.preventDefault(); open(); };
-  $("#artistsBtn").onclick = () => open();
+  $("#artistsBtn").onclick = e => { e.stopPropagation(); open(); };   // it sits inside the drop zone, which opens the file picker
 
   const api = { open, close, playing: "" };
   window.SLSArtists = api;
