@@ -35,6 +35,15 @@
   }
 
   const NEW = [
+    { id: "tt-classic", name: "TikTok Classic", cat: "trend", caseDef: "as", demo: "i wish my life had a soundtrack", def: { pf: "tiktok", hi: "#ffffff" }, tags: { e: "mid", m: ["calm", "sad", "romantic", "happy"] },
+      draw(c, W, H, s, t, st, o){   // TikTok's own "Classic" text: the whole line at once in TikTok Sans, white with a soft shadow, centred
+        const k = ease((t - s.start) / 0.15);
+        c.textBaseline = "top";
+        lineLayout(c, W, H, s, st, o, { caseDef: "as", px: 0.062, maxW: 0.8, lh: 1.12, each(it, i, x, y, px){
+          c.save(); c.globalAlpha *= k; c.shadowColor = "rgba(0,0,0,0.45)"; c.shadowBlur = px * 0.14; c.shadowOffsetY = px * 0.03;
+          c.fillStyle = o.tx; c.fillText(it.s, x, y); c.restore(); } });
+    } },
+
     { id: "tt-captions", name: "TikTok Captions", cat: "trend", caseDef: "as", demo: "we were dancing in the kitchen", def: { pf: "tiktokb", hi: "#ffffff" }, tags: { e: "mid", m: ["happy", "party", "calm"] },
       draw(c, W, H, s, t, st, o){   // the in-app caption: bold white words with a black outline, each one pops on as it's sung
         c.textBaseline = "middle";

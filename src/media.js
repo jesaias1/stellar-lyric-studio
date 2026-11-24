@@ -4,7 +4,7 @@
  *   GET  /api/stock/search?q=&orientation=portrait|landscape|square&page=1
  *        Searches Pixabay (PIXABAY_KEY) and Pexels (PEXELS_KEY), whichever keys are set.
  *   GET  /api/media?u=<url>&s=<signature>
- *        Streams a video or photo file to the browser. Only URLs this backend handed out (signed) are relayed, so it
+ *        Streams a video, photo or song preview file to the browser. Only URLs this backend handed out (signed) are relayed, so it
  *        can't be used as an open proxy. Needed because most video hosts don't allow a web page to read their
  *        files, and the app must read them to put them in the exported video.
  *   POST /api/bg/prompts   {lyrics, count, mood}            -> {prompts: [...]}   ideas written by an AI from the lyrics
@@ -51,7 +51,8 @@ async function relay(env, url, request, json) {
   if (!up.ok || !up.body) return json({ error: "upstream", message: `The host answered ${up.status}.` }, 502);
   let type = (up.headers.get("content-type") || "").split(";")[0].trim();
   const pic = u.match(/\.(jpe?g|png|webp|gif|avif)(\?|$)/i);
-  if (!/^(video|image)\//.test(type)) type = pic ? "image/" + pic[1].toLowerCase().replace("jpg", "jpeg") : /\.webm(\?|$)/i.test(u) ? "video/webm" : "video/mp4";
+  const snd = u.match(/\.(m4a|mp3|aac)(\?|$)/i);
+  if (!/^(video|image|audio)\//.test(type)) type = pic ? "image/" + pic[1].toLowerCase().replace("jpg", "jpeg") : snd ? (snd[1].toLowerCase() === "mp3" ? "audio/mpeg" : "audio/mp4") : /\.webm(\?|$)/i.test(u) ? "video/webm" : "video/mp4";
   const headers = { "content-type": type, "cache-control": "private, max-age=3600" };
   const len = up.headers.get("content-length"); if (len) headers["content-length"] = len;
   return new Response(up.body, { status: 200, headers });

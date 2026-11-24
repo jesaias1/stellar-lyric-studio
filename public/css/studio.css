@@ -368,3 +368,49 @@ body.auth-locked #splash{z-index:2100}
 .bites-pop[hidden]{display:none}
 .ly-line.in-cut{box-shadow:inset 3px 0 0 var(--tape)}
 @media (max-width:760px){.bites{margin:0 12px 8px}.bites-row{grid-template-columns:1fr}}
+
+/* ---------- Stellar Music artists: the side page on the start screen (js/artists.js) ---------- */
+.ar-back{position:fixed;inset:0;z-index:1500;background:rgba(4,6,26,.55);opacity:0;transition:opacity .28s ease}
+.ar-back.open{opacity:1}
+.ar-pane{position:fixed;top:0;right:0;bottom:0;z-index:1510;width:min(440px,100vw);display:flex;flex-direction:column;background:var(--panel);color:var(--text);border-left:1px solid var(--line-2);box-shadow:-18px 0 50px rgba(0,0,0,.35);transform:translateX(104%);transition:transform .3s cubic-bezier(.2,.8,.2,1),visibility 0s .3s;visibility:hidden;padding-top:env(safe-area-inset-top,0px)}
+.ar-pane.open{transform:none;visibility:visible;transition:transform .3s cubic-bezier(.2,.8,.2,1)}
+@media (prefers-reduced-motion:reduce){.ar-back,.ar-pane,.ar-pane.open{transition:none}}
+.ar-head{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line);flex:none}
+.ar-head h2{flex:1;margin:0;font:700 18px/1.2 var(--ui);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ar-body{flex:1;min-height:0;display:flex;flex-direction:column;overflow:auto;padding:16px}
+.ar-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.ar-card{display:flex;flex-direction:column;align-items:center;gap:10px;padding:18px 10px 14px;border:1px solid var(--line-2);border-radius:16px;background:var(--raise);color:var(--text);font:inherit;cursor:pointer;transition:border-color .15s,transform .15s}
+.ar-card:hover,.ar-card:focus-visible{border-color:var(--tape);transform:translateY(-2px)}
+.ar-name{font:700 14px/1.25 var(--ui);text-align:center;overflow-wrap:anywhere}
+.ar-ph{position:relative;display:grid;place-items:center;flex:none;overflow:hidden;border-radius:50%;background:hsl(var(--h,222) 60% 42%);color:#fff;font:700 22px var(--ui)}
+.ar-ph.big{width:96px;height:96px;font-size:38px}.ar-ph.mid{width:56px;height:56px}
+.ar-ph img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.ar-top{flex:none;display:grid;gap:12px;margin-bottom:10px}
+.ar-who{display:flex;align-items:center;gap:12px}
+.ar-who b{display:block;font:700 17px/1.2 var(--ui)}.ar-who span:not(.ar-ph){font-size:12.5px;color:var(--muted)}
+.ar-search{width:100%;box-sizing:border-box;padding:10px 12px!important;border-radius:10px!important;border:1px solid var(--line-2)!important;background:var(--ink)!important;color:var(--text)!important;font-size:14px}
+.ar-note{margin:0;font-size:12.5px;line-height:1.45;color:var(--muted)}
+.ar-songs{list-style:none;margin:0;padding:0;display:grid;gap:2px}
+.ar-row{display:flex;align-items:center;gap:12px;padding:8px;border-radius:12px;cursor:pointer;transition:background .12s}
+.ar-row:hover{background:var(--raise)}
+.ar-cover{width:48px;height:48px;flex:none;border-radius:8px;object-fit:cover;background:var(--raise)}
+.ar-info{flex:1;min-width:0;display:grid;gap:2px}
+.ar-info b{font:600 14px/1.25 var(--ui);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ar-info span{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ar-err{font-style:normal;font-size:12px;color:#e5484d}
+.ar-play.on{color:var(--on-tape);background:var(--tape);border-color:var(--tape)}
+.ar-play{cursor:pointer}
+.ar-row .btn{flex:none}
+.ar-state{display:grid;justify-items:center;gap:12px;padding:28px 12px;text-align:center;color:var(--muted)}
+.ar-state p{margin:0}
+.ar-none{text-align:center;color:var(--muted);font-size:13px;padding:24px 0}
+.ar-skel{display:grid;gap:10px}.ar-skel i{height:56px;border-radius:12px;background:var(--raise);animation:arPulse 1.2s ease-in-out infinite}
+@keyframes arPulse{50%{opacity:.45}}
+.ar-spin{width:16px;height:16px;border-radius:50%;border:2px solid currentColor;border-right-color:transparent;animation:arSpin .7s linear infinite}
+@keyframes arSpin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.ar-skel i,.ar-spin{animation-duration:2.4s}}
+.home-links{display:flex;gap:6px 22px;flex-wrap:wrap;align-items:center}
+@media (max-width:640px){.home-links{justify-content:center}}
+@media (max-width:520px){.ar-pane{width:100vw;border-left:0}}
+.ar-songs{flex:1;min-height:0;overflow:auto;margin:0 -8px;padding:0 8px 8px;align-content:start}
+.ar-body:has(.ar-songs){overflow:hidden}

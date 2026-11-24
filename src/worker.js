@@ -6,7 +6,9 @@
  *   GET    /api/health            is the backend up, and is it configured? (no passcode needed)
  *   POST   /api/session           check the login (or the passcode)
  *   POST   /api/transcribe        one chunk of audio in, words with timings out (Workers AI Whisper)
+ *   POST   /api/meta/deauthorize, /api/meta/delete   Meta's app-removal and data-deletion callbacks
  *   POST   /api/enter             log in or sign up with a username and the team code (src/login.js)
+ *   GET    /api/catalog[/:id]     the Stellar Music artists and their songs' 30 s previews (src/catalog.js)
  *   POST   /api/hooks             rates candidate soundbites' lyrics for TikTok / Reels (src/hooks.js)
  *   GET    /api/templates         the team's shared templates
  *   PUT    /api/templates/:id     save a template
@@ -30,6 +32,7 @@
 
 import { hooksRoute } from "./hooks.js";
 import { loginRoute } from "./login.js";
+import { catalogRoute } from "./catalog.js";
 import { authConfigured, userFrom, bearer } from "./auth.js";
 import { mediaRoute, mediaHealth } from "./media.js";
 import { photosRoute, photosHealth } from "./photos.js";
@@ -68,6 +71,16 @@ async function route(request, env, url) {
   const pub = await publishPublicRoute(request, env, url, path, method);
   if (pub) return pub;
 
+  // Meta's callbacks for when someone removes the app from Instagram, or asks for their data to be deleted.
+  // Nothing about Instagram accounts is kept on the server (logins are sealed into the person's studio account),
+  // so these only acknowledge and point to how deletion works.
+  if (path === "/api/meta/deauthorize" && method === "POST") return json({ ok: true });
+  if (path === "/api/meta/delete" && method === "POST") {
+    const code = "sls-" + crypto.randomUUID().slice(0, 8);
+    const base = (env.PUBLIC_URL || url.origin).replace(/\/+$/, "");
+    return json({ url: base + "/privacy.html#delete", confirmation_code: code });
+  }
+
   // Logging in (username + team code): public, it's how a session starts
   const enter = await loginRoute(request, env, path, method, { json });
   if (enter) return enter;
@@ -84,6 +97,8 @@ async function route(request, env, url) {
   if (m && method === "PUT") return saveTemplate(request, env, m[1]);
   if (m && method === "DELETE") return deleteTemplate(env, m[1]);
 
+  const catalog = await catalogRoute(request, env, path, method, { json });
+  if (catalog) return catalog;
   const hooks = await hooksRoute(request, env, path, method, { hasAI: hasAI(env), runModel, json });
   if (hooks) return hooks;
   const media = await mediaRoute(request, env, url, path, method, { hasAI: hasAI(env), runModel, json });

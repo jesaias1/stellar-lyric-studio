@@ -7,12 +7,13 @@
 <meta name="description" content="How Stellar Lyric Studio (SLS) handles songs, videos and linked social media accounts.">
 <link rel="icon" href="favicon.ico">
 <link rel="stylesheet" href="css/legal.css">
+<meta property="og:image" content="https://lyrics.stellarmusic.dk/img/share-card.png">
 </head>
 <body>
 <header><a class="mark" href="/"><img src="/img/logo-sls.webp" alt="SLS" width="185" height="144"> Stellar Lyric Studio</a></header>
 <main>
 <h1>Privacy Policy</h1>
-<p class="sub">Last updated 23 November 2026</p>
+<p class="sub">Last updated 24 November 2026</p>
 
 <p>Stellar Lyric Studio ("SLS", "the studio") is a tool made by Stellar Music, Copenhagen, Denmark, for making lyric videos and posting them to the social media accounts of the artists and profiles it works with. This page explains what the studio does with your data.</p>
 
@@ -22,10 +23,12 @@
 <h2>What the studio handles</h2>
 <ul>
 <li><b>Songs and lyrics.</b> When you add a song, the studio sends it in short pieces to an AI speech model run by Cloudflare (Workers AI) so the lyrics can be written and timed. The pieces are used for that and are not stored.</li>
-<li><b>Projects.</b> Your projects, songs, photos and clips are saved in your own browser (IndexedDB) and stay on your device.</li>
+<li><b>Your account.</b> You log in with a username and the team code. The studio keeps your username and the time the account was made, in a database run by Supabase.</li>
+<li><b>Projects.</b> Songs, photos and clips stay in your own browser (IndexedDB) on your device. The edit itself (lyrics, timings, style, cuts and texts) is also saved to your account, so you can open it on another device.</li>
 <li><b>Footage and photo searches.</b> Search words and lyrics are sent to the image and video services you choose (Pexels, Pixabay, SerpApi for Pinterest results, Higgsfield for AI backgrounds) to find or make footage.</li>
-<li><b>Linked accounts.</b> When you link a YouTube, Instagram or TikTok account, that platform gives the studio a login (an access token) and basic profile details: the account name, ID and profile picture. The login is encrypted and kept in the browser that linked the account. Only the studio's server can decrypt it, and only to post on your instruction.</li>
-<li><b>Videos you post.</b> A video is sent through the studio's server to the platforms you pick. For Instagram, which collects videos by link, the video is kept on the server for at most 3 hours, then deleted.</li>
+<li><b>Linked accounts.</b> When you link a YouTube, Instagram or TikTok account, that platform gives the studio a login (an access token) and basic profile details: the account name, ID and profile picture. The login is encrypted by the studio's server and saved to your studio account. Only the studio's server can decrypt it, and only to post on your instruction. Nobody else logged in to the studio can use it.</li>
+<li><b>Videos you post.</b> A video is sent through the studio's server to the platforms you pick. For Instagram, which collects videos by link, the video is kept in the studio's file storage (Vercel Blob) for at most 3 hours, then deleted.</li>
+<li><b>Hosting.</b> The studio runs on Vercel. The lyric AI runs on Cloudflare Workers AI.</li>
 </ul>
 
 <h2>What the studio asks the platforms for</h2>
@@ -37,7 +40,15 @@
 <p>The studio does not read your messages, followers, analytics or other content, and does not sell or share your data for advertising.</p>
 
 <h2>How long data is kept</h2>
-<p>Linked account logins stay in your browser until you remove the account in the studio, clear your browser data, or the platform's login expires. Posted videos are held on the server for at most 3 hours (Instagram only). Server logs kept by Cloudflare for troubleshooting are deleted automatically.</p>
+<p>Linked account logins stay saved to your studio account until you remove the account in the studio or the platform's login expires. Projects stay until you delete them. Posted videos are held for at most 3 hours (Instagram only). Server logs kept for troubleshooting are deleted automatically.</p>
+
+<h2 id="delete">Deleting your data</h2>
+<p>To delete what the studio holds about you:</p>
+<ol>
+<li>Remove a linked YouTube, Instagram or TikTok account in the studio's posting window. That deletes its saved login at once. You can also remove the studio in the platform's own settings (Instagram: <i>Settings, Apps and websites</i>; TikTok: <i>Settings, Security, Manage app permissions</i>; Google: <a href="https://myaccount.google.com/permissions" rel="noopener">account permissions</a>).</li>
+<li>Delete projects from the studio's start screen.</li>
+<li>To delete your whole studio account and everything saved to it, contact Stellar Music through <a href="https://stellarmusic.dk" rel="noopener">stellarmusic.dk</a> with your username. It is deleted within 30 days, and you get a confirmation.</li>
+</ol>
 
 <h2>Your choices and rights</h2>
 <ul>
