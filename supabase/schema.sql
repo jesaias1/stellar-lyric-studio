@@ -174,4 +174,5 @@ alter table public.song_sounds add column if not exists clip_len numeric check (
 alter table public.song_sounds add column if not exists clip_url text check (char_length(clip_url) <= 500 and clip_url ~ '^https://([a-z]+\.)?tiktok\.com/');
 alter table public.song_sounds add column if not exists clip_title text check (char_length(clip_title) <= 200);
 alter table public.song_sounds add column if not exists clip_videos bigint check (clip_videos >= 0);
+alter table public.song_sounds add column if not exists clip_from text check (clip_from in ('link', 'video'));   -- link: clip_url is that snippet itself
 

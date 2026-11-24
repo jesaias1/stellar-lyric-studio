@@ -708,3 +708,9 @@ body.cal-open .toast{z-index:1600}
 @media (min-width:761px) and (pointer:fine){.ttm-phone{display:none}}
 /* with a pop-up open on a phone, messages show at the top so they don't cover it */
 @media (max-width:760px), (max-width:1050px) and (pointer:coarse){ body:has(.modal:not([hidden])) .toast{bottom:auto;top:calc(12px + env(safe-area-inset-top,0px))} }
+/* on phones the TikTok steps get buttons that open the TikTok app */
+.pub-tt-open{display:none}
+@media (pointer:coarse){
+  .pub-tt-open{display:inline-flex;margin:6px 0 2px;background:#000;color:#fff!important;border-color:#000;text-decoration:none!important;min-height:36px;align-items:center}
+  .pub-seed li{padding-bottom:4px}
+}

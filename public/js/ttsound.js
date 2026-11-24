@@ -36,10 +36,10 @@ window.SLSTikTokSound = (() => {
     if(S.P.ttSound && S.P.ttSound.key === key()){ put(S.P.ttSound, { use }); return S.P.ttSound; }
     if(!team()) return null;
     try {
-      const rows = await Promise.race([SLSAuth.rest(`song_sounds?select=clip_start,clip_len,clip_url,clip_title,clip_videos&key=eq.${encodeURIComponent(key())}`), new Promise(r => setTimeout(() => r(null), 4000))]);
+      const rows = await Promise.race([SLSAuth.rest(`song_sounds?select=clip_start,clip_len,clip_url,clip_title,clip_videos,clip_from&key=eq.${encodeURIComponent(key())}`), new Promise(r => setTimeout(() => r(null), 4000))]);
       const r = rows && rows[0]; if(!r || r.clip_start == null || !r.clip_len) return null;
       if(r.clip_start + 1 > S.audio.duration) return null;
-      const tt = { key: key(), a: +r.clip_start, len: +r.clip_len, url: r.clip_url || "", title: r.clip_title || "", videos: r.clip_videos ?? null };
+      const tt = { key: key(), a: +r.clip_start, len: +r.clip_len, url: r.clip_url || "", title: r.clip_title || "", videos: r.clip_videos ?? null, from: r.clip_from || "video" };
       put(tt, { use }); return tt;
     } catch(err){ console.warn("couldn't read the TikTok sound for this song", err); return null; }
   }
@@ -90,12 +90,20 @@ window.SLSTikTokSound = (() => {
         else show(`<b>That sound isn't in this song.</b> Is it a remix, or a different song? Try the artist's own sound.`, "warn");
         return;
       }
-      const tt = { key: key(), a: r.start, len: Math.max(3, r.len), url: info.link || info.url || "", title: info.title || "", videos: info.videos ?? null, sure: r.sure };
+      // a link to the whole song (most official sounds) matches from 0:00 and says nothing about the part people use
+      const soundLen = info.duration || buf.duration;
+      if(from === "link" && r.start < 1.5 && soundLen > 45 && soundLen > S.audio.duration * 0.6){
+        show(`<b>That link is the whole song</b>, so it doesn't show which part people use. Open a popular video that uses the sound, tap Share, then Save video, and choose that video here instead.
+          ${team() ? `<div class="row"><button class="btn small" type="button" id="ttmAsOfficial">Save the link as the official sound for sound seeding</button></div>` : ""}`, "warn");
+        const b = $m("#ttmAsOfficial"); if(b) b.onclick = async () => { try { await SLSAuth.rest("song_sounds", { method: "POST", prefer: "resolution=merge-duplicates,return=minimal", body: { key: key(), title: title(), tiktok_url: info.link || info.url } }); b.replaceWith(Object.assign(document.createElement("span"), { textContent: "Saved as the official sound." })); } catch(err){ toast("Couldn't save it: " + (err.message || "try again")); } };
+        return;
+      }
+      const tt = { key: key(), a: r.start, len: Math.max(3, r.len), url: info.link || info.url || "", title: info.title || "", videos: info.videos ?? null, sure: r.sure, from };
       put(tt, { use: true, quiet: false });
       let saved = false;
       if(team()){
         try { await SLSAuth.rest("song_sounds", { method: "POST", prefer: "resolution=merge-duplicates,return=minimal",
-          body: { key: key(), title: title(), clip_start: tt.a, clip_len: +tt.len.toFixed(2), clip_url: /^https:\/\/([a-z]+\.)?tiktok\.com\//i.test(tt.url) ? tt.url : null, clip_title: tt.title.slice(0, 200) || null, clip_videos: tt.videos,
+          body: { key: key(), title: title(), clip_start: tt.a, clip_len: +tt.len.toFixed(2), clip_url: /^https:\/\/([a-z]+\.)?tiktok\.com\//i.test(tt.url) ? tt.url : null, clip_title: tt.title.slice(0, 200) || null, clip_videos: tt.videos, clip_from: from,
             ...($m("#ttmOfficial") && $m("#ttmOfficial").checked && /tiktok\.com\/music\//i.test(tt.url) ? { tiktok_url: tt.url } : {}) } }); saved = true; }
         catch(err){ console.warn("TikTok sound not saved for the team", err); }
       }
