@@ -98,3 +98,53 @@ grant select, insert, update, delete on public.profiles, public.projects, public
 
 -- the team code people need to sign up. To change it later, run just this line with the new code:
 -- insert into private.settings (key, value) values ('team_code', 'NEW-CODE') on conflict (key) do update set value = excluded.value;
+
+-- ---------- posts: scheduled ones (the calendar) and ones already made (history and results) ----------
+-- The studio adds a row when you schedule a post, or after posting right away. Every 5 minutes the website's
+-- server (/api/cron, called by pg_cron below) posts the ones that are due, checks on ones still processing,
+-- and now and then reads back views and likes. The server uses the Supabase secret key for this; people only
+-- ever see their own rows.
+create table if not exists public.posts (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  platform text not null check (platform in ('youtube', 'instagram', 'tiktok')),
+  account_id text not null check (char_length(account_id) <= 64),
+  account_name text not null default '' check (char_length(account_name) <= 200),
+  project_name text not null default '' check (char_length(project_name) <= 200),
+  artist text not null default '' check (char_length(artist) <= 120),
+  video_url text check (char_length(video_url) <= 2000),
+  video_type text not null default 'video/mp4' check (char_length(video_type) <= 60),
+  cover_url text check (char_length(cover_url) <= 2000),
+  meta jsonb not null default '{}'::jsonb check (pg_column_size(meta) <= 20000),
+  publish_at timestamptz not null default now(),
+  status text not null default 'scheduled' check (status in ('scheduled', 'posting', 'working', 'posted', 'failed', 'cancelled')),
+  ref text check (char_length(ref) <= 300),
+  result_url text check (char_length(result_url) <= 2000),
+  note text check (char_length(note) <= 1000),
+  attempts int not null default 0,
+  stats jsonb,
+  stats_at timestamptz,
+  mailed boolean not null default false,          -- already in a daily summary email
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists posts_due on public.posts (status, publish_at);
+create index if not exists posts_user on public.posts (user_id, publish_at desc);
+alter table public.posts enable row level security;
+drop policy if exists "own posts" on public.posts;
+create policy "own posts" on public.posts for all to authenticated
+  using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
+revoke all on public.posts from anon;
+grant select, insert, update, delete on public.posts to authenticated;
+
+-- a few values the scheduler keeps for itself (when the last daily summary email went out); only the server's
+-- secret key can read or change it
+create table if not exists public.studio_state (key text primary key, value text not null default '', updated_at timestamptz not null default now());
+alter table public.studio_state enable row level security;
+revoke all on public.studio_state from anon, authenticated;
+
+-- every 5 minutes: ask the website to post what's due (needs the pg_cron and pg_net extensions)
+create extension if not exists pg_cron;
+create extension if not exists pg_net;
+select cron.unschedule('sls-posts') where exists (select 1 from cron.job where jobname = 'sls-posts');
+select cron.schedule('sls-posts', '*/5 * * * *', $$ select net.http_post(url := 'https://lyrics.stellarmusic.dk/api/cron', headers := '{"content-type": "application/json"}'::jsonb, body := '{}'::jsonb) $$);

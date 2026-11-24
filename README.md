@@ -102,3 +102,16 @@ the account and follow it to any device. Songs and footage stay in the browser t
 - An email for every new account: make a free account at resend.com with the address that should get the emails
   (linas@stellarmusic.dk), create an API key and set it as `RESEND_API_KEY`. `NOTIFY_EMAIL` changes the address.
 - Without the Supabase settings the studio falls back to the single shared passcode (`SLS_PASSCODE`).
+
+## Scheduled posts, the calendar and results
+
+People can schedule a post for later when posting, and see every post in the calendar (start screen: calendar).
+The studio keeps each post in the `posts` table (supabase/schema.sql). Every 5 minutes Supabase's pg_cron calls
+`/api/cron` (src/schedule.js), which posts what's due, checks on posts that are still processing, and reads back
+views, likes and comments now and then (YouTube and Instagram; TikTok once the app may use `video.list`).
+
+- Run the posts part of `supabase/schema.sql` in the SQL editor (it also turns on pg_cron and pg_net and sets the job).
+- On the host: `SUPABASE_SECRET_KEY` = the project's secret key (Supabase > Project Settings > API Keys). The
+  scheduler needs it to read everyone's due posts and their sealed account logins.
+- Optional: `RESEND_API_KEY` (see Accounts) for an email to the owner when a scheduled post goes live or fails.
+- The video of a scheduled post waits in Vercel Blob until it's posted, then it's deleted.

@@ -16,6 +16,7 @@
  * the Resend account was made with, so make that account with the address that should get the emails.
  */
 import { authConfigured } from "./auth.js";
+import { sendMail, copenhagen } from "./mail.js";
 
 export const USER_DOMAIN = "users.lyrics.stellarmusic.dk";
 const enc = new TextEncoder();
@@ -79,15 +80,7 @@ export async function loginRoute(request, env, path, method, { json }) {
 
 /* an email saying someone made an account (best effort: a failure here never stops the login) */
 async function notify(env, name, s, request) {
-  if (!env.RESEND_API_KEY) return;
-  const to = env.NOTIFY_EMAIL || "linas@stellarmusic.dk", from = env.NOTIFY_FROM || "Stellar Lyric Studio <onboarding@resend.dev>";
-  const when = new Date().toLocaleString("da-DK", { timeZone: "Europe/Copenhagen" }), site = env.PUBLIC_URL || new URL(request.url).origin;
-  const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 5000);
-  try {
-    const r = await fetch("https://api.resend.com/emails", { method: "POST", signal: ctl.signal, headers: { authorization: "Bearer " + env.RESEND_API_KEY, "content-type": "application/json" },
-      body: JSON.stringify({ from, to: [to], subject: `New account on Stellar Lyric Studio: ${name}`,
-        text: `${name} just made an account on Stellar Lyric Studio (username: ${s}).\n\nTime: ${when}\nSite: ${site}\n\nIf you don't know who this is, change the team code (see the README) and remove the user in Supabase under Authentication > Users.` }) });
-    if (!r.ok) console.error("new-account email failed:", r.status, (await r.text()).slice(0, 200));
-  } catch (err) { console.error("new-account email failed:", String(err && err.message || err)); }
-  finally { clearTimeout(timer); }
+  const site = env.PUBLIC_URL || new URL(request.url).origin;
+  await sendMail(env, `New account on Stellar Lyric Studio: ${name}`,
+    `${name} just made an account on Stellar Lyric Studio (username: ${s}).\n\nTime: ${copenhagen(Date.now())}\nSite: ${site}\n\nIf you don't know who this is, change the team code (see the README) and remove the user in Supabase under Authentication > Users.`);
 }

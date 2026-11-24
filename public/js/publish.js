@@ -32,13 +32,19 @@ window.SLSPublish = (() => {
       <div class="hint" id="pubSetup"></div>
     </div>
     <div class="field pub-text" id="pubText">
-      <label class="field"><span class="hint">Caption <span id="pubCapFor"></span></span><textarea id="pubCaption" rows="3" maxlength="2200"></textarea></label>
+      <div class="field"><div class="row pub-cap-h"><span class="hint">Caption <span id="pubCapFor"></span></span><button class="btn small ghost" id="pubWrite" type="button">✨ Write a caption</button></div>
+        <textarea id="pubCaption" rows="3" maxlength="2200" aria-label="Caption"></textarea>
+        <div class="hint pub-undo" id="pubUndo" hidden>Your old caption was replaced. <button class="btn small ghost" id="pubUndoBtn" type="button">Undo</button></div></div>
       <label class="field" data-for="youtube"><span class="hint">YouTube title</span><input type="text" id="pubYtTitle" maxlength="100"></label>
       <div class="field" data-for="youtube"><span class="hint">YouTube visibility</span><div class="seg" id="pubYtPriv"><button data-v="public">Public</button><button data-v="unlisted">Unlisted</button><button data-v="private">Private</button></div></div>
       <label class="ph-only" data-for="instagram"><input type="checkbox" id="pubFeed" checked> Also show the Reel in the Instagram profile grid</label>
       <label class="ph-only"><input type="checkbox" id="pubAi"> Label it as made with AI <span class="hint">(turn on when it uses AI backgrounds)</span></label>
     </div>
     <div class="pub-tts" id="pubTT"></div>
+    <div class="field pub-when" id="pubWhen"><span class="label">When</span>
+      <div class="seg" id="pubWhenSeg" role="group" aria-label="When to post"><button type="button" data-w="now" aria-pressed="true">Post now</button><button type="button" data-w="later" aria-pressed="false">Schedule</button></div>
+      <div class="pub-sched" id="pubSched" hidden><input type="datetime-local" id="pubAt" aria-label="Date and time to post"><span class="hint">The studio posts it for you at that time, even if your computer is off.</span></div>
+      <div class="hint pub-warn" id="pubSchedWhy"></div></div>
     <div class="hint pub-consent" id="pubConsent"></div>
     <div class="pub-jobs" id="pubJobs"></div>
     <div class="row ph-actions"><button class="btn primary" id="pubGo" type="button">Post</button><span class="hint" id="pubWhy"></span><button class="btn ghost" id="pubClose" type="button">Close</button></div>
@@ -58,7 +64,7 @@ window.SLSPublish = (() => {
     $("#pubInfo").textContent = `${(r.blob.size / 1048576).toFixed(1)} MB · ${r.f.label} · ${r.w}×${r.h} · ${(S.P.section.b - S.P.section.a).toFixed(0)} s`;
     if(!$("#pubCaption").value || $("#pubCaption").dataset.song !== S.songName){ const fl = firstLine(); $("#pubCaption").value = (fl ? `“${fl}”\n\n` : "") + S.songName; $("#pubCaption").dataset.song = S.songName; }
     if(!$("#pubYtTitle").value || $("#pubYtTitle").dataset.song !== S.songName){ $("#pubYtTitle").value = `${S.songName} (Lyrics)`.slice(0, 100); $("#pubYtTitle").dataset.song = S.songName; }
-    await getHealth(true); paint(); loadCreators();
+    $("#pubUndo").hidden = true; await getHealth(true); paint(); loadCreators();
   }
   const close = () => { m.hidden = true; $("#pubPrev").pause(); };
   $("#pubX").onclick = close; $("#pubClose").onclick = close;
@@ -104,9 +110,20 @@ window.SLSPublish = (() => {
   }
 
   /* ---------- TikTok: what TikTok requires on the posting screen ---------- */
-  function ttOpt(id){ return tt[id] || (tt[id] = { mode: "draft" }); }
+  function ttOpt(id){ const o = tt[id] || (tt[id] = { mode: "draft" }); if(o.seed == null) o.seed = true; return o; }
+  /* "Use the official sound": TikTok's API can't attach a sound, so the video goes to the account's drafts and
+     the artist adds the song's official sound in the TikTok app before posting (that links the post to it,
+     instead of starting a new "original sound"). The studio knows where in the song the clip starts. */
+  const clock = t => { t = Math.max(0, t || 0); const m = Math.floor(t / 60); return m + ":" + String(Math.floor(t - m * 60)).padStart(2, "0"); };
+  const songTitle = () => String(S.songName || "").replace(/\.[a-z0-9]{2,4}$/i, "").replace(/\s*\((preview|lyrics?)\)\s*$/i, "").trim();
+  function seedSteps(name, title, start){
+    return `<ol class="pub-seed"><li>Open TikTok on <b>${esc(name)}</b> and tap the notification to open the draft.</li>
+      <li>Tap <b>Sounds</b>, search <b>${esc(title || "the song")}</b> and pick the official sound (the artist's name, not "original sound").</li>
+      <li>Trim the sound so it starts at <b>${clock(start)}</b>, where this clip starts in the song.</li>
+      <li>Tap <b>Volume</b> and set <b>Original sound</b> to 0 %, then post.</li></ol>`;
+  }
   // only the mode is remembered: TikTok wants privacy and the rest chosen fresh every time, with nothing preset
-  const saveTT = () => keep.set("sls-pub-tt", Object.fromEntries(Object.entries(tt).map(([k, v]) => [k, { mode: v.mode }])));
+  const saveTT = () => keep.set("sls-pub-tt", Object.fromEntries(Object.entries(tt).map(([k, v]) => [k, { mode: v.mode, seed: v.seed }])));
   async function loadCreators(){
     for(const a of accounts().filter(x => x.platform === "tiktok" && selected.has(x.id) && (x.scopes || []).includes("direct"))){
       if(creator[a.id]) continue; creator[a.id] = { loading: true }; paint();
@@ -121,9 +138,10 @@ window.SLSPublish = (() => {
     const len = S.P.section.b - S.P.section.a;
     $("#pubTT").innerHTML = list.map(a => {
       const o = ttOpt(a.id), direct = (a.scopes || []).includes("direct"), c = creator[a.id] || {};
-      if(o.mode === "direct" && !direct) o.mode = "draft";
+      if(o.mode === "direct" && (!direct || o.seed)) o.mode = "draft";
       let body = "";
-      if(o.mode === "draft") body = `<div class="hint">It lands in the TikTok inbox of <b>${esc(a.name)}</b>: open TikTok, tap the notification, then add sounds or edit and post. At most 5 drafts can wait at a time.</div>`;
+      if(o.seed) body = `<div class="hint">It goes to the TikTok drafts of <b>${esc(a.name)}</b>, ready for the official sound:</div>${seedSteps(a.name, songTitle(), S.P.section.a)}`;
+      else if(o.mode === "draft") body = `<div class="hint">It lands in the TikTok inbox of <b>${esc(a.name)}</b>: open TikTok, tap the notification, then add sounds or edit and post. At most 5 drafts can wait at a time.</div>`;
       else if(c.loading) body = `<div class="hint">Checking what ${esc(a.name)} can post…</div>`;
       else if(c.error) body = `<div class="hint pub-warn">${esc(c.error)}</div>`;
       else {
@@ -141,7 +159,8 @@ window.SLSPublish = (() => {
             ${!o.brandOrganic && !o.brandContent ? `<div class="hint pub-warn">Pick at least one, or turn disclosure off.</div>` : ""}</div>` : ""}`;
       }
       return `<div class="pub-tt" data-id="${esc(a.id)}"><div class="row" style="justify-content:space-between"><b class="pub-tt-h">${ICON.tiktok} ${esc(a.name)}</b>
-        <div class="seg"><button data-tt="mode" data-v="draft" data-id="${esc(a.id)}" aria-pressed="${o.mode === "draft"}">Send to drafts</button><button data-tt="mode" data-v="direct" data-id="${esc(a.id)}" aria-pressed="${o.mode === "direct"}" ${direct ? "" : `disabled title="This TikTok login only allows drafts"`}>Post directly</button></div></div>${body}</div>`;
+        <div class="seg"><button data-tt="mode" data-v="draft" data-id="${esc(a.id)}" aria-pressed="${o.mode === "draft"}">Send to drafts</button><button data-tt="mode" data-v="direct" data-id="${esc(a.id)}" aria-pressed="${o.mode === "direct"}" ${direct && !o.seed ? "" : `disabled title="${o.seed ? "Turn off “Use the official sound” to post directly" : "This TikTok login only allows drafts"}"`}>Post directly</button></div></div>
+        <label class="ph-only pub-seed-on"><input type="checkbox" data-tt="seed" data-id="${esc(a.id)}" ${o.seed ? "checked" : ""}> Use the official sound <span class="hint">(for released songs: the post is linked to the song's sound on TikTok)</span></label>${body}</div>`;
     }).join("");
     const anyDirect = list.some(a => ttOpt(a.id).mode === "direct"), branded = list.some(a => ttOpt(a.id).mode === "direct" && ttOpt(a.id).commercial && ttOpt(a.id).brandContent);
     $("#pubConsent").innerHTML = anyDirect ? `By posting to TikTok, you agree to TikTok's ${branded ? `<a href="https://www.tiktok.com/legal/page/global/bc-policy/en" target="_blank" rel="noopener">Branded Content Policy</a> and ` : ""}<a href="https://www.tiktok.com/legal/page/global/music-usage-confirmation/en" target="_blank" rel="noopener">Music Usage Confirmation</a>.` : "";
@@ -169,10 +188,42 @@ window.SLSPublish = (() => {
     saveTT(); paint();
   });
 
+  /* ---------- when: now or later ---------- */
+  const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"], MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const p2 = n => String(n).padStart(2, "0");
+  const toLocalInput = d => `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}T${p2(d.getHours())}:${p2(d.getMinutes())}`;
+  const niceWhen = d => `${DAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]} at ${p2(d.getHours())}:${p2(d.getMinutes())}`;
+  const minAt = () => new Date(Date.now() + 10 * 60e3);
+  let when = keep.get("sls-when", "now") === "later" ? "later" : "now";
+  function scheduleBlock(){
+    if(!window.SLSAuth || SLSAuth.mode !== "accounts") return "Scheduling needs a login.";
+    if(health && health.publish && !health.publish.blob) return "Scheduling needs the site's video storage.";
+    return "";
+  }
+  function setAtDefaults(){
+    const at = $("#pubAt"), min = minAt(); at.min = toLocalInput(min);
+    const cur = at.value ? new Date(at.value) : null;
+    if(!cur || isNaN(cur) || cur < new Date()){ const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(18, 0, 0, 0); at.value = toLocalInput(d); }
+  }
+  const later = () => when === "later" && !scheduleBlock();
+  function atProblem(){
+    const d = new Date($("#pubAt").value);
+    if(!$("#pubAt").value || isNaN(d)) return "Pick a date and time to post.";
+    if(d < new Date(Date.now() + 9.5 * 60e3)) return "Pick a time at least 10 minutes from now.";
+    return "";
+  }
+  $("#pubWhenSeg").onclick = e => { const b = e.target.closest("button[data-w]"); if(!b || b.disabled) return; when = b.dataset.w; keep.set("sls-when", when); paint(); };
+  $("#pubAt").addEventListener("input", () => paint());
+
   function paintGo(sel){
+    const block = scheduleBlock(), sched = when === "later" && !block;
+    $$("#pubWhenSeg button").forEach(b => { b.setAttribute("aria-pressed", String(b.dataset.w === (sched ? "later" : "now"))); if(b.dataset.w === "later") b.disabled = !!block; });
+    $("#pubSched").hidden = !sched; $("#pubSchedWhy").textContent = block;
+    if(sched) setAtDefaults();
     const problems = sel.map(a => a.platform === "tiktok" ? ttProblem(a) : "").filter(Boolean);
+    if(sched && sel.length && atProblem()) problems.push(atProblem());
     const go = $("#pubGo"), n = sel.length;
-    go.textContent = n ? `Post to ${n} account${n === 1 ? "" : "s"}` : "Post";
+    go.textContent = n ? `${sched ? "Schedule for" : "Post to"} ${n} account${n === 1 ? "" : "s"}` : sched ? "Schedule" : "Post";
     go.disabled = !n || !!problems.length || posting;
     $("#pubWhy").textContent = posting ? "" : !n ? (accounts().length ? "Tick the accounts to post to." : "") : problems[0] || "";
     go.title = problems[0] || "";
@@ -222,7 +273,7 @@ window.SLSPublish = (() => {
   const jobs = [];
   function paintJobs(){
     $("#pubJobs").innerHTML = jobs.map(j => `<div class="fx-job pub-job ${j.state}"><span class="fx-dot"></span><span class="fx-jt">${ICON[j.platform]} ${esc(j.name)}</span>
-      <span class="hint">${esc(j.text)}${j.url ? ` · <a href="${esc(j.url)}" target="_blank" rel="noopener">Open</a>` : ""}</span>${j.state === "uploading" ? `<span class="bar"><i style="width:${(j.pct * 100).toFixed(0)}%"></i></span>` : ""}</div>`).join("");
+      <span class="hint">${esc(j.text)}${j.cal ? ` <button class="btn small" type="button" data-cal="${esc(j.cal)}">Open calendar</button>` : ""}${j.url ? ` · <a href="${esc(j.url)}" target="_blank" rel="noopener">Open</a>` : ""}</span>${j.state === "uploading" ? `<span class="bar"><i style="width:${(j.pct * 100).toFixed(0)}%"></i></span>` : ""}</div>`).join("");
   }
   const b64 = obj => btoa(unescape(encodeURIComponent(JSON.stringify(obj)))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
   function metaFor(a){
@@ -231,11 +282,12 @@ window.SLSPublish = (() => {
     if(a.platform === "instagram") return { caption, feed: $("#pubFeed").checked, ai };
     const o = ttOpt(a.id);
     return o.mode === "direct" ? { mode: "direct", caption, privacy: o.privacy, comment: !!o.comment, duet: !!o.duet, stitch: !!o.stitch, brandOrganic: !!(o.commercial && o.brandOrganic), brandContent: !!(o.commercial && o.brandContent), ai }
-      : { mode: "draft" };
+      : { mode: "draft", ...(o.seed ? { seed: { song: songTitle(), start: +S.P.section.a.toFixed(2) } } : {}) };
   }
   $("#pubGo").onclick = async () => {
     const sel = accounts().filter(a => selected.has(a.id) && !fits(a.platform)); if(!sel.length || posting) return;
     if(!(await SLSApp.ensurePass())) return;
+    if(later()) return schedule(sel);
     posting = true; paintGo(sel);
     const blob = video.blob, mine = sel.map(a => ({ id: a.id, platform: a.platform, name: a.name, state: "waiting", text: "Waiting…", pct: 0, meta: metaFor(a) }));
     jobs.unshift(...mine); paintJobs(); $("#pubJobs").scrollIntoView({ block: "nearest", behavior: "smooth" });
@@ -256,13 +308,70 @@ window.SLSPublish = (() => {
         const d = await api.send(`/api/publish/${j.platform}`, body, { headers: { "content-type": src ? "application/json" : (blob.type || "video/mp4"), "x-sls-account": a.sealed, "x-sls-meta": b64(j.meta) }, onProgress: p => { if(!src){ j.pct = p; paintJobs(); } } });
         if(d.account) updateAccount(a.id, { sealed: d.account });
         Object.assign(j, { ref: d.ref, url: d.url || null, state: d.state === "done" ? "added" : "working", text: d.note || (d.state === "done" ? "Done." : "Processing…") });
-        if(j.state === "working") follows.push(follow(j));
-      } catch(err){ Object.assign(j, { state: "failed", text: errText(err) }); }
+        if(j.state === "working") follows.push(follow(j).then(() => record(j))); else record(j);
+      } catch(err){ Object.assign(j, { state: "failed", text: errText(err) }); record(j); }
       paintJobs();
     }
     posting = false; paint();
     if(src){ await Promise.allSettled(follows); api.api("/api/publish/blob-done", { method: "POST", body: { url: src }, timeout: 20000 }).catch(() => {}); }   // the stored copy is deleted once every post is through
   };
+  /* ---------- scheduling: the video goes to storage once, and one row per account goes in the calendar ---------- */
+  async function schedule(sel){
+    const d = new Date($("#pubAt").value), bad = atProblem(); if(bad){ toast(bad); return; }
+    posting = true; paintGo(sel);
+    const blob = video.blob, type = blob.type || "video/mp4", mine = sel.map(a => ({ id: a.id, platform: a.platform, name: a.name, state: "uploading", text: "Uploading the video…", pct: 0, meta: metaFor(a), artist: a.label || "" }));
+    jobs.unshift(...mine); paintJobs(); $("#pubJobs").scrollIntoView({ block: "nearest", behavior: "smooth" });
+    let src = null;
+    try { src = await toBlob(blob, p => { mine.forEach(j => j.pct = p); paintJobs(); }); }
+    catch(err){ mine.forEach(j => Object.assign(j, { state: "failed", text: "The video couldn't be uploaded: " + errText(err) })); paintJobs(); posting = false; paint(); return; }
+    mine.forEach(j => Object.assign(j, { text: "Saving to the calendar…", pct: 0 })); paintJobs();
+    const iso = d.toISOString();
+    try {
+      const rows = await SLSAuth.rest("posts", { method: "POST", prefer: "return=representation", body: mine.map(j => ({ platform: j.platform, account_id: j.id, account_name: j.name, project_name: S.songName || "", artist: j.artist, video_url: src, video_type: type, cover_url: null, meta: j.meta, publish_at: iso, status: "scheduled" })) });
+      if(!Array.isArray(rows) || rows.length < mine.length) throw new Error("The calendar didn't save it.");
+      mine.forEach(j => Object.assign(j, { state: "added", cal: iso, text: `Scheduled for ${niceWhen(d)} on ${j.name} (${P[j.platform]}). See it in the calendar.` }));
+      toast(mine.length === 1 ? "Scheduled." : `Scheduled on ${mine.length} accounts.`);
+      window.dispatchEvent(new Event("sls-posts-changed"));
+    } catch(err){
+      mine.forEach(j => Object.assign(j, { state: "failed", text: "The video was uploaded but the post couldn't be saved: " + errText(err) }));
+      api.api("/api/publish/blob-done", { method: "POST", body: { url: src }, timeout: 20000 }).catch(() => {});
+    }
+    paintJobs(); posting = false; paint();
+  }
+  /* a line in the calendar for every post that went out now, so the history is in one place */
+  async function record(j){
+    try {
+      if(!window.SLSAuth || SLSAuth.mode !== "accounts" || (j.state !== "added" && j.state !== "failed")) return;
+      const a = accounts().find(x => x.id === j.id) || {}, ok = j.state === "added";
+      await SLSAuth.rest("posts", { method: "POST", body: { platform: j.platform, account_id: j.id, account_name: j.name, project_name: S.songName || "", artist: a.label || "", video_url: null, video_type: (video && video.blob.type) || "video/mp4", cover_url: null, meta: j.meta, publish_at: new Date().toISOString(), status: ok ? "posted" : "failed", ref: j.ref || null, result_url: ok ? (j.url || null) : null, note: String(j.text || "").slice(0, 500) } });
+      window.dispatchEvent(new Event("sls-posts-changed"));
+    } catch(err){ console.warn("post history not saved", err); }
+  }
+  $("#pubJobs").addEventListener("click", e => { const b = e.target.closest("[data-cal]"); if(b && window.SLSCalendar) SLSCalendar.open(b.dataset.cal); });
+
+  /* ---------- "Write a caption": only when asked ---------- */
+  let capBefore = null;
+  const soundbiteLyrics = () => {
+    let lines = []; try { lines = lineGroups().filter(g => g[0].t >= S.P.section.a - 0.3 && g[0].t < S.P.section.b).map(g => g.map(w => w.w).join(" ")); } catch {}
+    return lines.join(" / ").slice(0, 1500);
+  };
+  $("#pubWrite").onclick = async () => {
+    const btn = $("#pubWrite"); if(btn.disabled) return;
+    const sel = accounts().filter(a => selected.has(a.id) && !fits(a.platform)), a = sel[0];
+    btn.disabled = true; btn.classList.add("busy"); btn.textContent = "Writing…";
+    try {
+      const d = await api.api("/api/caption", { method: "POST", timeout: 30000, body: { platform: a ? a.platform : "tiktok", title: S.songName, artist: a ? (a.label || a.name) : "", lyrics: soundbiteLyrics(), language: S.P.lang || "" } });
+      const tags = (d.hashtags || []).map(h => "#" + String(h).replace(/^#/, "")).join(" "), text = [d.caption || "", tags].filter(Boolean).join("\n\n");
+      if(!text) throw new Error("No caption came back. Try again.");
+      const cap = $("#pubCaption"), old = cap.value;
+      cap.value = text.slice(0, 2200); cap.dispatchEvent(new Event("input", { bubbles: true }));
+      if(old.trim()){ capBefore = old; $("#pubUndo").hidden = false; } else { capBefore = null; $("#pubUndo").hidden = true; }
+    } catch(err){ toast(errText(err)); }
+    btn.disabled = false; btn.classList.remove("busy"); btn.textContent = "✨ Write a caption";
+  };
+  $("#pubUndoBtn").onclick = () => { if(capBefore != null) $("#pubCaption").value = capBefore; capBefore = null; $("#pubUndo").hidden = true; };
+  $("#pubCaption").addEventListener("input", e => { if(e.isTrusted) $("#pubUndo").hidden = true; });
+
   /* uploads the file to Vercel Blob with Vercel's own browser library; the server only hands out the upload token */
   async function toBlob(file, onProgress){
     const lib = await import(window.SLS_BLOB_CLIENT || "https://esm.sh/@vercel/blob@2/client");
@@ -280,7 +389,7 @@ window.SLSPublish = (() => {
       try {
         const d = await api.api("/api/publish/status", { method: "POST", body: { platform: j.platform, account: a.sealed, ref: j.ref }, timeout: 60000 });
         if(d.account) updateAccount(a.id, { sealed: d.account });
-        if(d.state === "done"){ Object.assign(j, { state: "added", text: d.note || "Done.", url: d.url || j.url }); paintJobs(); toast(`${P[j.platform]} · ${j.name}: ${d.note || "done"}`); return; }
+        if(d.state === "done"){ Object.assign(j, { state: "added", text: d.note || "Done.", url: d.url || j.url, ref: d.ref || j.ref }); paintJobs(); toast(`${P[j.platform]} · ${j.name}: ${d.note || "done"}`); return; }
         if(d.state === "failed"){ Object.assign(j, { state: "failed", text: d.note || "Failed." }); paintJobs(); return; }
       } catch(err){ if(err.code === "relink" || err.code === "unauthorized"){ Object.assign(j, { state: "failed", text: errText(err) }); paintJobs(); return; } }
     }

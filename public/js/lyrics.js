@@ -33,7 +33,7 @@ window.SLSLyricsUI = (() => {
       const row = document.createElement("div"); row.className = "ly-line" + (L.every(w => w.g) ? " missing" : "") + (inCut ? " in-cut" : ""); row.dataset.li = li;
       if(inCut) row.dataset.cut = "In your video";
       if(L.every(w => w.g)) row.title = "None of this line could be found in the song. It may not be sung in this version.";
-      const t = document.createElement("button"); t.className = "ly-t"; t.title = "Play from this line"; t.innerHTML = IC.play + "<span>" + clock(L[0].t) + "</span>";
+      const t = document.createElement("button"); t.className = "ly-t"; t.title = "Play this line"; t.innerHTML = IC.play + "<span>" + clock(L[0].t) + "</span>";
       const ws = document.createElement("div"); ws.className = "ly-words"; if(/[֐-ࣿ]/.test(L[0].w)) ws.dir = "rtl";
       L.forEach(w => { const b = document.createElement("button"); b.className = "ly-w" + (w.u ? " u" : ""); b.textContent = w.w; if(w.u) b.title = w.g ? "This word couldn't be found in the vocal, so its timing is a guess" : "The AI wasn't sure about this word"; rowOf.push(rows.length); flat.push(w); els.push(b); ws.append(b); });
       const ops = document.createElement("div"); ops.className = "ly-ops";
@@ -85,7 +85,7 @@ window.SLSLyricsUI = (() => {
     p.innerHTML =
       (w.u ? (w.g ? `<div class="ly-edit-note"><b>Timing guessed</b><span>This word couldn't be found in the vocal, so its time is estimated from the words around it. Hear it, and move it earlier or later if it's off.</span></div>`
         : `<div class="ly-edit-note"><b>Not sure</b><span>${w.alt ? "The AI heard this two different ways." : "The AI could barely make this out, or isn't sure a word is sung here."} Listen, then keep it or fix it.</span></div>`) : "") +
-      `<div class="ly-edit-main"><button class="btn ly-hear" data-op="hear" title="Play this word in the song">${IC.play}Hear it</button>` +
+      `<div class="ly-edit-main"><button class="btn ly-hear" data-op="hear" title="Play this line in the song">${IC.play}Hear the line</button>` +
       `<input type="text" id="lyInput" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="Word" enterkeyhint="done">` +
       `<button class="btn primary ly-keep" data-op="keep">${IC.check}${w.u ? "Keep" : "Done"}</button></div>` +
       (w.u && w.alt ? `<div class="ly-alts"><span>Could also be</span><button data-op="alt"></button></div>` : "") +
@@ -115,7 +115,9 @@ window.SLSLyricsUI = (() => {
   function nextUnsure(after){ const skip = new Set(lineGroups().filter(L => L.every(w => w.g)).flat()), ok = w => w.u && !skip.has(w), from = after ? flat.indexOf(after) : -1;
     return flat.find((w, k) => k > from && ok(w)) || flat.find(ok) || null; }
   function step(dir){ const i = flat.indexOf(open.w), kept = commit(), j = kept ? flat.indexOf(kept) + dir : Math.min(i, flat.length - 1); if(flat[j]) openWord(flat[j]); }
-  function hear(w){ const a = Math.max(0, w.t - 0.8); S.t = a; hearEnd = Math.min(S.audio ? S.audio.duration : 1e9, w.t + w.d + 0.7); play({}); }
+  // plays the whole line the word is in (the word stays highlighted as it's sung), then stops
+  function lineSpan(L){ const last = L[L.length - 1]; return [Math.max(0, L[0].t - 0.3), Math.min(S.audio ? S.audio.duration : 1e9, last.t + last.d + 0.5)]; }
+  function hear(w){ const L = lineGroups().find(L => L.includes(w)) || [w], [a, b] = lineSpan(L); S.t = a; hearEnd = b; play({}); }
 
   list.addEventListener("click", e => {
     const emp = e.target.closest("[data-empty]"); if(emp){ window.SLSApp[emp.dataset.empty === "listen" ? "listen" : "paste"](); return; }
@@ -140,7 +142,7 @@ window.SLSLyricsUI = (() => {
       if(op.dataset.op === "join" && li > 0){ g.splice(li - 1, 2, [...g[li - 1], ...g[li]]); relabel(g); changed(); render(); }
       if(op.dataset.op === "drop"){ const gone = new Set(g[li]); S.P.words = S.P.words.filter(w => !gone.has(w)); changed(); render(); toast("Line removed. Undo with Ctrl+Z."); }
       return; }
-    const tb = e.target.closest(".ly-t"); if(tb){ const li = +tb.closest(".ly-line").dataset.li, L = lineGroups()[li]; if(L){ commit(); hearEnd = null; S.t = Math.max(0, L[0].t - 0.25); play({}); } return; }
+    const tb = e.target.closest(".ly-t"); if(tb){ const li = +tb.closest(".ly-line").dataset.li, L = lineGroups()[li]; if(L){ commit(); const [a, b] = lineSpan(L); S.t = a; hearEnd = b; play({}); } return; }
     const wb = e.target.closest(".ly-w"); if(wb){ const w = flat[els.indexOf(wb)]; if(!w) return; if(open && open.w === w){ $("#lyInput")?.focus(); return; } if(open) commit(); const again = S.P.words.includes(w) ? w : null; if(again) openWord(again); return; }
   });
   list.addEventListener("input", e => { if(e.target.id !== "lyInput" || !open) return; const i = flat.indexOf(open.w), v = e.target.value.trim(); if(i >= 0) els[i].textContent = v || open.original || "…"; if(v && !/\s/.test(v)) open.w.w = v; });

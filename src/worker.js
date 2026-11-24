@@ -9,6 +9,8 @@
  *   POST   /api/meta/deauthorize, /api/meta/delete   Meta's app-removal and data-deletion callbacks
  *   POST   /api/enter             log in or sign up with a username and the team code (src/login.js)
  *   GET    /api/catalog[/:id]     the Stellar Music artists and their songs' 30 s previews (src/catalog.js)
+ *   POST   /api/caption           an AI-written post text and hashtags, when asked (src/caption.js)
+ *   POST   /api/cron              posts scheduled posts that are due, every 5 minutes (src/schedule.js)
  *   POST   /api/hooks             rates candidate soundbites' lyrics for TikTok / Reels (src/hooks.js)
  *   GET    /api/templates         the team's shared templates
  *   PUT    /api/templates/:id     save a template
@@ -33,6 +35,8 @@
 import { hooksRoute } from "./hooks.js";
 import { loginRoute } from "./login.js";
 import { catalogRoute } from "./catalog.js";
+import { cronRoute } from "./schedule.js";
+import { captionRoute } from "./caption.js";
 import { authConfigured, userFrom, bearer } from "./auth.js";
 import { mediaRoute, mediaHealth } from "./media.js";
 import { photosRoute, photosHealth } from "./photos.js";
@@ -82,6 +86,10 @@ async function route(request, env, url) {
     return json({ url: base + "/privacy.html#delete", confirmation_code: code });
   }
 
+  // The scheduler (every 5 minutes, from Supabase's pg_cron): public, it only does what is due
+  const cron = await cronRoute(request, env, url, path, method, { json });
+  if (cron) return cron;
+
   // Logging in (username + team code): public, it's how a session starts
   const enter = await loginRoute(request, env, path, method, { json });
   if (enter) return enter;
@@ -100,6 +108,8 @@ async function route(request, env, url) {
 
   const catalog = await catalogRoute(request, env, path, method, { json });
   if (catalog) return catalog;
+  const caption = await captionRoute(request, env, path, method, { hasAI: hasAI(env), runModel, json });
+  if (caption) return caption;
   const hooks = await hooksRoute(request, env, path, method, { hasAI: hasAI(env), runModel, json });
   if (hooks) return hooks;
   const media = await mediaRoute(request, env, url, path, method, { hasAI: hasAI(env), runModel, json });

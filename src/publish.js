@@ -68,7 +68,10 @@ export async function publishRoute(request, env, url, path, method, { json, user
 async function openAccount(env, sealed, p, user) {
   const a = await unseal(env, sealed || "");
   if (!a || a.p !== p) throw new Fail(`That ${NAMES[p] || ""} account can't be read here (the site's TOKEN_KEY may have changed). Link it again.`, "relink", 409);
-  if (user && user.id && a.uid !== user.id) throw new Fail(`That ${NAMES[p]} account was linked under another login. Link it again from your own account.`, "relink", 409);
+  // the studio login that linked it ("owner"; accounts linked before that was added kept it in "uid", which
+  // Instagram also uses for its own account id, so "owner" comes first)
+  const owner = a.owner !== undefined ? a.owner : a.uid;
+  if (user && user.id && owner !== user.id) throw new Fail(`That ${NAMES[p]} account was linked under another login. Link it again from your own account.`, "relink", 409);
   return a;
 }
 
@@ -139,7 +142,7 @@ async function oauthReturn(env, url, p) {
     const ru = redirectUri(st.base, p);
     const acct = p === "youtube" ? await youtubeLink(env, code, ru) : p === "instagram" ? await instagramLink(env, code, ru) : await tiktokLink(env, code, ru);
     const { secret, ...pub } = acct;
-    const record = { ...pub, id: `${p}:${pub.rid}`, platform: p, sealed: await seal(env, { k: "acct", p, rid: pub.rid, uid: st.uid || null, ...secret }), linkedAt: Date.now() };
+    const record = { ...pub, id: `${p}:${pub.rid}`, platform: p, sealed: await seal(env, { k: "acct", p, rid: pub.rid, ...secret, owner: st.uid || null }), linkedAt: Date.now() };
     return page(null, record);
   } catch (e) {
     console.error("oauth failed", p, e && e.message);
@@ -275,7 +278,7 @@ async function instagramStatus(env, a, ref) {
     if (!p.ok || !d.id) return code === "PUBLISHED" ? { state: "done", note: "Posted." } : { state: "failed", note: instagramError(d, p.status) };
     await dropFile(env, fid);
     const m = await getJSON(await fetch(`${IG}/${d.id}?` + form({ fields: "permalink", access_token: a.at })));
-    return { state: "done", url: m.permalink || null, note: "Posted as a Reel." };
+    return { state: "done", url: m.permalink || null, note: "Posted as a Reel.", ref: d.id };
   }
   return { state: "working" };
 }
@@ -327,7 +330,7 @@ async function tiktokLink(env, code, ru) {
   const scopes = String(t.scope || "").split(",").map(s => s.trim());
   return { rid: t.open_id, name: user.display_name || "TikTok", handle: "", avatar: user.avatar_url || "",
     scopes: [scopes.includes("video.upload") && "draft", scopes.includes("video.publish") && "direct"].filter(Boolean),
-    secret: { at: t.access_token, atExp: Date.now() + (t.expires_in || 86400) * 1000, rt: t.refresh_token, rtExp: Date.now() + (t.refresh_expires_in || 31536000) * 1000 } };
+    secret: { at: t.access_token, atExp: Date.now() + (t.expires_in || 86400) * 1000, rt: t.refresh_token, rtExp: Date.now() + (t.refresh_expires_in || 31536000) * 1000, scope: scopes.join(",") } };
 }
 async function tiktokAccess(env, a) {
   if (a.atExp && Date.now() < a.atExp - 120e3) return { a, changed: false };
@@ -388,10 +391,62 @@ async function tiktokUpload(env, a, bytes, type, meta) {
 async function tiktokStatus(env, a, ref) {
   const d = await ttCall(a, "/post/publish/status/fetch/", { publish_id: ref });
   if (d.status === "SEND_TO_USER_INBOX") return { state: "done", note: "In the account's TikTok inbox: open TikTok, tap the notification, then post it." };
-  if (d.status === "PUBLISH_COMPLETE") return { state: "done", note: "Posted. Until TikTok audits the app, posts stay private (only the account can see them)." };
+  if (d.status === "PUBLISH_COMPLETE") { const id = (d.publicaly_available_post_id || d.publicly_available_post_id || [])[0];
+    return { state: "done", note: "Posted. Until TikTok audits the app, posts stay private (only the account can see them).", ...(id ? { ref: String(id) } : {}) }; }
   if (d.status === "FAILED") return { state: "failed", note: "TikTok couldn't post it: " + (d.fail_reason || "unknown reason") };
   return { state: "working" };
 }
+
+/* ---------- posting, shared by the posting window and the scheduler (src/schedule.js) ----------
+   a: the opened account. Returns {out, a, changed}: out = {ref, state, url?, note?}; a is the account with a
+   renewed login when changed is true (seal and keep it). */
+export async function postWith(env, url, p, a, bytes, type, meta, src) {
+  configured(env, p);
+  let changed = false, out;
+  if (p === "youtube") out = await youtubeUpload(env, a, bytes, type, meta);
+  if (p === "instagram") { ({ a, changed } = await instagramToken(env, a)); out = await instagramUpload(env, url, a, bytes, type, meta, src); }
+  if (p === "tiktok") { ({ a, changed } = await tiktokAccess(env, a)); out = await tiktokUpload(env, a, bytes, type, meta); }
+  return { out, a, changed };
+}
+export async function statusWith(env, p, a, ref) {
+  configured(env, p);
+  let changed = false, out;
+  if (p === "youtube") out = { state: "done" };
+  if (p === "instagram") { ({ a, changed } = await instagramToken(env, a)); out = await instagramStatus(env, a, ref); }
+  if (p === "tiktok") { ({ a, changed } = await tiktokAccess(env, a)); out = await tiktokStatus(env, a, ref); }
+  return { out, a, changed };
+}
+/* views, likes and comments of a post, where the platform lets us read them; null when it doesn't */
+export async function statsWith(env, p, a, ref) {
+  configured(env, p);
+  let changed = false, stats = null;
+  if (p === "youtube" && ref) {
+    const token = await googleAccess(env, a);
+    const d = await getJSON(await fetch("https://www.googleapis.com/youtube/v3/videos?" + form({ part: "statistics", id: ref }), { headers: { authorization: "Bearer " + token } }));
+    const st = d.items && d.items[0] && d.items[0].statistics;
+    if (st) stats = { views: +st.viewCount || 0, likes: +st.likeCount || 0, comments: +st.commentCount || 0 };
+  }
+  if (p === "instagram" && ref && !String(ref).includes("|")) {
+    ({ a, changed } = await instagramToken(env, a));
+    const m = await getJSON(await fetch(`${IG}/${ref}?` + form({ fields: "like_count,comments_count", access_token: a.at })));
+    if (m && !m.error) {
+      stats = { likes: m.like_count || 0, comments: m.comments_count || 0 };
+      // views need the insights permission; used when the account granted it
+      const ins = await getJSON(await fetch(`${IG}/${ref}/insights?` + form({ metric: "views,shares", access_token: a.at })));
+      for (const x of (ins && ins.data) || []) { const v = x.values && x.values[0] ? x.values[0].value : x.total_value && x.total_value.value; if (x.name === "views") stats.views = v; if (x.name === "shares") stats.shares = v; }
+    }
+  }
+  if (p === "tiktok" && ref && /video\.list/.test(a.scope || "")) {
+    ({ a, changed } = await tiktokAccess(env, a));
+    try {
+      const d = await ttCall(a, "/video/query/?fields=id,view_count,like_count,comment_count,share_count", { filters: { video_ids: [String(ref)] } });
+      const v = d.videos && d.videos[0];
+      if (v) stats = { views: v.view_count || 0, likes: v.like_count || 0, comments: v.comment_count || 0, shares: v.share_count || 0 };
+    } catch {}
+  }
+  return { stats, a, changed };
+}
+export { openAccount, Fail };
 
 /* ---------- 2. posting ---------- */
 async function upload(env, request, url, p, json, user) {
@@ -420,10 +475,7 @@ async function upload(env, request, url, p, json, user) {
     }
     if (!bytes.byteLength) throw new Fail("No video was sent.", "bad_request", 400);
     if (bytes.byteLength > MAX_BYTES) throw new Fail("The video is larger than 95 MB. Export at 1080p or Standard quality.", "too_large", 413);
-    let a = a0, changed = false, out;
-    if (p === "youtube") out = await youtubeUpload(env, a, bytes, type, meta);
-    if (p === "instagram") { ({ a, changed } = await instagramToken(env, a)); out = await instagramUpload(env, url, a, bytes, type, meta, src); }
-    if (p === "tiktok") { ({ a, changed } = await tiktokAccess(env, a)); out = await tiktokUpload(env, a, bytes, type, meta); }
+    const { out, a, changed } = await postWith(env, url, p, a0, bytes, type, meta, src);
     return json({ ...out, account: changed ? await seal(env, a) : undefined });
   } catch (e) { console.error("publish failed", p, e && e.message); return fail(json, e); }
 }
@@ -434,10 +486,7 @@ async function status(env, request, url, json, user) {
     if (!NAMES[p]) throw new Fail("Unknown platform.", "bad_request", 400);
     configured(env, p);
     const a0 = await openAccount(env, b.account, p, user);
-    let a = a0, changed = false, out;
-    if (p === "youtube") out = { state: "done" };
-    if (p === "instagram") { ({ a, changed } = await instagramToken(env, a)); out = await instagramStatus(env, a, b.ref); }
-    if (p === "tiktok") { ({ a, changed } = await tiktokAccess(env, a)); out = await tiktokStatus(env, a, b.ref); }
+    const { out, a, changed } = await statusWith(env, p, a0, b.ref);
     return json({ ...out, account: changed ? await seal(env, a) : undefined });
   } catch (e) { return fail(json, e); }
 }

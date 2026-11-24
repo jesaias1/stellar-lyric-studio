@@ -6,6 +6,7 @@
  *
  * Set these in the Vercel project (Settings > Environment Variables):
  *   TEAM_CODE       the code people type with their username to log in (no passwords; see src/login.js)
+ *   SUPABASE_SECRET_KEY  the Supabase project's secret key: the scheduler posts everyone's scheduled posts with it
  *   RESEND_API_KEY  optional: an email to NOTIFY_EMAIL (default linas@stellarmusic.dk) for every new account
  *   SUPABASE_URL    } logins: each person has their own account (see src/auth.js). Both values are public.
  *   SUPABASE_KEY    }   Without them the studio asks for one shared passcode instead:
@@ -28,8 +29,10 @@ import { authConfigured, userFrom } from "../src/auth.js";
 // trimmed: a value pasted or piped in often carries a stray newline
 const NAMES = ["SLS_PASSCODE", "CF_ACCOUNT_ID", "CF_API_TOKEN", "PIXABAY_KEY", "PEXELS_KEY", "SERPAPI_KEY", "HF_KEY_ID", "HF_KEY_SECRET", "MEDIA_SECRET",
   "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "INSTAGRAM_APP_ID", "INSTAGRAM_APP_SECRET", "TIKTOK_CLIENT_KEY", "TIKTOK_CLIENT_SECRET", "TIKTOK_SCOPES", "TOKEN_KEY", "PUBLIC_URL",
-  "BLOB_READ_WRITE_TOKEN", "SUPABASE_URL", "SUPABASE_KEY", "TEAM_CODE", "LOGIN_SECRET", "RESEND_API_KEY", "NOTIFY_EMAIL", "NOTIFY_FROM"];
-const env = () => Object.fromEntries(NAMES.map(n => [n, (process.env[n] || "").trim() || undefined]));
+  "BLOB_READ_WRITE_TOKEN", "SUPABASE_URL", "SUPABASE_KEY", "TEAM_CODE", "LOGIN_SECRET", "RESEND_API_KEY", "NOTIFY_EMAIL", "NOTIFY_FROM", "SUPABASE_SECRET_KEY"];
+const env = () => ({ ...Object.fromEntries(NAMES.map(n => [n, (process.env[n] || "").trim() || undefined])),
+  // the scheduler deletes a stored video once it's posted (src/schedule.js)
+  deleteBlob: async u => { const { del } = await import("@vercel/blob"); await del(u); } });
 
 export default {
   fetch(request) {
