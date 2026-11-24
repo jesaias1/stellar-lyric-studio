@@ -293,6 +293,8 @@ window.SLSPhotos = (() => {
       <label class="mb-drop" id="mbDrop"><input type="file" id="mbFiles" accept="image/*" multiple hidden>
         <b>Drop images here</b><span class="hint">or <span class="drop-link">choose them from your computer</span></span></label>
       <form class="fx-search" id="mbPinForm" autocomplete="off"><input type="url" id="mbPin" placeholder="…or paste a public Pinterest board link" aria-label="Pinterest board link"><button class="btn small" type="submit">Import</button></form>
+      <div class="mb-pin-app"><a class="btn small mb-open-pin" href="https://www.pinterest.com/" target="_blank" rel="noopener">Open Pinterest</a><button class="btn small" id="mbPaste" type="button">Paste board link</button>
+        <span class="hint">In Pinterest, open the board, tap Share, then Copy link. Come back and tap Paste board link.</span></div>
       <div class="hint" id="mbMsg"></div>
       <div class="ph-grid mb-grid" id="mbGrid"></div>
       <div class="row ph-actions"><button class="btn primary" id="mbDone" type="button">Done</button><button class="btn ghost" id="mbDel" type="button">Delete moodboard</button></div>
@@ -348,6 +350,24 @@ window.SLSPhotos = (() => {
   ["dragenter", "dragover"].forEach(k => drop.addEventListener(k, e => { e.preventDefault(); drop.classList.add("over"); }));
   ["dragleave", "drop"].forEach(k => drop.addEventListener(k, e => { e.preventDefault(); drop.classList.remove("over"); }));
   drop.addEventListener("drop", e => addFiles([...(e.dataTransfer && e.dataTransfer.files || [])]));
+  const PIN_LINK = /https:\/\/(([a-z]{2,3}\.)?pinterest\.[a-z.]+|pin\.it)\/[^\s"'<>]+/i;
+  // the board link from the clipboard (what Pinterest's Copy link puts there), imported straight away
+  $("#mbPaste").onclick = async () => {
+    let t = ""; try { t = await navigator.clipboard.readText(); } catch { mbMsg("The browser didn't allow reading the clipboard. Press and hold the link box and choose Paste."); $("#mbPin").focus(); return; }
+    const m = PIN_LINK.exec(t || ""); if(!m){ mbMsg("There's no Pinterest link on the clipboard. In Pinterest, open the board, tap Share, then Copy link."); return; }
+    $("#mbPin").value = m[0]; $("#mbPinForm").requestSubmit();
+  };
+  /* shared from the Pinterest app ("Share" to the installed studio on Android, see manifest share_target):
+     a new moodboard opens and the board is imported */
+  async function fromShare(){
+    const q = new URLSearchParams(location.search); if(!q.has("share")) return;
+    const m = PIN_LINK.exec([q.get("url"), q.get("text"), q.get("title")].filter(Boolean).join(" "));
+    history.replaceState(null, "", location.pathname + location.hash);
+    if(!m){ toast("Only Pinterest board links can be shared to the studio."); return; }
+    if(window.SLSAuth && SLSAuth.ready) await SLSAuth.ready;
+    editBoard(null); $("#mbPin").value = m[0]; $("#mbPinForm").requestSubmit();
+  }
+  setTimeout(fromShare, 0);
   $("#mbPinForm").onsubmit = async e => {
     e.preventDefault(); const link = $("#mbPin").value.trim(); if(!link || edBusy) return;
     if(!(await SLSApp.ensurePass())) return;

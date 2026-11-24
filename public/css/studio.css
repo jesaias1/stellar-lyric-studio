@@ -714,3 +714,8 @@ body.cal-open .toast{z-index:1600}
   .pub-tt-open{display:inline-flex;margin:6px 0 2px;background:#000;color:#fff!important;border-color:#000;text-decoration:none!important;min-height:36px;align-items:center}
   .pub-seed li{padding-bottom:4px}
 }
+/* moodboards: getting a board from the Pinterest app on a phone */
+.mb-pin-app{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.mb-pin-app .hint{flex-basis:100%;font-size:12.5px}
+.mb-open-pin{display:none}
+@media (pointer:coarse){ .mb-open-pin{display:inline-flex;background:#e60023;border-color:#e60023;color:#fff!important;text-decoration:none!important} }
