@@ -1,117 +1,144 @@
-# Stellar Lyric Studio
+<p align="center">
+  <img src="public/img/share-card.png" alt="Stellar Lyric Studio: lyric videos for TikTok, Reels and Shorts" width="720">
+</p>
 
-Lyric videos for social media from just a song. Drop a track, the lyrics are written and timed for you,
-you check them, pick a style and export a video.
+<p align="center">
+  <b>Your song in. Lyric video out.</b><br>
+  Drop a track, the lyrics are written and timed to every word for you, pick a look and export a video
+  ready for TikTok, Reels and Shorts.<br>
+  Made by <a href="https://stellarmusic.dk">Stellar Music</a> · <a href="https://lyrics.stellarmusic.dk">lyrics.stellarmusic.dk</a>
+</p>
 
-## How it is put together
+<p align="center">
+  <img src="docs/screenshots/editor.jpg" alt="The editor: lyrics on the left, the video in the middle, templates on the right" width="800">
+</p>
+
+## What it does
+
+- **Lyrics written and timed for you.** Paste the lyrics (or let the AI write them) and every word is timed to the
+  music. About 100 languages.
+- **Check every word.** Click a word to fix it; words the AI wasn't sure about are marked.
+- **Dozens of lyric templates.** Minimal, bold, layered, glow, cinematic, playful, editorial and trending looks,
+  with your own text boxes and hooks on top.
+- **Any frame.** Vertical or horizontal, 9:16, 4:5, 1:1, 16:9, 5:4, or your own size in pixels.
+- **Backgrounds.** Free stock video, AI backgrounds written from the lyrics, an image grabber that finds one
+  photo per lyric line, and your own moodboards (drag the images into order).
+- **Best parts and TikTok sounds.** Finds the parts of a song that work best as a soundbite, and finds where a
+  TikTok sound sits in the song by listening to it.
+- **Export in the browser.** MP4, MOV, WebM or MKV, 720p to 4K, rendered frame by frame on your own computer.
+- **Post and plan.** Post to YouTube, Instagram and TikTok accounts in one go, schedule posts for later and see
+  them in the calendar.
+- **Works on phones.** The whole studio works on a phone, and it can be added to the home screen as an app.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/start.jpg" alt="Start screen"><br><sub>Start: paste the lyrics, drop the song</sub></td>
+    <td width="50%"><img src="docs/screenshots/lyrics.jpg" alt="Checking the lyrics"><br><sub>Check the lyrics, word by word</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/horizontal.jpg" alt="A horizontal 16:9 frame"><br><sub>Vertical, horizontal or your own size</sub></td>
+    <td><img src="docs/screenshots/export.jpg" alt="The export window"><br><sub>Export MP4, MOV, WebM or MKV, up to 4K</sub></td>
+  </tr>
+</table>
+
+<p align="center">
+  <img src="docs/screenshots/phone.jpg" alt="The studio on a phone" width="300"><br>
+  <sub>The same studio on a phone</sub>
+</p>
+
+---
+
+## For developers
+
+### How it is put together
 
 | Part | Where | What it does |
 | --- | --- | --- |
 | The app | `public/` | Plain HTML, CSS and JavaScript. No build step. |
-| The editor engine | `public/js/studio.js`, `public/css/studio.css` | The V0.1 studio: preview, styles, clips, timeline, export. |
-| The guided flow | `public/js/app.js`, `public/css/sls.css` | Splash, start screen, the four steps, and the editor's light/dark switch (the blue start screen is the same in both). The Stellar Music design lives in `public/css/brand.css`. |
-| Lyric AI pipeline | `public/js/transcribe.js` | Cuts the song into pieces, has them transcribed twice, compares the two passes and marks words it is unsure about. |
+| The editor engine | `public/js/studio.js`, `public/css/studio.css` | Preview, frame sizes, styles, clips, timeline. |
+| The guided flow | `public/js/app.js`, `public/css/sls.css` | Splash, start screen and the four steps. The Stellar Music design is in `public/css/brand.css`. |
+| Logins | `public/js/auth.js`, `src/login.js`, `src/auth.js` | Username plus team code, accounts in Supabase. |
+| Lyric AI | `public/js/transcribe.js` | Cuts the song into pieces, has them transcribed twice, compares the passes and marks unsure words. |
 | Lyric review | `public/js/lyrics.js` | Click a word to fix it, keep or correct the unsure ones. |
-| More lyric styles | `public/js/styles-extra.js` | Glow, Cinematic and Playful styles, plus more Bold and Layered ones. |
-| Footage | `public/js/footage.js`, `src/media.js` | Free stock video search (Pixabay, Pexels) and AI backgrounds written from the lyrics (Higgsfield). |
-| Photos | `public/js/photos.js`, `src/photos.js` | The image grabber: keywords or a prompt plus the lyrics go in, the AI searches free photos (Pexels, Pixabay) and/or Pinterest and ranks the results, one image per lyric line comes out. A review window throws out the bad ones. Moodboards: your own image sets (files or a public Pinterest board), kept in the browser. |
+| Lyric templates | `public/js/styles-extra.js`, `styles-more.js`, `styles-trend.js` | The lyric looks beyond the built-in ones. |
+| Best parts and TikTok sounds | `public/js/soundbites.js`, `soundmatch.js`, `ttsound.js`, `src/tiktok-sound.js` | Finds strong soundbites; matches a TikTok sound to its place in the song (saved per song in `song_sounds`). |
+| Footage | `public/js/footage.js`, `src/media.js` | Stock video (Pixabay, Pexels) and AI backgrounds (Higgsfield). |
+| Photos and moodboards | `public/js/photos.js`, `src/photos.js` | The image grabber (free photos and Pinterest, ranked against the lyrics) and moodboards kept in the browser. |
 | Safe zones | `public/js/safezones.js` | Shows where TikTok, Reels, Shorts, Stories and YouTube put their buttons. Never exported. |
-| Export | `public/js/export.js`, `public/vendor/` | Renders the soundbite frame by frame and encodes MP4, MOV, WebM or MKV in the browser (mediabunny, MPL-2.0). |
-| Projects | `public/js/projects.js` | Every song is a project, saved in the browser (IndexedDB) with its song file, clips and settings; autosaves, and a refresh reopens it. |
-| Posting | `public/js/publish.js`, `src/publish.js` | Link YouTube channels, Instagram accounts and TikTok accounts (as many as you like, grouped by artist) and post the exported video to them in one go. Accounts are kept in the browser that linked them, sealed so only the server can use the logins. |
-| Templates | `public/js/templates.js` | Reusable looks: pick which parts a template carries, starter looks built in. |
-| Backend | `src/worker.js` | Passcode check, the Whisper call, shared templates. Runs as a Cloudflare Worker, or on Vercel through `api/index.js`. |
+| Export | `public/js/export.js`, `public/vendor/` | Renders frame by frame and encodes in the browser (mediabunny, MPL-2.0). |
+| Projects | `public/js/projects.js` | Every song is a project: autosaved, and synced to the account. |
+| Templates | `public/js/templates.js` | Reusable looks, starter looks built in. |
+| Posting and scheduling | `public/js/publish.js`, `calendar.js`, `src/publish.js`, `src/schedule.js` | Linked YouTube, Instagram and TikTok accounts; posting now or later; the calendar. |
+| Backend | `src/worker.js`, `api/index.js` | One router. Runs on Vercel through `api/index.js` (server settings are read from its `NAMES` list), or as a Cloudflare Worker. |
 
-The speech model is Whisper large v3 turbo on Cloudflare Workers AI. It handles about 100 languages and returns a
-time for every word.
+The speech model is Whisper large v3 turbo on Cloudflare Workers AI: about 100 languages, a time for every word.
 
-## Run it on your computer
+### Run it on your computer
 
 ```bash
 npm install
 npm run dev
 ```
 
-Then open http://localhost:8787. The passcode for local use is in `.dev.vars` (copy `.dev.vars.example` if it is missing).
-Locally the lyric AI answers with a canned sample unless `.dev.vars` has `CF_ACCOUNT_ID` and `CF_API_TOKEN`.
+Then open http://localhost:8787. Local settings go in `.dev.vars` (copy `.dev.vars.example`). Without
+`CF_ACCOUNT_ID` and `CF_API_TOKEN` there, the lyric AI answers with a canned sample.
 
-## Put it online
+### Releases
 
-**Cloudflare** (the lyric AI needs no extra keys there):
+The live site runs on Vercel: every push to `main` deploys. Installed phone apps update themselves when
+`public/version.txt` changes, so every release bumps it **and** the `sls-build` meta tag in `public/index.html`
+to the same new timestamp (`yyyymmddhhmm`, UTC), in the same commit.
 
-```bash
-npx wrangler secret put SLS_PASSCODE -c wrangler.jsonc
-npm run deploy
-```
+### Server settings
 
-**Vercel**: import the repo, then add `SLS_PASSCODE`, `CF_ACCOUNT_ID` and `CF_API_TOKEN` under
-Settings > Environment Variables. The token needs "Workers AI" access.
+On Vercel, under Settings > Environment Variables (on Cloudflare: `npx wrangler secret put <NAME> -c wrangler.jsonc`).
 
-Optional keys, for footage and photos:
+| Key | What for |
+| --- | --- |
+| `SUPABASE_URL`, `SUPABASE_KEY` | Accounts (the publishable key is a public value) |
+| `SUPABASE_SECRET_KEY` | The scheduler: reads everyone's due posts |
+| `TEAM_CODE` | The code people log in with |
+| `TOKEN_KEY` | Seals linked accounts and logins. Changing it logs everyone out of their accounts |
+| `CF_ACCOUNT_ID`, `CF_API_TOKEN` | The lyric AI (token with "Workers AI" access) |
+| `PIXABAY_KEY`, `PEXELS_KEY` | Stock video and free photos |
+| `SERPAPI_KEY` | Pinterest in the image grabber (about 3 searches per grab) |
+| `HF_KEY_ID`, `HF_KEY_SECRET` | AI background clips (Higgsfield) |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Posting to YouTube |
+| `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET` | Posting to Instagram |
+| `TIKTOK_CLIENT_KEY`, `TIKTOK_CLIENT_SECRET` | Posting to TikTok |
+| `TIKTOK_AUDITED` | Set to `1` once TikTok has approved the app: unlocks public direct posts |
+| `BLOB_READ_WRITE_TOKEN` | Vercel Blob: exported videos are uploaded there for posting (Vercel caps requests at 4.5 MB) |
+| `RESEND_API_KEY`, `NOTIFY_EMAIL` | Optional emails: new accounts, scheduled posts that went live or failed |
+| `SLS_PASSCODE` | Only without Supabase: one shared passcode instead of accounts |
 
-| Key | Where to get it | Switches on |
-| --- | --- | --- |
-| `PIXABAY_KEY` | free, https://pixabay.com/api/docs/ (log in) | stock video and free photo search |
-| `PEXELS_KEY` | https://www.pexels.com/api/ (new keys are paused at the moment) | more stock video and free photos |
-| `SERPAPI_KEY` | https://serpapi.com (250 free searches a month, then paid) | Pinterest in the image grabber |
-| `HF_KEY_ID`, `HF_KEY_SECRET` | https://console.higgsfield.ai (API account with balance) | AI background clips |
-
-Optional keys, for posting (the setup guide walks through getting each one):
-
-| Key | Where to get it | Switches on |
-| --- | --- | --- |
-| `TOKEN_KEY` | any long random string you make up | seals the account logins (falls back to the passcode) |
-| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | https://console.cloud.google.com (OAuth client, YouTube Data API v3) | YouTube |
-| `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET` | https://developers.facebook.com/apps (Instagram API with Instagram login) | Instagram Reels |
-| `TIKTOK_CLIENT_KEY`, `TIKTOK_CLIENT_SECRET` | https://developers.tiktok.com (Login Kit + Content Posting API) | TikTok |
-
-Instagram also needs the `PUBLISH` KV namespace (see `wrangler.jsonc`). Each platform's login must send people back to
-`https://<your site>/api/oauth/youtube` (or `instagram`, `tiktok`). Posting needs the Cloudflare version of the site:
-Vercel caps requests at 4.5 MB.
-
-Set them the same way as the passcode, for example `npx wrangler secret put SERPAPI_KEY -c wrangler.jsonc`.
-Pinterest has no public search API, so Pinterest results come through SerpApi; one image grab uses about 3 searches.
+Each platform's login sends people back to `https://<your site>/api/oauth/youtube` (or `instagram`, `tiktok`).
 Pinterest images belong to whoever posted them: fine for drafts and moodboards, but the free photos are the safe
 choice for videos you publish.
 
-## Notes
+### Accounts
+
+Everyone logs in with a username and the team code; there are no passwords. A new username gets an account
+straight away, and "Remember me" keeps a device logged in. Anyone with the team code can open any account by
+typing its username, so keep the code inside the team.
+
+Projects and linked accounts belong to the account and follow it to any device. Songs and footage stay in the
+browser they were added in.
+
+- Run `supabase/schema.sql` once in the Supabase SQL editor (tables, row-level security, the team-code check), and
+  turn off "Confirm email" under Authentication > Sign In / Providers.
+- Usernames are stored as `<username>@users.lyrics.stellarmusic.dk`; no mail is sent there.
+- Changing the team code: set `TEAM_CODE` and redeploy, then run
+  `insert into private.settings (key, value) values ('team_code', 'NEW-CODE') on conflict (key) do update set value = excluded.value;`
+  Everyone keeps their account and just types the new code.
+
+### Scheduled posts and the calendar
+
+Posts live in the `posts` table. Every 5 minutes Supabase's pg_cron calls `/api/cron` (`src/schedule.js`), which
+posts what's due, checks on posts still processing, and now and then reads back views, likes and comments. The
+posts part of `supabase/schema.sql` turns on pg_cron and pg_net and sets the job. A scheduled video waits in
+Vercel Blob until it's posted, then it's deleted.
+
+### Notes
 
 - Songs are sent to the backend in 30 second pieces for transcription only. Nothing is stored.
-- Projects are saved in the browser. Shared templates need the `TEMPLATES` storage (see `wrangler.jsonc`).
-- `brand/` holds the original logo. `samples/` holds an example LRC and SRT.
-
-## Accounts (logins)
-
-Everyone logs in with a username and the team code. There are no passwords: the server checks the team code
-and logs the person in (src/login.js). A new username gets an account straight away. "Remember me" keeps a device
-logged in until the person logs out. Anyone with the team code can open any account by typing its username:
-that's the trade-off for no passwords, so keep the code inside the team.
-
-Projects (the edit: lyrics, timing, style, cuts, texts) and linked YouTube, Instagram and TikTok accounts belong to
-the account and follow it to any device. Songs and footage stay in the browser they were added in.
-
-- The accounts live in Supabase. Run `supabase/schema.sql` once in the project's SQL editor (tables, row-level
-  security, the team-code check), and turn off "Confirm email" under Authentication > Sign In / Providers.
-- On the host: `SUPABASE_URL` and `SUPABASE_KEY` (the publishable key, a public value), `TEAM_CODE`, and
-  `TOKEN_KEY` (already used for linked accounts; the login secrets are worked out from it, so changing it locks
-  everyone out of their accounts).
-- Each username is stored in Supabase as `<username>@users.lyrics.stellarmusic.dk`; no mail is sent there.
-- Changing the team code: set `TEAM_CODE` on the host and redeploy, and run in the SQL editor
-  `insert into private.settings (key, value) values ('team_code', 'NEW-CODE') on conflict (key) do update set value = excluded.value;`
-  Capitals don't matter. Everyone keeps their account; they just type the new code.
-- An email for every new account: make a free account at resend.com with the address that should get the emails
-  (linas@stellarmusic.dk), create an API key and set it as `RESEND_API_KEY`. `NOTIFY_EMAIL` changes the address.
-- Without the Supabase settings the studio falls back to the single shared passcode (`SLS_PASSCODE`).
-
-## Scheduled posts, the calendar and results
-
-People can schedule a post for later when posting, and see every post in the calendar (start screen: calendar).
-The studio keeps each post in the `posts` table (supabase/schema.sql). Every 5 minutes Supabase's pg_cron calls
-`/api/cron` (src/schedule.js), which posts what's due, checks on posts that are still processing, and reads back
-views, likes and comments now and then (YouTube and Instagram; TikTok once the app may use `video.list`).
-
-- Run the posts part of `supabase/schema.sql` in the SQL editor (it also turns on pg_cron and pg_net and sets the job).
-- On the host: `SUPABASE_SECRET_KEY` = the project's secret key (Supabase > Project Settings > API Keys). The
-  scheduler needs it to read everyone's due posts and their sealed account logins.
-- Optional: `RESEND_API_KEY` (see Accounts) for an email to the owner when a scheduled post goes live or fails.
-- The video of a scheduled post waits in Vercel Blob until it's posted, then it's deleted.
+- `brand/` holds the original logo, `samples/` an example LRC and SRT, `docs/screenshots/` the pictures above.
