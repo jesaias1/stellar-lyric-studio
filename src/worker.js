@@ -4,7 +4,7 @@
  * Static files in ./public are served by Cloudflare directly. Everything under /api/ lands here:
  *
  *   GET    /api/health            is the backend up, and is it configured? (no passcode needed)
- *   POST   /api/session           check the studio passcode
+ *   POST   /api/session           check the login (or the passcode)
  *   POST   /api/transcribe        one chunk of audio in, words with timings out (Workers AI Whisper)
  *   GET    /api/templates         the team's shared templates
  *   PUT    /api/templates/:id     save a template
@@ -22,10 +22,11 @@
  *   POST   /api/publish/...       link YouTube, Instagram, TikTok accounts and post to them } see src/publish.js
  *   GET    /api/oauth/:platform   where a login comes back (no passcode, signed state)    }
  *
- * Every route except /api/health needs the studio passcode in an "Authorization: Bearer ..." header.
- * The passcode is the SLS_PASSCODE secret (set with `npx wrangler secret put SLS_PASSCODE`).
+ * Every route except /api/health needs "Authorization: Bearer ...": the user's login token when accounts are on
+ * (SUPABASE_URL and SUPABASE_KEY, see src/auth.js), otherwise the shared SLS_PASSCODE.
  */
 
+import { authConfigured, userFrom, bearer } from "./auth.js";
 import { mediaRoute, mediaHealth } from "./media.js";
 import { photosRoute, photosHealth } from "./photos.js";
 import { publishRoute, publishPublicRoute, publishHealth } from "./publish.js";
@@ -52,7 +53,10 @@ async function route(request, env, url) {
   const path = url.pathname.replace(/\/+$/, ""), method = request.method;
 
   if (path === "/api/health" && method === "GET") {
-    return json({ ok: true, ai: hasAI(env), locked: !!env.SLS_PASSCODE, templates: !!env.TEMPLATES, ...mediaHealth(env), ...photosHealth(env), ...publishHealth(env) });
+    // the login settings are public on purpose: the browser needs them to show the login, and the key is the
+    // publishable one (all data is protected by Supabase's row-level security)
+    const auth = authConfigured(env) ? { url: String(env.SUPABASE_URL).replace(/\/+$/, ""), key: env.SUPABASE_KEY } : null;
+    return json({ ok: true, ai: hasAI(env), locked: !!(auth || env.SLS_PASSCODE), auth, templates: !!env.TEMPLATES, ...mediaHealth(env), ...photosHealth(env), ...publishHealth(env) });
   }
 
   // Logins coming back from YouTube, Instagram and TikTok, and the video Instagram fetches: these come from
@@ -61,10 +65,10 @@ async function route(request, env, url) {
   if (pub) return pub;
 
   // Everything below is private.
-  const denied = await guard(request, env);
-  if (denied) return denied;
+  const who = await guard(request, env);
+  if (who instanceof Response) return who;
 
-  if (path === "/api/session" && method === "POST") return json({ ok: true });
+  if (path === "/api/session" && method === "POST") return json({ ok: true, user: who.id ? { id: who.id, email: who.email } : null });
   if (path === "/api/transcribe" && method === "POST") return transcribe(request, env);
 
   if (path === "/api/templates" && method === "GET") return listTemplates(env);
@@ -76,7 +80,7 @@ async function route(request, env, url) {
   if (media) return media;
   const photos = await photosRoute(request, env, url, path, method, { hasAI: hasAI(env), runModel, json });
   if (photos) return photos;
-  const publish = await publishRoute(request, env, url, path, method, { json });
+  const publish = await publishRoute(request, env, url, path, method, { json, user: who });
   if (publish) return publish;
 
   return json({ error: "not_found", message: "No such endpoint." }, 404);
@@ -84,22 +88,28 @@ async function route(request, env, url) {
 
 /* ---------- access ---------- */
 
+/* Who is asking: a logged-in user ({ id, email }) when accounts are on, otherwise the team passcode ({}).
+   Answers a Response instead when the request isn't allowed. */
 async function guard(request, env) {
-  if (!env.SLS_PASSCODE) {
-    return json({ error: "not_configured", message: "The studio passcode hasn't been set on the server yet." }, 503);
-  }
-  // Slows down passcode guessing and runaway scripts: a cap on requests per visitor.
+  // Slows down guessing and runaway scripts: a cap on requests per visitor.
   if (env.API_LIMIT) {
     const ip = request.headers.get("cf-connecting-ip") || "local";
     const { success } = await env.API_LIMIT.limit({ key: ip });
     if (!success) return json({ error: "rate_limited", message: "Too many requests. Wait a minute and try again." }, 429);
   }
-  const header = request.headers.get("authorization") || "";
-  const given = header.startsWith("Bearer ") ? header.slice(7) : "";
+  const given = bearer(request);
+  if (authConfigured(env)) {
+    const user = await userFrom(env, given);
+    if (!user) return json({ error: "unauthorized", message: "Your login has run out. Log in again." }, 401);
+    return user;
+  }
+  if (!env.SLS_PASSCODE) {
+    return json({ error: "not_configured", message: "Logins aren't set up on the server yet (SUPABASE_URL and SUPABASE_KEY, or SLS_PASSCODE)." }, 503);
+  }
   if (!given || !(await sameSecret(given, env.SLS_PASSCODE))) {
     return json({ error: "unauthorized", message: "That passcode isn't right." }, 401);
   }
-  return null;
+  return {};
 }
 
 // Compare through a hash so the check takes the same time whatever was sent.

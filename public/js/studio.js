@@ -177,6 +177,19 @@ function beatsIn(a,b){
   for(let k=Math.ceil((a-off)/bl - 1e-6); ; k++){ const t = off + k*bl; if(t > b + 1e-6) break; out.push({t, k}); if(out.length > 4000) break; }
   return out;
 }
+/* where a dragged cut edge sticks: the start of a lyric line first, then a word, then the beat. Only when it's
+   within a few pixels, so it never jumps far. Option/Alt drags freely. */
+function snapCut(t){
+  const px = 8 / Math.max(1e-6, xOf(1) - xOf(0)), cands = [];
+  for(const L of lineStartsCached()) cands.push([L, "lyric line", 0]);
+  for(const w of S.P.words) cands.push([w.t, "word", 1]);
+  if(S.snap){ const g = beatLen()/2, off = S.P.offset, b = off + Math.round((t-off)/g)*g; cands.push([b, "beat", 2]); }
+  let best = null;
+  for(const [ct, why, pr] of cands){ const d = Math.abs(ct - t); if(d <= px * (pr === 0 ? 1.4 : 1) && (!best || pr < best.pr || (pr === best.pr && d < best.d))) best = { t: ct, why, pr, d }; }
+  return best ? { t: best.t, why: "on " + best.why } : { t, why: "" };
+}
+let _lsKey = "", _ls = [];
+function lineStartsCached(){ const k = S.P.words.length + ":" + (S.P.words[0] ? S.P.words[0].t : 0); if(k !== _lsKey){ _lsKey = k; _ls = lineGroups().map(L => L[0].t); } return _ls; }
 function snapTime(t, div=2){
   if(!S.snap) return t;
   const g = beatLen()/div, off = S.P.offset;
@@ -398,8 +411,8 @@ const PRESETS = [
   { id:"relay", name:"Relay", cat:"minimal", caseDef:"upper", demo:"she never gave me a warning", def:{pf:"sans", hi:"#ffffff"},
     draw(c,W,H,s,t,st,o){
       const yc = cy(H,st), bh = H*0.2, k = ease((t - s.start)/0.35);
-      c.save(); const g = c.createLinearGradient(0, yc - bh*0.6, 0, yc + bh*0.6); g.addColorStop(0, o.hi); g.addColorStop(0.55, o.hi); g.addColorStop(1, "rgba(255,255,255,0)");
-      c.globalAlpha *= 0.92; c.fillStyle = g; c.fillRect(0, yc - bh*0.6, W*k, bh*1.2); c.restore();
+      c.save(); c.globalAlpha *= 0.92;
+      bandFill(c, W, yc - bh*0.6, bh*1.2, k, (y0, y1) => { const g = c.createLinearGradient(0, y0, 0, y1); g.addColorStop(0, o.hi); g.addColorStop(0.55, o.hi); g.addColorStop(1, "rgba(255,255,255,0)"); c.fillStyle = g; }); c.restore();
       c.textBaseline = "top"; setLS(c, H*0.002);
       lineLayout(c, W, H, s, st, o, {caseDef:"upper", px:0.022, maxW:0.8, lh:1.5, each(it,i,x,y){ if(i >= s.rev) return; c.fillStyle = i === s.rev-1 ? "#222" : "#777"; c.fillText(it.s, x, y - H*0.03); }});
       setLS(c, 0);
@@ -646,6 +659,36 @@ function drawGen(c, W, H, g, lt, segI){
   const n = noise(), ox = Math.floor(lt*60*37)%256, oy = Math.floor(lt*60*91)%256;
   c.fillStyle = c.createPattern(n, "repeat"); c.translate(-ox,-oy); c.fillRect(0,0,W+256,H+256); c.restore();
 }
+/* Transitions. Each cut can have its own; otherwise the one chosen for all ("Mix" picks a different one per cut). */
+const TRANS_NAMES = { none: "None", crossfade: "Crossfade", slide: "Slide", push: "Push", zoom: "Zoom", wipe: "Wipe", blur: "Blur", spin: "Spin", flash: "Flash", dip: "Dip to black", mix: "Mix" };
+const MIX = ["crossfade", "slide", "zoom", "push", "blur", "wipe", "flash"];
+function transitionInto(i){
+  const own = slotOf(i).tr; if(own) return own;
+  const all = S.P.cuts.transition || "none";
+  return all === "mix" ? MIX[(i * 3 + (S.P.cuts.seed || 0)) % MIX.length] : all;
+}
+/* How a photo or video sits in the frame. Per cut (slot.fx) or for all clips (cuts.fx):
+   fit "fill" (crop to fill the frame) or "fit" (show the whole picture on a blurred copy of itself),
+   z zoom (1 = as it fits, up to 3), x / y position (-1 to 1: from one edge of the picture to the other).
+   Photos also move (cuts.motion "zoom": the slow zoom and pan; "still": no movement at all). */
+const FX0 = { fit: "fill", z: 1, x: 0, y: 0 };
+const fxOf = i => ({ ...FX0, ...(S.P.cuts.fx || {}), ...(slotOf(i).fx || {}) });
+const motionOf = i => slotOf(i).mo || S.P.cuts.motion || "zoom";
+let _blurC = null;
+function framedDraw(c, el, W, H, iw, ih, fx, kb){
+  const z = clamp(fx.z || 1, 0.5, 4) * (kb ? kb.s : 1), px = clamp((fx.x || 0) + (kb ? kb.x : 0), -1, 1), py = clamp((fx.y || 0) + (kb ? kb.y : 0), -1, 1);
+  if(fx.fit === "fit"){
+    // a soft, dark copy fills the frame behind the whole picture (drawn tiny and stretched: a cheap blur)
+    _blurC = _blurC || document.createElement("canvas"); _blurC.width = 24; _blurC.height = Math.max(8, Math.round(24 * H / W));
+    const g = _blurC.getContext("2d"), bs = Math.max(_blurC.width / iw, _blurC.height / ih); g.drawImage(el, (_blurC.width - iw * bs) / 2, (_blurC.height - ih * bs) / 2, iw * bs, ih * bs);
+    c.save(); c.imageSmoothingEnabled = true; c.imageSmoothingQuality = "high"; c.drawImage(_blurC, 0, 0, W, H); c.fillStyle = "rgba(0,0,0,.35)"; c.fillRect(0, 0, W, H); c.restore();
+    const s = Math.min(W / iw, H / ih) * z, w = iw * s, h = ih * s;
+    c.drawImage(el, (W - w) / 2 + px * W * 0.5, (H - h) / 2 + py * H * 0.5, w, h); return;
+  }
+  const s = Math.max(W / iw, H / ih) * Math.max(1, z), w = iw * s, h = ih * s;
+  if(z < 1){ c.fillStyle = "#000"; c.fillRect(0, 0, W, H); const s2 = Math.max(W / iw, H / ih) * z, w2 = iw * s2, h2 = ih * s2; c.drawImage(el, (W - w2) / 2 + px * W * 0.5, (H - h2) / 2 + py * H * 0.5, w2, h2); return; }
+  c.drawImage(el, (W - w) / 2 + px * (w - W) / 2, (H - h) / 2 + py * (h - H) / 2, w, h);
+}
 function coverDraw(c, el, W, H, iw, ih, scale, px, py){
   const s = Math.max(W/iw, H/ih) * scale, w = iw*s, h = ih*s;
   c.drawImage(el, (W-w)/2 + px*(w-W)/2, (H-h)/2 + py*(h-H)/2, w, h);
@@ -654,10 +697,13 @@ function coverDraw(c, el, W, H, iw, ih, scale, px, py){
 function drawClip(c, W, H, clip, lt, segDur, segI){
   if(!clip){ c.fillStyle = "#0b0a10"; c.fillRect(0,0,W,H); return true; }
   if(clip.kind === "gen"){ drawGen(c, W, H, clip.gen, lt + segI*3.1, segI); return true; }
-  if(clip.kind === "img"){ const p = clamp(lt/Math.max(segDur,.1),0,1), dir = segI%4;
-    coverDraw(c, clip.el, W, H, clip.el.naturalWidth, clip.el.naturalHeight, 1.06 + 0.1*p, (dir===0?-1:dir===1?1:0)*(p-.5)*0.8, (dir===2?-1:dir===3?1:0)*(p-.5)*0.8); return true; }
-  if(clip.kind === "video" && clip.xf){ coverDraw(c, clip.xf, W, H, clip.xf.width, clip.xf.height, 1.0, 0, 0); return true; }   // a frame decoded by the exporter
-  if(clip.kind === "video"){ const v = vidFor(clip, segI); if(v.readyState >= 2 && !v.seeking && v.videoWidth){ coverDraw(c, v, W, H, v.videoWidth, v.videoHeight, 1.0, 0, 0); return true; } return false; }
+  const fx = fxOf(segI);
+  if(clip.kind === "img"){ const p = clamp(lt/Math.max(segDur,.1),0,1), dir = segI%4, mo = motionOf(segI);
+    const kb = mo === "still" ? null : mo === "zoomout" ? { s: 1.16 - 0.1*p, x: 0, y: 0 } : mo === "zoomin" ? { s: 1.02 + 0.14*p, x: 0, y: 0 }
+      : { s: 1.06 + 0.1*p, x: (dir===0?-1:dir===1?1:0)*(p-.5)*0.8, y: (dir===2?-1:dir===3?1:0)*(p-.5)*0.8 };
+    framedDraw(c, clip.el, W, H, clip.el.naturalWidth, clip.el.naturalHeight, fx, kb); return true; }
+  if(clip.kind === "video" && clip.xf){ framedDraw(c, clip.xf, W, H, clip.xf.width, clip.xf.height, fx, null); return true; }   // a frame decoded by the exporter
+  if(clip.kind === "video"){ const v = vidFor(clip, segI); if(v.readyState >= 2 && !v.seeking && v.videoWidth){ framedDraw(c, v, W, H, v.videoWidth, v.videoHeight, fx, null); return true; } return false; }
   return true;
 }
 // two players per video clip: one plays the current cut while the other is already parked on the next cut's first frame
@@ -697,7 +743,7 @@ function renderFrame(tr0){
   let si = segs.findIndex(s => t >= s.a && t < s.b); if(si < 0) si = Math.max(0, segs.length-1);
   const seg = segs[si], clip = seg ? S.clips.find(c=>c.id===order[si]) : null;
   manageVideos(segs, order, si, t);
-  footC = layer(footC, W, H); cutC = layer(cutC, W, H); const fc = footC.getContext("2d"), lt = seg ? t - seg.a : 0, tr = P.cuts.transition || "none";
+  footC = layer(footC, W, H); cutC = layer(cutC, W, H); const fc = footC.getContext("2d"), lt = seg ? t - seg.a : 0, tr = transitionInto(si);
   if(si !== lastSi){ const cc = cutC.getContext("2d"); cc.clearRect(0,0,W,H); cc.drawImage(footC, 0, 0); lastSi = si; }   // keep the outgoing frame for crossfades
   const spd = slotOf(si).sp || 1; fc.save(); drawClip(fc, W, H, clip, lt*spd, seg ? (seg.b - seg.a)*spd : 1, si); fc.restore();          // not ready? the last good frame stays
   const XF = clamp(P.cuts.xf ?? 0.35, 0.05, 3);
@@ -725,8 +771,20 @@ function renderFrame(tr0){
     // horizontal position: lyrics live in a column that narrows as it moves toward an edge, so they never leave the frame
     const xp = st.x ?? 0.5, Wn = W*(1 - Math.abs(xp - 0.5)*0.9), left = xp*(W - Wn);
     const yc = cy(H,st), k = st.size || 1;
-    sc.save(); sc.globalAlpha = ls.fade; sc.translate(left + Wn/2, yc); sc.scale(k, k); sc.translate(-Wn/2, -yc); pr.draw(sc, Wn, H, ls, tl0, st, styleOpts(st, pr)); sc.restore();
+    LYRF = { m: sc.getTransform(), W, H };
+    sc.save(); sc.globalAlpha = ls.fade; sc.translate(left + Wn/2, yc); sc.scale(k, k); sc.translate(-Wn/2, -yc);
+    try { pr.draw(sc, Wn, H, ls, tl0, st, styleOpts(st, pr)); } finally { sc.restore(); LYRF = null; }
   }
+}
+/* Lyric size and position only move the words. Parts of a template that belong to the frame (cinema bars, a
+   band across the screen) are drawn through these, so they keep covering the whole frame whatever the size. */
+let LYRF = null;   // the frame under the lyrics while they're drawn: { m: transform, W, H }
+function onFrame(c, W, H, fn){ if(!LYRF){ fn(W, H); return; } c.save(); c.setTransform(LYRF.m); fn(LYRF.W, LYRF.H); c.restore(); }
+/* a band across the full frame width at the words' height (y and h in the template's own units) */
+function bandFill(c, W, y, h, frac = 1, paint){
+  if(!LYRF){ if(paint) paint(y, y + h); c.fillRect(0, y, W * frac, h); return; }
+  const m = LYRF.m.inverse().multiply(c.getTransform()), a = m.transformPoint(new DOMPoint(0, y)), b = m.transformPoint(new DOMPoint(0, y + h));
+  c.save(); c.setTransform(LYRF.m); if(paint) paint(a.y, b.y); c.fillRect(0, a.y, LYRF.W * frac, b.y - a.y); c.restore();
 }
 const HOOK_LOOKS = {plain:["#ffffff","#000000"], glow:["#ffffff","#ffd400"], pill:["#ffffff","#0a090e"], box:["#111111","#ffffff"], caption:["#ffffff","#000000"], outline:["#ffffff","#000000"], sticker:["#111111","#ffffff"], banner:["#ffffff","#ff2d3a"]};
 function rgba(hex, a){ const n = parseInt((hex||"#000").slice(1), 16); return `rgba(${n>>16&255},${n>>8&255},${n&255},${a})`; }
@@ -825,13 +883,19 @@ function renderPresetGrid(){
   $$("#styleCats button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === styleCat)));
   renderPresetThumbs();
 }
+/* font pickers: TikTok's own fonts first, then all the others A to Z. Rebuilt when more fonts are added. */
+function fillFonts(sel){
+  const el = $(sel), keys = Object.keys(FONTLIB); if(!el || el.options.length === keys.length) return;
+  const v = el.value, opt = k => `<option value="${k}">${esc(FONTLIB[k].name)}</option>`, tt = keys.filter(k => /^tiktok/.test(k)), rest = keys.filter(k => !/^tiktok/.test(k)).sort((a, b) => FONTLIB[a].name.localeCompare(FONTLIB[b].name));
+  el.innerHTML = (tt.length ? `<optgroup label="TikTok">${tt.map(opt).join("")}</optgroup>` : "") + `<optgroup label="All fonts">${rest.map(opt).join("")}</optgroup>`;
+  if(v) el.value = v;
+}
 function syncStylePanel(){
   const st = S.P.style, pr = styleDef(st.preset), o = styleOpts(st, pr);
-  $("#styleName").textContent = pr.name; $("#ssTitle").textContent = pr.name + " settings";
+  $("#styleName").textContent = pr.name; $("#ssTitle").textContent = "Text for " + pr.name;
   const fav = favs.has(pr.id); $("#styleFav").textContent = fav ? "★" : "☆"; $("#styleFav").setAttribute("aria-pressed", String(fav)); $("#styleFav").title = fav ? "Remove from favourites" : "Add to favourites";
   $("#styleVar").hidden = !pr.variants;
-  const opts = Object.entries(FONTLIB).map(([k,f]) => `<option value="${k}">${f.name}</option>`).join("");
-  if(!$("#sPf").options.length){ $("#sPf").innerHTML = opts; $("#sSf").innerHTML = opts; }
+  fillFonts("#sPf"); fillFonts("#sSf");
   $("#sPf").value = o.pf; $("#sSf").value = o.sf; $("#sSfRow").hidden = !pr.def?.sf;
   const cur = o.hi.toLowerCase();
   $("#hiSw").innerHTML = HI_SWATCHES.map(h => `<button class="sw" data-c="${h}" style="background:${h}" aria-label="Highlight ${h}" aria-pressed="${h === cur}"></button>`).join("") + `<input type="color" id="hiCustom" title="Custom highlight" value="${/^#[0-9a-f]{6}$/i.test(cur) ? cur : "#ffffff"}">`;
@@ -843,11 +907,12 @@ function setStyleOpt(kind, val){ const st = S.P.style, id = st.preset; st.fonts 
 
 /* ============ timeline ============ */
 const tl = $("#tl"), tlc = tl.getContext("2d"), tlScroll = $("#tlScroll");
-const ROWS = {ruler:[0,20], hook:[20,42], words:[42,76], cuts:[76,116], wave:[116,156], texts:[[20,42]], aux:[], end:156, sig:""};
+const ROWS = {ruler:[0,20], hook:[20,42], words:[42,76], cuts:[76,132], wave:[132,172], texts:[[20,42]], aux:[], end:172, sig:""};
+const CUT_H = 56;   // height of the clips track: big enough to see the pictures and grab the edges
 function tTracks(){ if(!Array.isArray(S.P.tTracks) || !S.P.tTracks.length) S.P.tTracks = [{}]; return S.P.tTracks; }
 function layoutRows(){ if(!S.P) return; const T = tTracks(), A = S.P.aux || (S.P.aux = []); let y = 20; ROWS.texts = [];
   for(let i = T.length - 1; i >= 0; i--){ ROWS.texts[i] = [y, y + 22]; y += 22; }   // newest text track sits on top, like CapCut
-  ROWS.hook = [20, y]; ROWS.words = [y, y + 34]; y += 34; ROWS.cuts = [y, y + 40]; y += 40; ROWS.wave = [y, y + 40]; y += 40;
+  ROWS.hook = [20, y]; ROWS.words = [y, y + 34]; y += 34; ROWS.cuts = [y, y + CUT_H]; y += CUT_H; ROWS.wave = [y, y + 40]; y += 40;
   ROWS.aux = A.map(() => { const r = [y, y + 30]; y += 30; return r; }); ROWS.end = y; ROWS.sig = T.length + "|" + A.length; }
 const trackSig = () => !S.P ? ROWS.sig : (S.P.tTracks?.length || 1) + "|" + (S.P.aux?.length || 0);
 const textTrackAt = y => ROWS.texts.findIndex(r => r && y >= r[0] && y < r[1]);
@@ -905,13 +970,18 @@ function drawTimelineStatic(){
   // cuts
   const {segs, order} = segInfo();
   segs.forEach((s,i) => { const x = xOf(s.a), x2 = xOf(s.b), clip = S.clips.find(cl=>cl.id===order[i]); const sel = S.sel && S.sel.type==="seg" && S.sel.i===i;
-    if(clip && clip.thumb){ c.save(); c.beginPath(); roundRect(c, x+1, C0 + 4, x2-x-2, 32, 5); c.clip(); const im = clip.thumbImg; if(im && im.complete){ const sw = x2-x-2, s2 = Math.max(sw/im.width, 32/im.height); c.globalAlpha = .9; c.drawImage(im, x+1 + (sw - im.width*s2)/2, C0 + 4 + (32-im.height*s2)/2, im.width*s2, im.height*s2); } c.restore(); }
-    else { c.fillStyle = col("--raise"); roundRect(c, x+1, C0 + 4, x2-x-2, 32, 5); c.fill(); }
-    c.strokeStyle = sel ? col("--tape") : col("--clip"); c.lineWidth = sel ? 2 : 1; c.globalAlpha = sel ? 1 : .6; roundRect(c, x+1, C0 + 4, x2-x-2, 32, 5); c.stroke(); c.globalAlpha = 1;
+    const CH = CUT_H - 8;
+    if(clip && clip.thumb){ c.save(); c.beginPath(); roundRect(c, x+1, C0 + 4, x2-x-2, CH, 5); c.clip(); const im = clip.thumbImg; if(im && im.complete){ const sw = x2-x-2, s2 = Math.max(sw/im.width, CH/im.height); c.globalAlpha = .9; c.drawImage(im, x+1 + (sw - im.width*s2)/2, C0 + 4 + (CH-im.height*s2)/2, im.width*s2, im.height*s2); } c.restore(); }
+    else { c.fillStyle = col("--raise"); roundRect(c, x+1, C0 + 4, x2-x-2, CH, 5); c.fill(); }
+    c.strokeStyle = sel ? col("--tape") : col("--clip"); c.lineWidth = sel ? 2 : 1; c.globalAlpha = sel ? 1 : .6; roundRect(c, x+1, C0 + 4, x2-x-2, CH, 5); c.stroke(); c.globalAlpha = 1;
+    // how long this clip is on screen, and its transition in, at the bottom of the tile
+    if(x2 - x > 30){ const dl = (s.b - s.a).toFixed(1) + "s", trn = slotOf(i).tr; c.font = `700 10px ${FONTS.sans}`; const tw = c.measureText(dl).width;
+      c.fillStyle = "rgba(0,0,0,.62)"; roundRect(c, x2 - tw - 12, C0 + CH - 12, tw + 8, 13, 4); c.fill(); c.fillStyle = "#fff"; c.textBaseline = "middle"; c.fillText(dl, x2 - tw - 8, C0 + CH - 5.5);
+      if(trn && i > 0 && x2 - x > tw + 40){ const tl2 = TRANS_NAMES[trn] || trn, w2 = c.measureText(tl2).width; c.fillStyle = "rgba(0,0,0,.62)"; roundRect(c, x + 5, C0 + CH - 12, w2 + 8, 13, 4); c.fill(); c.fillStyle = "#fff"; c.fillText(tl2, x + 9, C0 + CH - 5.5); } }
     if(i > 0){ c.fillStyle = col("--clip"); c.beginPath(); c.moveTo(x, C0 + 1); c.lineTo(x+4, C0 + 5); c.lineTo(x, C0 + 9); c.lineTo(x-4, C0 + 5); c.fill(); }
     const sp = slotOf(i).sp || 1; if(Math.abs(sp - 1) > 0.01 && x2 - x > 26){ c.font = `700 10px ${FONTS.sans}`; const label = sp.toFixed(2).replace(/0+$/,"").replace(/\.$/,"") + "×", tw = c.measureText(label).width;
       c.fillStyle = "rgba(0,0,0,.65)"; roundRect(c, x+4, C0 + 7, tw+8, 13, 4); c.fill(); c.fillStyle = "#fff"; c.textBaseline = "middle"; c.fillText(label, x+8, C0 + 14); }
-    if(sel){ c.fillStyle = col("--tape"); if(i > 0) c.fillRect(x+1, C0 + 6, 4, 28); if(i < segs.length-1) c.fillRect(x2-5, C0 + 6, 4, 28); } });
+    if(sel){ c.fillStyle = col("--tape"); if(i > 0) c.fillRect(x+1, C0 + 6, 4, CH - 4); if(i < segs.length-1) c.fillRect(x2-5, C0 + 6, 4, CH - 4); } });
   // waveform
   if(S.audio){ const d = S.audio.getChannelData(0), sr = S.audio.sampleRate, mid = ROWS.wave[0] + 20, hh = 18; c.fillStyle = col("--audio"); c.globalAlpha = S.P.mainMute ? .3 : .9;
     const px = Math.floor(tlW); for(let x=0;x<px;x+=2){ const t0 = tOf(x), t1 = tOf(x+2); const i0 = Math.max(0, Math.floor(t0*sr)), i1 = Math.min(d.length, Math.floor(t1*sr)), st = Math.max(1, Math.floor((i1-i0)/40)); let m = 0; for(let j=i0;j<i1;j+=st) m = Math.max(m, Math.abs(d[j])); const h = Math.max(1, m*hh); c.fillRect(x, mid-h, 1.5, h*2); } c.globalAlpha = 1; }
@@ -940,8 +1010,12 @@ function drawTimeline(){
   const x = xOf(songTime()); tlc.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--tape"); tlc.fillRect(Math.round(x)-1, 0, 2, ROWS.end);
   tlc.beginPath(); tlc.moveTo(x-6,0); tlc.lineTo(x+6,0); tlc.lineTo(x,8); tlc.fill();
   if(drag && drag.kind === "slot" && drag.moved){ const {segs} = segInfo(), src = segs[drag.i], tg = segs[drag.j], col = getComputedStyle(document.documentElement).getPropertyValue("--tape"), w = xOf(src.b) - xOf(src.a);
-    tlc.save(); tlc.strokeStyle = col; tlc.lineWidth = 2; tlc.setLineDash([5,3]); roundRect(tlc, xOf(tg.a)+1, ROWS.cuts[0] + 3, xOf(tg.b)-xOf(tg.a)-2, 34, 5); tlc.stroke();
-    tlc.setLineDash([]); tlc.globalAlpha = .55; tlc.fillStyle = col; roundRect(tlc, drag.xNow - w/2, ROWS.cuts[0] + 6, w, 28, 5); tlc.fill(); tlc.restore(); }
+    tlc.save(); tlc.strokeStyle = col; tlc.lineWidth = 2; tlc.setLineDash([5,3]); roundRect(tlc, xOf(tg.a)+1, ROWS.cuts[0] + 3, xOf(tg.b)-xOf(tg.a)-2, CUT_H - 6, 5); tlc.stroke();
+    tlc.setLineDash([]); tlc.globalAlpha = .55; tlc.fillStyle = col; roundRect(tlc, drag.xNow - w/2, ROWS.cuts[0] + 6, w, CUT_H - 12, 5); tlc.fill(); tlc.restore(); }
+  // while a cut edge is dragged: where it is and how long the two clips around it are
+  if(drag && drag.kind === "cut"){ const {segs} = segInfo(), a = segs[drag.k], b = segs[drag.k + 1]; if(a && b){ const x = xOf(b.a), txt = `${fmt(b.a)}  ·  ${(a.b - a.a).toFixed(2)}s | ${(b.b - b.a).toFixed(2)}s${drag.snapped ? "  ·  " + drag.snapped : ""}`;
+    tlc.save(); tlc.font = `600 11px ${FONTS.sans}`; const tw = tlc.measureText(txt).width, bx = clamp(x - tw/2 - 6, 2, tlW - tw - 14); tlc.fillStyle = "rgba(10,10,14,.88)"; roundRect(tlc, bx, ROWS.cuts[0] - 20, tw + 12, 18, 5); tlc.fill();
+    tlc.fillStyle = "#fff"; tlc.textBaseline = "middle"; tlc.fillText(txt, bx + 6, ROWS.cuts[0] - 11); tlc.restore(); } }
   if(drag && drag.kind === "marquee" && drag.moved){ const xa = Math.min(drag.x0, drag.x1), ya = Math.min(drag.y0, drag.y1), w = Math.abs(drag.x1 - drag.x0), h = Math.abs(drag.y1 - drag.y0);
     tlc.save(); tlc.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--tape"); tlc.globalAlpha = 0.14; tlc.fillRect(xa, ya, w, h); tlc.globalAlpha = 0.9; tlc.strokeStyle = tlc.fillStyle; tlc.lineWidth = 1; tlc.setLineDash([4,3]); tlc.strokeRect(xa + .5, ya + .5, w, h); tlc.restore(); }
   if(S.playing && S.zoom > 1){ const vx = x - tlScroll.scrollLeft; if(vx > tlScroll.clientWidth*0.85 || vx < 0) tlScroll.scrollLeft = x - tlScroll.clientWidth*0.2; }
@@ -975,7 +1049,7 @@ tl.addEventListener("pointerdown", e => {
   if(y >= ROWS.cuts[0] && y < ROWS.cuts[1] && L.cuts){ startSeekOrPan(e, t); return; }
   if(y >= ROWS.cuts[0] && y < ROWS.cuts[1]){
     const {segs} = segInfo();
-    const bi = segs.findIndex((sg,k) => k > 0 && Math.abs(xOf(sg.a) - x) <= 6);
+    const bi = segs.findIndex((sg,k) => k > 0 && Math.abs(xOf(sg.a) - x) <= 9);
     if(bi > 0){ toManualCuts(); materializeSlots(); const pts = segInfo().segs.slice(1).map(sg => sg.a); S.P.cuts.points = pts; const sl = S.P.cuts.slots;
       drag = {kind:"cut", k: bi-1, p0: pts[bi-1], in0: resolvedIn(bi), sp: (sl[bi] && sl[bi].sp) || 1, vid: (() => { const c = S.clips.find(c => c.id === segInfo().order[bi]); return c && c.kind === "video"; })()}; selectSeg(bi); return; }
     const i = segs.findIndex(s => t >= s.a && t < s.b);
@@ -992,7 +1066,7 @@ tl.addEventListener("pointerdown", e => {
 });
 tl.addEventListener("pointermove", e => {
   const r = tl.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
-  if(!drag){ let cur = "default"; if(y >= ROWS.words[0] && y < ROWS.words[1]){ const w = S.P.words.find(w => x >= xOf(w.t) && x <= xOf(w.t+w.d)); if(w) cur = x > xOf(w.t+w.d) - 7 ? "ew-resize" : "grab"; } else if(y >= ROWS.wave[0]) cur = y >= ROWS.wave[1] && (S.P.aux || [])[auxAt(y)] && !S.auxBuf[S.P.aux[auxAt(y)].id] ? "pointer" : "grab"; else if(y < ROWS.cuts[0]) cur = "text"; else cur = segInfo().segs.some((sg,k) => k > 0 && Math.abs(xOf(sg.a) - x) <= 6) ? "ew-resize" : "pointer"; tl.style.cursor = cur; return; }
+  if(!drag){ let cur = "default"; if(y >= ROWS.words[0] && y < ROWS.words[1]){ const w = S.P.words.find(w => x >= xOf(w.t) && x <= xOf(w.t+w.d)); if(w) cur = x > xOf(w.t+w.d) - 7 ? "ew-resize" : "grab"; } else if(y >= ROWS.wave[0]) cur = y >= ROWS.wave[1] && (S.P.aux || [])[auxAt(y)] && !S.auxBuf[S.P.aux[auxAt(y)].id] ? "pointer" : "grab"; else if(y < ROWS.cuts[0]) cur = "text"; else cur = segInfo().segs.some((sg,k) => k > 0 && Math.abs(xOf(sg.a) - x) <= 9) ? "ew-resize" : "pointer"; tl.style.cursor = cur; return; }
   const t = tOf(x);
   if(drag.kind === "seek"){ seek(t); return; }
   if(drag.kind === "tmove" || drag.kind === "tresize"){ const len = S.P.section.b - S.P.section.a, d = (x - drag.x0)/tlW*len, it = drag.it;
@@ -1009,7 +1083,8 @@ tl.addEventListener("pointermove", e => {
   if(drag.kind === "pan"){ const dx = e.clientX - drag.x0; if(Math.abs(dx) > 5) drag.moved = true; if(drag.moved) tlScroll.scrollLeft = drag.sl - dx; return; }
   const dt = (x - drag.x0) / tlW * (S.P.section.b - S.P.section.a);
   if(drag.kind === "cut"){ const pts = S.P.cuts.points, k = drag.k, lo = (k > 0 ? pts[k-1] : S.P.section.a) + 0.15, hi = (k < pts.length-1 ? pts[k+1] : S.P.section.b) - 0.15;
-    pts[k] = clamp(snapTime(t, 2), lo, hi); const sl = S.P.cuts.slots; if(drag.vid && sl && sl[k+1]) sl[k+1].in = Math.max(0, drag.in0 + (pts[k] - drag.p0)*drag.sp);
+    const sn = e.altKey ? { t, why: "" } : snapCut(t); drag.snapped = sn.why;
+    pts[k] = clamp(sn.t, lo, hi); const sl = S.P.cuts.slots; if(drag.vid && sl && sl[k+1]) sl[k+1].in = Math.max(0, drag.in0 + (pts[k] - drag.p0)*drag.sp);
     tlDirty = true; if(!S.playing) S.t = pts[k] + 0.001; return; }
   if(drag.kind === "slot"){ drag.xNow = x; if(Math.abs(x - drag.x0) > 6) drag.moved = true;
     if(drag.moved){ const {segs} = segInfo(), tt = tOf(x); let j = segs.findIndex(g => tt >= g.a && tt < g.b); if(j < 0) j = tt < S.P.section.a ? 0 : segs.length - 1; drag.j = j; } return; }
@@ -1130,6 +1205,15 @@ function syncSegCard(){
   if(vid){ const segLen = (s.b - s.a)*sp, max = Math.max(0, (vid.duration||0) - Math.min(segLen, vid.duration||0)), cur = clamp(sl.in ?? defaultIn(S.sel.i, vid), 0, max);
     const r = $("#segStart"); r.max = max.toFixed(2); r.value = cur; $("#segStartVal").textContent = `${fmt(cur)} of ${fmt(vid.duration||0)}`; }
   const selEl = $("#segClip"); selEl.innerHTML = S.clips.map(c => `<option value="${c.id}">${esc(c.name)}${c.on?"":" (off)"}</option>`).join(""); selEl.value = order[S.sel.i] || "";
+  if(document.activeElement !== $("#segLen")) $("#segLen").value = (s.b - s.a).toFixed(2);
+  $("#segMerge").disabled = S.sel.i >= segs.length - 1;
+  $("#segTr").value = sl.tr || ""; $("#segTr").disabled = S.sel.i === 0; $("#segTr").title = S.sel.i === 0 ? "The first clip has nothing to transition from" : "";
+  $("#segMoRow").hidden = !(clip && clip.kind === "img"); $("#segMo").value = sl.mo || "";
+  const fx = fxOf(S.sel.i); $$("#segFit button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === fx.fit)));
+  if(document.activeElement !== $("#segZoom")){ $("#segZoom").value = Math.round(fx.z * 100); $("#segZoomVal").textContent = Math.round(fx.z * 100) + "%"; }
+  if(document.activeElement !== $("#segX")) $("#segX").value = fx.x; if(document.activeElement !== $("#segY")) $("#segY").value = fx.y;
+  $("#segFxReset").disabled = !sl.fx;
+  $("#segCard").classList.toggle("gen-clip", !!(clip && clip.kind === "gen"));
 }
 function cycleSeg(i){ const {order} = segInfo(), pool = S.clips.filter(c=>c.on); if(!pool.length) return; const k = pool.findIndex(c=>c.id===order[i]); setSlot(i, {c: pool[(k+1)%pool.length].id, in: null}); syncSegCard(); }
 const esc = s => String(s).replace(/[&<>"]/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[ch]));
@@ -1173,11 +1257,15 @@ function updateMeta(){
 function syncCutUI(){ const m = S.P.cuts.mode;
   $$("#cutOrder button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === (S.P.cuts.order || "shuffle"))));
   $$("#cutTrans button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === (S.P.cuts.transition || "none"))));
-  $("#xfField").hidden = (S.P.cuts.transition || "none") === "none"; $("#xfDur").value = S.P.cuts.xf ?? 0.35; $("#xfDurVal").textContent = (+(S.P.cuts.xf ?? 0.35)).toFixed(2) + "s";
+  const fxA = {...FX0, ...(S.P.cuts.fx || {})};
+  $$("#cutMotion button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === (S.P.cuts.motion || "zoom"))));
+  $$("#cutFit button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === fxA.fit)));
+  if(document.activeElement !== $("#cutZoom")){ $("#cutZoom").value = Math.round(fxA.z * 100); $("#cutZoomVal").textContent = Math.round(fxA.z * 100) + "%"; }
+  $("#xfField").hidden = (S.P.cuts.transition || "none") === "none" && !(S.P.cuts.slots || []).some(sl => sl && sl.tr && sl.tr !== "none"); $("#xfDur").value = S.P.cuts.xf ?? 0.35; $("#xfDurVal").textContent = (+(S.P.cuts.xf ?? 0.35)).toFixed(2) + "s";
   $$("#cutMode button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === m)));
   $("#cutCountField").hidden = m !== "count"; $("#cutEveryField").hidden = m !== "beat"; $("#cutManualField").hidden = m !== "manual"; }
 function syncHookUI(){ const h = S.P.hook, len = S.P.section.b - S.P.section.a;
-  if(!$("#hFont").options.length) $("#hFont").innerHTML = Object.entries(FONTLIB).map(([k,f]) => `<option value="${k}">${f.name}</option>`).join("");
+  fillFonts("#hFont");
   $$("#hLook button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === (h.look || "pill"))));
   $("#hFont").value = h.font || "sans"; $("#hSize").value = h.size || 1; $("#hColor").value = h.color || "#ffffff"; $("#hBg").value = h.bg || "#000000"; $("#hAnim").value = h.anim || "fade";
   $("#hX").value = h.x ?? 0.5; $("#hY").value = h.y ?? 0.09;
@@ -1188,7 +1276,7 @@ function syncHookUI(){ const h = S.P.hook, len = S.P.section.b - S.P.section.a;
 function syncUI(){ setTimeout(syncTextEditor, 0);
   const P = S.P, st = P.style;
   $("#lyricsText").value = P.lyrics; $("#bpm").value = P.bpm;
-  $("#sSize").value = st.size; $("#sX").value = st.x ?? 0.5; paintSizePx(); $("#sY").value = st.y; $("#sScrim").value = st.scrim;
+  $("#sX").value = st.x ?? 0.5; paintSizePx(); $("#sY").value = st.y; $("#sScrim").value = st.scrim;
   $("#sCase").value = st.case; $("#sColor").value = st.color; syncStylePanel();
   $$("#hookSeg button").forEach(b => b.setAttribute("aria-pressed", String((b.dataset.v === "on") === !!P.hook.on))); $("#hFields").hidden = !P.hook.on; $("#hOffHint").hidden = !!P.hook.on; syncHookUI(); $("#hText").value = P.hook.text; $("#hDur").value = P.hook.dur; $("#hDurVal").textContent = (+P.hook.dur).toFixed(1) + "s";
   $$("#presets .preset").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.id === st.preset)));
@@ -1258,13 +1346,13 @@ $$(".tabs [data-tab]").forEach(b => b.onclick = () => showTab(b.dataset.tab));
 /* phone sheets: move the existing panels into a bottom sheet, put them back when it closes */
 const SHEETS = {
   lyrics: ["Lyrics", () => [$('[data-pane="lyrics"]')]],
-  style: ["Style", () => [$(".rack .pane")]],
+  style: ["Templates", () => [$('[data-rpane="looks"]')]],
+  font: ["Font and size", () => [$('[data-rpane="type"]')]],
   clips: ["Clips", () => [$('[data-pane="clips"]')]],
   hook: ["Hook", () => [$("#hookSeg").closest(".card")]],
   text: ["Text", () => [$("#textCard")]],
   audio: ["Audio", () => [$("#vocalMode"), $(".tlbar")]],
-  format: ["Format", () => [$(".stagebar"), $("#secRow")]],
-  templates: ["Templates", () => [$('[data-pane="templates"]')]]
+  format: ["Format", () => [$(".stagebar"), $("#secRow")]]
 };
 let sheetOpen = null, sheetMoved = [];
 const isPhone = () => window.matchMedia("(max-width:700px) and (pointer:coarse)").matches;
@@ -1285,40 +1373,38 @@ $("#mtools").onclick = e => { const b = e.target.closest("[data-sheet]"); if(b) 
 $("#msheetDone").onclick = closeSheet;
 window.matchMedia("(max-width:700px) and (pointer:coarse)").addEventListener("change", ev => { if(!ev.matches) closeSheet(); sizeTimeline(); fitStage(); });
 function showTab(name){ document.body.dataset.mtab = name; $$(".tabs [data-tab]").forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === name)));
-  if(name === "style"){ renderPresetThumbs(); return; } $$("[data-pane]").forEach(p => p.hidden = p.dataset.pane !== name); }
-
-const bindStyle = (id, key, num) => $(id).addEventListener("input", e => { S.P.style[key] = num ? +e.target.value : e.target.value; if(key==="size") paintSizePx(); saveDraft(); });
-/* Lyric size as a number: the style's text height in pixels on a 1080p video (the slider's 1× is whatever size the
-   style was designed at). Measured by drawing the current line once and noting the largest font it asks for;
-   long lines still shrink to fit the frame. */
-const SIZE_MIN = 0.12, SIZE_MAX = 2.5;
-let measureCv = null, basePxCache = { key: "", px: null };
-function lyricBasePx(){
-  const P = S.P, st = P.style, pr = styleDef(st.preset), W = stage.width, H = stage.height;
-  const inBite = P.words.filter(w => w.t >= P.section.a - 0.2 && w.t < P.section.b);
-  let t = songTime(), s = inBite.length ? lyricState(t) : null;
-  if(inBite.length && (!s || !s.rev)){ t = inBite[0].t + 0.6; s = lyricState(t); }
-  if(!s || !s.rev){ t = 99; s = demoState(pr, t); }
-  if(!s || !s.rev) return null;
-  const key = [st.preset, st.pf, st.sf, st.case, W, H, s.words.map(w => w.w).join(" ")].join("|");
-  if(basePxCache.key === key) return basePxCache.px;
-  measureCv = measureCv || document.createElement("canvas"); measureCv.width = W; measureCv.height = H;
-  const c = measureCv.getContext("2d"), d = Object.getOwnPropertyDescriptor(CanvasRenderingContext2D.prototype, "font"); let max = 0;
-  Object.defineProperty(c, "font", { configurable: true, get(){ return d.get.call(this); }, set(v){ const m = /([\d.]+)px/.exec(v); if(m) max = Math.max(max, +m[1]); d.set.call(this, v); } });
-  const Wn = W*(1 - Math.abs((st.x ?? 0.5) - 0.5)*0.9);
-  try { c.save(); pr.draw(c, Wn, H, s, t, { ...st, size: 1 }, styleOpts(st, pr)); c.restore(); } catch {}
-  delete c.font;
-  basePxCache = { key, px: max ? max * 1080 / Math.min(W, H) : null };
-  return basePxCache.px;
+  if(name === "style"){ renderPresetThumbs(); return; } $$("[data-pane]").forEach(p => p.hidden = p.dataset.pane !== name);
+  if(name === "clips") openTimelineOnce(); }
+// the clip timings are edited on the timeline, so it opens (once per visit) when you go to Clips
+let tlOpenedForClips = false;
+function openTimelineOnce(){ if(tlOpenedForClips || isPhone()) return; tlOpenedForClips = true; if(document.body.dataset.tl !== "open" && $("#tlToggle")) $("#tlToggle").click(); }
+/* the right-hand panel: Templates (the looks), Text (font, size, colour, position), Titles (hook and text boxes) */
+function showRTab(name){
+  if(!$(`[data-rpane="${name}"]`)) name = "looks";
+  $$(".rtabs [data-rtab]").forEach(b => b.setAttribute("aria-selected", String(b.dataset.rtab === name)));
+  $$("[data-rpane]").forEach(p => p.hidden = p.dataset.rpane !== name);
+  if(name === "looks") renderPresetThumbs();
+  try { localStorage.setItem("sls-rtab", name); } catch {}
 }
-function paintSizePx(){ const b = lyricBasePx(), box = $("#sizePx"); if(document.activeElement === box) return; box.value = b ? Math.round(b * (S.P.style.size || 1)) : ""; box.disabled = !b; }
-$("#sizePx").addEventListener("change", e => { const b = lyricBasePx(), v = +e.target.value; if(!b || !(v > 0)) { paintSizePx(); return; }
-  const k = clamp(v / b, SIZE_MIN, SIZE_MAX); S.P.style.size = +k.toFixed(3); $("#sSize").value = S.P.style.size; saveDraft();
-  if(Math.abs(k - v / b) > 0.001){ toast(`That's as ${k === SIZE_MIN ? "small" : "big"} as this style goes: ${Math.round(b * k)} px`); }
-  e.target.blur(); paintSizePx(); });
-setInterval(() => { if(document.body.dataset.step === "design" && !document.hidden) paintSizePx(); }, 700);
-$("#sizePx").addEventListener("keydown", e => { if(e.key === "Enter") e.target.dispatchEvent(new Event("change")); });
-bindStyle("#sSize","size",true); bindStyle("#sX","x",true); bindStyle("#sY","y",true);
+$$(".rtabs [data-rtab]").forEach(b => b.onclick = () => showRTab(b.dataset.rtab));
+try { const t = localStorage.getItem("sls-rtab"); if(t) setTimeout(() => showRTab(t), 0); } catch {}
+
+const bindStyle = (id, key, num) => $(id).addEventListener("input", e => { S.P.style[key] = num ? +e.target.value : e.target.value; saveDraft(); });
+/* Lyric size on a 0 to 100 scale. 50 is the template's own size; every step is the same visible change, so
+   the low end goes far smaller (0 is 4% of normal) and the top end three times bigger. Stored as a multiplier. */
+const SIZE_LO = 0.04, SIZE_HI = 3;
+const sizeFromV = v => { v = clamp(+v || 0, 0, 100); return v <= 50 ? SIZE_LO * Math.pow(1 / SIZE_LO, v / 50) : Math.pow(SIZE_HI, (v - 50) / 50); };
+const vFromSize = k => { k = clamp(+k || 1, SIZE_LO, SIZE_HI); return k <= 1 ? 50 * Math.log(k / SIZE_LO) / Math.log(1 / SIZE_LO) : 50 + 50 * Math.log(k) / Math.log(SIZE_HI); };
+function paintSizePx(){
+  const v = vFromSize(S.P.style.size || 1);
+  if(document.activeElement !== $("#sSize")) $("#sSize").value = v.toFixed(1);
+  if(document.activeElement !== $("#sizeNum")) $("#sizeNum").value = Math.round(v);
+}
+$("#sSize").addEventListener("input", e => { S.P.style.size = +sizeFromV(e.target.value).toFixed(4); $("#sizeNum").value = Math.round(+e.target.value); saveDraft(); });
+$("#sizeNum").addEventListener("input", e => { const v = e.target.value; if(v === "" || isNaN(+v)) return; S.P.style.size = +sizeFromV(v).toFixed(4); $("#sSize").value = clamp(+v, 0, 100); saveDraft(); });
+$("#sizeNum").addEventListener("change", e => { e.target.value = Math.round(clamp(+e.target.value || 0, 0, 100)); paintSizePx(); });
+$("#sizeNum").addEventListener("keydown", e => { if(e.key === "Enter") e.target.blur(); });
+bindStyle("#sX","x",true); bindStyle("#sY","y",true);
 $("#sCenter").onclick = () => { S.P.style.x = 0.5; S.P.style.y = 0.5; syncUI(); saveDraft(); }; bindStyle("#sScrim","scrim",true); bindStyle("#sCase","case"); bindStyle("#sColor","color"); $("#sColor").addEventListener("change", renderPresetThumbs);
 $("#sPf").onchange = e => setStyleOpt("pf", e.target.value);
 $("#sSf").onchange = e => setStyleOpt("sf", e.target.value);
@@ -1408,6 +1494,36 @@ $("#shuffleBtn").onclick = () => { S.P.cuts.seed = (S.P.cuts.seed * 7919 + 13) %
 $("#segStart").oninput = e => { if(S.sel?.type !== "seg") return; const i = S.sel.i, v = +e.target.value; setSlot(i, {in: v}); const inf = segInfo(); if(!S.playing) S.t = inf.segs[i].a + 0.001;
   const clip = S.clips.find(c => c.id === inf.order[i]); $("#segStartVal").textContent = `${fmt(v)} of ${fmt(clip?.el?.duration||0)}`; };
 $("#segClip").onchange = e => { if(S.sel?.type === "seg"){ setSlot(S.sel.i, {c: e.target.value, in: null}); syncSegCard(); } };
+/* ---- timing of the selected clip: its length, split, join ---- */
+function setSegLength(i, L){
+  if(S.locks.cuts){ toast("The cuts track is locked"); return; }
+  toManualCuts(); materializeSlots();
+  const {segs} = segInfo(), g = segs[i]; if(!g) return; const pts = S.P.cuts.points.slice().sort((a, b) => a - b), MIN = 0.2;
+  if(i < segs.length - 1){ const nx = segs[i + 1]; pts[i] = +clamp(g.a + L, g.a + MIN, nx.b - MIN).toFixed(3); }
+  else if(i > 0){ const pv = segs[i - 1]; pts[i - 1] = +clamp(g.b - L, pv.a + MIN, g.b - MIN).toFixed(3); }
+  else { toast("Add a cut first: this clip fills the whole soundbite."); return; }
+  S.P.cuts.points = pts; dirty(); syncSegCard();
+}
+$("#segLen").onchange = e => { if(S.sel?.type === "seg") setSegLength(S.sel.i, +e.target.value || 0.2); };
+$("#segLen").onkeydown = e => { if(e.key === "Enter") e.target.blur(); };
+$("#segShorter").onclick = () => { if(S.sel?.type !== "seg") return; const g = segInfo().segs[S.sel.i]; if(g) setSegLength(S.sel.i, g.b - g.a - 0.1); };
+$("#segLonger").onclick = () => { if(S.sel?.type !== "seg") return; const g = segInfo().segs[S.sel.i]; if(g) setSegLength(S.sel.i, g.b - g.a + 0.1); };
+$("#segSplit").onclick = () => { const t = songTime(); if(addCutAt(t)){ const {segs} = segInfo(), i = segs.findIndex(g => t >= g.a - 0.01 && t < g.b); if(i >= 0) selectSeg(i); } };
+$("#segMerge").onclick = () => { if(S.sel?.type !== "seg") return; const i = S.sel.i, {segs} = segInfo(); if(i >= segs.length - 1){ toast("This is the last clip"); return; } deleteClip(i + 1); selectSeg(i); };
+/* ---- transition and framing of the selected clip ---- */
+$("#segTr").onchange = e => { if(S.sel?.type !== "seg") return; setSlot(S.sel.i, {tr: e.target.value || undefined}); syncSegCard(); const g = segInfo().segs[S.sel.i]; if(g && !S.playing && S.sel.i > 0){ S.t = Math.max(S.P.section.a, g.a - 0.5); play({}); } };
+$("#segMo").onchange = e => { if(S.sel?.type !== "seg") return; setSlot(S.sel.i, {mo: e.target.value || undefined}); syncSegCard(); };
+function setSegFx(patch){ if(S.sel?.type !== "seg") return; const i = S.sel.i, own = slotOf(i).fx || {}; setSlot(i, {fx: {...fxOf(i), ...own, ...patch}}); if(!S.playing){ const g = segInfo().segs[i]; if(g && (S.t < g.a || S.t >= g.b)) S.t = g.a + Math.min(0.4, (g.b - g.a)/2); } syncSegCard(); }
+$("#segFit").onclick = e => { const b = e.target.closest("button"); if(b) setSegFx({fit: b.dataset.v}); };
+$("#segZoom").oninput = e => { $("#segZoomVal").textContent = e.target.value + "%"; setSegFx({z: +e.target.value / 100}); };
+$("#segX").oninput = e => setSegFx({x: +e.target.value});
+$("#segY").oninput = e => setSegFx({y: +e.target.value});
+$("#segFxReset").onclick = () => { if(S.sel?.type !== "seg") return; setSlot(S.sel.i, {fx: undefined}); syncSegCard(); };
+$("#segFxAll").onclick = () => { if(S.sel?.type !== "seg") return; S.P.cuts.fx = fxOf(S.sel.i); (S.P.cuts.slots || []).forEach(sl => { if(sl) delete sl.fx; }); syncCutUI(); syncSegCard(); dirty(); toast("Every cut now uses this framing"); };
+/* ---- for all clips: photo movement and framing ---- */
+$("#cutMotion").onclick = e => { const b = e.target.closest("button"); if(!b) return; S.P.cuts.motion = b.dataset.v; syncCutUI(); saveDraft(); };
+$("#cutFit").onclick = e => { const b = e.target.closest("button"); if(!b) return; S.P.cuts.fx = {...FX0, ...(S.P.cuts.fx || {}), fit: b.dataset.v}; syncCutUI(); saveDraft(); };
+$("#cutZoom").oninput = e => { S.P.cuts.fx = {...FX0, ...(S.P.cuts.fx || {}), z: +e.target.value / 100}; $("#cutZoomVal").textContent = e.target.value + "%"; saveDraft(); };
 const setSpeed = v => { if(S.sel?.type !== "seg") return; v = clamp(+v, 0.25, 4); setSlot(S.sel.i, {sp: v}); syncSegCard(); };
 $("#segSpeed").oninput = e => setSpeed(e.target.value);
 $("#segSpeedP").onclick = e => { const b = e.target.closest("button"); if(b) setSpeed(b.dataset.v); };
@@ -1549,7 +1665,7 @@ let clipId = 0;
 function genThumb(g){ const cv = document.createElement("canvas"); cv.width = 120; cv.height = 160; drawGen(cv.getContext("2d"), 120, 160, g, 1.3, 0); return cv.toDataURL("image/jpeg", .8); }
 function addThumb(c, url){ c.thumb = url; c.thumbImg = new Image(); c.thumbImg.onload = () => tlDirty = true; c.thumbImg.src = url; }
 function renderClips(){
-  $("#clipGrid").innerHTML = S.clips.map(c => `<button class="clipt${c.on?"":" off"}" data-id="${c.id}" aria-pressed="${c.on}" title="${c.on?"In":"Out of"} the shuffle">
+  $("#clipGrid").innerHTML = S.clips.map(c => `<button class="clipt${c.on?"":" off"}" data-id="${c.id}" aria-pressed="${c.on}" draggable="true" title="${c.on?"In":"Out of"} the shuffle. Drag onto a clip on the timeline to put it there.">
     <img alt="" src="${c.thumb||""}"><span class="cap"><span>${esc(c.name)}</span><span class="kind">${c.kind==="gen"?"Built-in":c.src&&c.src.kind==="ai"?"AI":c.src&&c.src.kind==="stock"?"Stock":c.src&&c.src.kind==="photo"&&c.src.source==="Pinterest"?"Pinterest":c.src&&c.src.kind==="board"?"Moodboard":c.kind==="img"?"Photo":"Video"}</span></span>
     ${c.kind!=="gen"?`<span class="x" data-rm="${c.id}" role="button" aria-label="Remove ${esc(c.name)}">×</span>`:""}</button>`).join("");
 }
@@ -1560,6 +1676,15 @@ $("#clipGrid").onclick = e => {
   if(c.on && S.clips.filter(x=>x.on).length === 1){ toast("Keep at least one clip in the shuffle"); return; }
   c.on = !c.on; renderClips(); tlDirty = true; syncSegCard();
 };
+/* drag a tile from the pool onto a clip on the timeline to use it there */
+$("#clipGrid").addEventListener("dragstart", e => { const b = e.target.closest(".clipt"); if(!b) return; e.dataTransfer.setData("text/sls-clip", b.dataset.id); e.dataTransfer.effectAllowed = "copy"; if(document.body.dataset.tl !== "open" && $("#tlToggle")) $("#tlToggle").click(); document.body.classList.add("tl-drop"); });
+$("#clipGrid").addEventListener("dragend", () => document.body.classList.remove("tl-drop"));
+tl.addEventListener("dragover", e => { if(![...e.dataTransfer.types].includes("text/sls-clip")) return; const r = tl.getBoundingClientRect(), y = e.clientY - r.top; if(y >= ROWS.cuts[0] && y < ROWS.cuts[1]){ e.preventDefault(); e.dataTransfer.dropEffect = "copy"; } });
+tl.addEventListener("drop", e => { const id = e.dataTransfer.getData("text/sls-clip"); if(!id) return; e.preventDefault(); document.body.classList.remove("tl-drop");
+  if(S.locks.cuts){ toast("The cuts track is locked"); return; }
+  const r = tl.getBoundingClientRect(), t = tOf(e.clientX - r.left), {segs} = segInfo(), i = segs.findIndex(g => t >= g.a && t < g.b); if(i < 0) return;
+  const c = S.clips.find(x => x.id === id); if(!c) return; if(!c.on){ c.on = true; renderClips(); }
+  setSlot(i, {c: id, in: null}); selectSeg(i); if(!S.playing) S.t = segs[i].a + 0.001; dirty(); });
 $("#clipFiles").onchange = async e => { const files = [...e.target.files]; e.target.value = ""; await addFootage(files); };
 /* Adds photos and videos to the footage pool. files: File or Blob objects; meta (optional, per file):
    {name, credit, src} where src describes where it came from so a template can fetch it again. */
@@ -1865,7 +1990,7 @@ function syncTextEditor(){
   const list = S.P.texts || [], cur = S.sel?.type === "text" ? textById(S.sel.id) : null;
   $("#txtList").innerHTML = list.map((x, i) => `<button data-id="${x.id}" aria-pressed="${cur && cur.id === x.id}">${esc((x.text || "Text").split("\n")[0].slice(0, 18) || "Text " + (i+1))}</button>`).join("");
   $("#txtEmpty").hidden = list.length > 0; $("#txtEdit").hidden = !cur; if(!cur) return;
-  if(!$("#txtFont").options.length) $("#txtFont").innerHTML = Object.entries(FONTLIB).map(([k,f]) => `<option value="${k}">${f.name}</option>`).join("");
+  fillFonts("#txtFont");
   const setV = (id, v) => { const el = $(id); if(document.activeElement !== el) el.value = v; };
   setV("#txtText", cur.text); setV("#txtFont", cur.font); setV("#txtSize", cur.size); setV("#txtColor", cur.color); setV("#txtBg", cur.bg); setV("#txtAnim", cur.anim);
   setV("#txtStart", (+cur.start).toFixed(2)); setV("#txtDur", (+cur.dur).toFixed(2)); setV("#txtLs", cur.ls || 0); setV("#txtLsp", cur.lsp || 0);

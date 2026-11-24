@@ -82,7 +82,7 @@
     { id: "cinema", name: "Cinema", cat: "cinematic", caseDef: "upper", demo: "she never gave me a warning", def: { pf: "serif", hi: "#ffffff" },
       draw(c, W, H, s, t, st, o){
         const k = ease((t - s.start) / 0.6), bar = H * 0.11 * k;
-        c.save(); c.globalAlpha = 1; c.fillStyle = "#000"; c.fillRect(0, 0, W, bar); c.fillRect(0, H - bar, W, bar); c.restore();
+        c.save(); c.globalAlpha = 1; c.fillStyle = "#000"; onFrame(c, W, H, (FW, FH) => { const b = FH * 0.11 * k; c.fillRect(0, 0, FW, b); c.fillRect(0, FH - b, FW, b); }); c.restore();
         const txt = s.words.slice(0, s.rev).map(w => caseOf(st, "upper", w.w)).join(" "), all = s.words.map(w => caseOf(st, "upper", w.w)).join(" ");
         const px = fitK(c, o.pf, [all], W * 0.82, H * 0.03); c.font = fnt(o.pf, px); setLS(c, px * (0.42 - 0.12 * k)); c.textAlign = "center"; c.textBaseline = "middle";
         c.globalAlpha *= k; c.fillStyle = o.tx; c.fillText(txt, W / 2, cy(H, st)); setLS(c, 0);

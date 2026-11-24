@@ -19,6 +19,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:ital,wdth,wght@1,125,800&family=Archivo+Black&family=Archivo+Narrow:wght@500;600&family=Barlow+Condensed:ital,wght@0,800;1,800&family=Bebas+Neue&family=Caveat:wght@700&family=Permanent+Marker&family=Big+Shoulders+Display:wght@800&family=Do+Hyeon&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,600&family=Instrument+Serif:ital@0;1&family=Inter+Tight:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,500&family=Silkscreen&family=JetBrains+Mono:wght@400;600&family=Oswald:wght@600&family=Playfair+Display:ital,wght@1,500&family=Poppins:wght@700&family=Six+Caps&family=Unbounded:wght@600;800&family=Syne:wght@800&family=DM+Serif+Display:ital@0;1&family=Bungee&family=Monoton&family=Rubik+Mono+One&family=Pacifico&family=Space+Mono:wght@700&display=swap">
+<!-- TikTok's own typeface (open source), and two more caption fonts; separate so one failing can't take the others down -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=TikTok+Sans:wght@400..900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Courier+Prime&family=Yesteryear&display=swap">
 <link rel="stylesheet" href="css/studio.css">
 <link rel="stylesheet" href="css/sls.css">
 <link rel="stylesheet" href="css/brand.css">
@@ -47,6 +50,7 @@
     <nav class="home-nav" aria-label="Start screen"><a href="#projects" id="navProjects">projects</a><a href="#" id="navDemo">demo</a><a href="https://stellarmusic.dk" target="_blank" rel="noopener">stellar music</a></nav>
     <div class="home-bar-r">
       <button class="btn ghost small" id="homeBack" hidden>Back to my project</button>
+      <div class="acct" data-sls-user hidden></div>
     </div>
   </div>
 
@@ -151,6 +155,7 @@
       <input id="instFile" type="file" accept="audio/*" hidden>
     </div>
     <button class="icon-btn" data-theme-toggle aria-label="Switch between light and dark"></button>
+    <div class="acct" data-sls-user hidden></div>
     <button class="btn primary" id="exportBtn"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 2v8M4.5 6.5 8 10l3.5-3.5M3 13h10"/></svg>Export<span class="wide">&nbsp;video</span></button>
   </header>
 
@@ -197,8 +202,7 @@
       <div class="tabs" role="tablist">
         <button class="tab" role="tab" aria-selected="true" data-tab="lyrics">Lyrics</button>
         <button class="tab" role="tab" aria-selected="false" data-tab="clips">Clips</button>
-        <button class="tab" role="tab" aria-selected="false" data-tab="templates">Templates</button>
-        <button class="tab mobile-only" role="tab" aria-selected="false" data-tab="style">Style</button>
+        <button class="tab mobile-only" role="tab" aria-selected="false" data-tab="style">Look</button>
       </div>
 
       <section class="pane" data-pane="lyrics">
@@ -275,9 +279,19 @@
         </div>
         <div class="field">
           <span class="label">Transition between clips</span>
-          <div class="seg seg-wrap" id="cutTrans"><button data-v="none">Cut</button><button data-v="crossfade">Crossfade</button><button data-v="slide">Slide</button><button data-v="push">Push</button><button data-v="zoom">Zoom</button><button data-v="wipe">Wipe</button><button data-v="blur">Blur</button><button data-v="spin">Spin</button><button data-v="flash">Flash</button><button data-v="dip">Dip</button></div>
-          <span class="hint">None is a clean, instant cut.</span>
+          <div class="seg seg-wrap" id="cutTrans"><button data-v="none">None</button><button data-v="mix" title="A different transition at every cut">Mix</button><button data-v="crossfade">Crossfade</button><button data-v="slide">Slide</button><button data-v="push">Push</button><button data-v="zoom">Zoom</button><button data-v="wipe">Wipe</button><button data-v="blur">Blur</button><button data-v="spin">Spin</button><button data-v="flash">Flash</button><button data-v="dip">Dip</button></div>
+          <span class="hint">None is a clean, instant cut. Pick a cut on the timeline to give it its own transition.</span>
           <label class="field" id="xfField" hidden><span class="row" style="justify-content:space-between"><span class="hint">Transition length</span><span class="hint" id="xfDurVal">0.35s</span></span><input type="range" id="xfDur" min="0.05" max="2" step="0.05"></label>
+        </div>
+        <div class="field">
+          <span class="label">Photos move</span>
+          <div class="seg seg-wrap" id="cutMotion"><button data-v="zoom">Slow zoom and pan</button><button data-v="zoomin">Zoom in</button><button data-v="zoomout">Zoom out</button><button data-v="still">Still</button></div>
+        </div>
+        <div class="field">
+          <span class="label">Framing</span>
+          <div class="seg" id="cutFit"><button data-v="fill">Fill the frame</button><button data-v="fit">Whole picture</button></div>
+          <label class="srow"><span>Zoom</span><span class="row" style="gap:8px;flex:1;flex-wrap:nowrap"><input type="range" id="cutZoom" min="50" max="300" step="1"><span class="hint" id="cutZoomVal" style="min-width:42px;text-align:right">100%</span></span></label>
+          <span class="hint">For every photo and video. Pick a cut on the timeline to frame just that one.</span>
         </div>
         <div class="field" id="cutManualField" hidden>
           <div class="row"><button class="btn small" id="cutAdd">Add cut at playhead</button><button class="btn small ghost" id="cutReset">Back to beat cuts</button></div>
@@ -302,28 +316,26 @@
             <input type="range" id="segSpeed" min="0.25" max="4" step="0.05" aria-label="Clip speed">
             <div class="seg" id="segSpeedP"><button data-v="0.5">0.5×</button><button data-v="1">1×</button><button data-v="1.5">1.5×</button><button data-v="2">2×</button><button data-v="3">3×</button></div>
           </div>
+          <div class="field">
+            <span class="label">Timing</span>
+            <div class="row seg-time" style="gap:6px;flex-wrap:nowrap"><span class="hint">Length</span><button class="btn small ghost" id="segShorter" title="0.1 s shorter" aria-label="Shorter">−</button><input type="number" id="segLen" min="0.2" step="0.1" style="width:76px" aria-label="Length of this clip in seconds"><span class="hint">s</span><button class="btn small ghost" id="segLonger" title="0.1 s longer" aria-label="Longer">+</button></div>
+            <div class="row" style="gap:6px"><button class="btn small" id="segSplit">Split at playhead</button><button class="btn small ghost" id="segMerge">Join with next</button></div>
+          </div>
+          <label class="srow"><span>Transition in</span><select id="segTr"><option value="">Same as all</option><option value="none">None</option><option value="crossfade">Crossfade</option><option value="slide">Slide</option><option value="push">Push</option><option value="zoom">Zoom</option><option value="wipe">Wipe</option><option value="blur">Blur</option><option value="spin">Spin</option><option value="flash">Flash</option><option value="dip">Dip to black</option></select></label>
+          <label class="srow" id="segMoRow"><span>Movement</span><select id="segMo"><option value="">Same as all</option><option value="zoom">Slow zoom and pan</option><option value="zoomin">Zoom in</option><option value="zoomout">Zoom out</option><option value="still">Still</option></select></label>
+          <div class="field">
+            <span class="row" style="justify-content:space-between"><span class="label">Framing</span><button class="btn small ghost" id="segFxReset">Reset</button></span>
+            <div class="seg" id="segFit"><button data-v="fill">Fill the frame</button><button data-v="fit">Whole picture</button></div>
+            <label class="srow"><span>Zoom</span><span class="row" style="gap:8px;flex:1;flex-wrap:nowrap"><input type="range" id="segZoom" min="50" max="300" step="1"><span class="hint" id="segZoomVal" style="min-width:42px;text-align:right">100%</span></span></label>
+            <div class="grid2"><label class="field"><span class="hint">Left / right</span><input type="range" id="segX" min="-1" max="1" step="0.01"></label>
+              <label class="field"><span class="hint">Up / down</span><input type="range" id="segY" min="-1" max="1" step="0.01"></label></div>
+            <button class="btn small ghost" id="segFxAll">Use this framing for every cut</button>
+          </div>
           <div class="row"><button class="btn small ghost" id="cutRemove">Delete this clip</button></div>
-          <div class="hint">On the timeline: drag a clip to move it, drag its edges to trim, double-click to swap in the next clip, Delete removes it.</div>
+          <div class="hint">On the timeline: drag a clip's edge to change when it changes (it sticks to lyric lines and beats; hold Alt to move freely), drag a clip to swap it with another, double-click to try the next clip, or drag a photo from the pool onto a clip to replace it.</div>
         </div>
       </section>
 
-      <section class="pane" data-pane="templates" hidden>
-        <div class="field">
-          <label class="label" for="tplName">Save this section as a template</label>
-          <input type="text" id="tplName" placeholder="e.g. Fuorisede hook, 15s">
-          <button class="btn" id="tplSave">Save template</button>
-          <div class="hint" id="tplWhere">Templates keep the section, lyric timing, beat grid, cuts, style and hook. Footage is not stored, so you can swap visuals for each new version.</div>
-        </div>
-        <div class="label">SLS templates</div>
-        <div class="tlist" id="builtinList"></div>
-        <div class="hint">Pick a template, then load that song (or load the song first). The studio finds the section in the song by its sound and lines everything up.</div>
-        <div class="label">Saved templates</div>
-        <div class="tlist" id="tplList"></div>
-        <div class="row">
-          <button class="btn small ghost" id="tplDownload">Save as file</button>
-          <label class="btn small ghost file">Open file<input id="tplOpen" type="file" accept=".json,application/json"></label>
-        </div>
-      </section>
     </aside>
 
     <!-- CENTER: stage -->
@@ -351,36 +363,55 @@
       </div>
     </main>
 
-    <!-- RIGHT: style rack -->
+    <!-- RIGHT: templates / text / titles -->
     <aside class="side rack">
-      <div class="tabs"><button class="tab" aria-selected="true" tabindex="-1">Style</button></div>
-      <section class="pane">
+      <div class="rtabs" role="tablist" aria-label="Look">
+        <button class="rtab" role="tab" data-rtab="looks" aria-selected="true">Templates</button>
+        <button class="rtab" role="tab" data-rtab="type" aria-selected="false">Text</button>
+        <button class="rtab" role="tab" data-rtab="titles" aria-selected="false">Titles</button>
+      </div>
+      <section class="pane" data-rpane="looks">
         <div class="shead">
           <div class="shead-l">
-            <span class="label">Lyric style</span>
+            <span class="label">Lyric template</span>
             <b id="styleName">Stack</b>
             <div class="row" style="gap:6px"><button class="btn small ghost" id="styleFav" aria-pressed="false" title="Add to favourites">☆</button><button class="btn small ghost" id="styleVar" hidden>Variation</button></div>
           </div>
-          <canvas id="stylePrev" width="300" height="200" aria-label="Animated preview of the selected style"></canvas>
+          <canvas id="stylePrev" width="300" height="200" aria-label="Animated preview of the selected template"></canvas>
         </div>
-        <div class="chips" id="styleCats"><button data-v="all">All</button><button data-v="fav">Favourites</button><button data-v="minimal">Minimal</button><button data-v="bold">Bold</button><button data-v="layered">Layered</button><button data-v="glow">Glow</button><button data-v="cinematic">Cinematic</button><button data-v="playful">Playful</button><button data-v="editorial">Editorial</button></div>
+        <div class="chips" id="styleCats"><button data-v="all">All</button><button data-v="fav">Favourites</button><button data-v="trend">Trending</button><button data-v="minimal">Minimal</button><button data-v="bold">Bold</button><button data-v="layered">Layered</button><button data-v="glow">Glow</button><button data-v="cinematic">Cinematic</button><button data-v="playful">Playful</button><button data-v="editorial">Editorial</button></div>
         <div class="presets" id="presets"></div>
+        <div class="tpl-pane" id="tplPane">
+          <input type="text" id="tplName" hidden><button id="tplSave" hidden></button>
+          <div class="hint" id="tplWhere"></div>
+          <div class="tlist" id="builtinList"></div>
+          <div class="tlist" id="tplList"></div>
+          <button id="tplDownload" hidden></button><input id="tplOpen" type="file" accept=".json,application/json" hidden>
+        </div>
+      </section>
+      <section class="pane" data-rpane="type" hidden>
         <div class="card">
-          <div class="label" id="ssTitle">Stack settings</div>
-          <label class="srow"><span>Primary font</span><select id="sPf"></select></label>
-          <label class="srow" id="sSfRow"><span>Secondary font</span><select id="sSf"></select></label>
-          <label class="srow"><span>Size</span><span class="row" style="gap:6px;flex:1;flex-wrap:nowrap"><input type="range" id="sSize" min="0.12" max="2.5" step="0.01"><input type="number" id="sizePx" class="size-px" min="4" max="600" step="1" aria-label="Lyric text size in pixels" title="Text size in pixels on a 1080p video. Long lines shrink to fit the frame."><span class="hint">px</span></span></label>
+          <div class="label" id="ssTitle">Text for Stack</div>
+          <label class="srow"><span>Font</span><select id="sPf"></select></label>
+          <label class="srow" id="sSfRow"><span>Second font</span><select id="sSf"></select></label>
+          <div class="field size-f">
+            <span class="row" style="justify-content:space-between"><span class="label">Size</span><span class="row" style="gap:4px"><input type="number" id="sizeNum" class="size-num" min="0" max="100" step="1" aria-label="Lyric size from 0 to 100"><span class="hint">/ 100</span></span></span>
+            <input type="range" id="sSize" min="0" max="100" step="0.5" aria-label="Lyric size">
+            <span class="hint">0 is tiny, 50 is the template's own size, 100 is huge. Long lines still shrink to fit the frame.</span>
+          </div>
           <div class="srow"><span>Highlight</span><div class="swatches" id="hiSw"></div></div>
           <div class="srow"><span>Text colour</span><div class="swatches"><input type="color" id="sColor" title="Text colour"></div></div>
-          <label class="srow"><span>Case</span><select id="sCase"><option value="auto">Style default</option><option value="as">As typed</option><option value="lower">lowercase</option><option value="upper">UPPERCASE</option></select></label>
+          <label class="srow"><span>Case</span><select id="sCase"><option value="auto">Template default</option><option value="as">As typed</option><option value="lower">lowercase</option><option value="upper">UPPERCASE</option></select></label>
         </div>
         <div class="card">
           <div class="field"><span class="row" style="justify-content:space-between"><span class="label">Position</span><button class="btn small ghost" id="sCenter">Center</button></span>
             <div class="grid2"><label class="field"><span class="hint">Left / right</span><input type="range" id="sX" min="0" max="1" step="0.01"></label>
             <label class="field"><span class="hint">Up / down</span><input type="range" id="sY" min="0" max="1" step="0.01"></label></div>
             <span class="hint">Or drag the lyrics on the preview.</span></div>
-          <label class="field"><span class="label">Darken footage</span><input type="range" id="sScrim" min="0" max="0.75" step="0.01"></label>
+          <label class="field"><span class="label">Darken footage behind the text</span><input type="range" id="sScrim" min="0" max="0.75" step="0.01"></label>
         </div>
+      </section>
+      <section class="pane" data-rpane="titles" hidden>
         <div class="card">
           <div class="row" style="justify-content:space-between"><span class="label">Hook text</span>
             <div class="seg" id="hookSeg"><button data-v="off">Off</button><button data-v="on">On</button></div></div>
@@ -473,7 +504,7 @@
       <div class="tlscroll" id="tlScroll"><canvas id="tl"></canvas></div>
     </div>
   </section>
-  <nav class="mtools" id="mtools" aria-label="Tools"><button data-sheet="lyrics"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h10M4 18h13"/></svg><span>Lyrics</span></button><button data-sheet="style"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19 12 5l7 14M8 13h8"/></svg><span>Style</span></button><button data-sheet="clips"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m10 9 5 3-5 3z"/></svg><span>Clips</span></button><button data-sheet="text"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 6V4h14v2"/><path d="M12 4v16"/><path d="M9 20h6"/></svg><span>Text</span></button><button data-sheet="hook"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="8" rx="4"/></svg><span>Hook</span></button><button data-sheet="audio"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg><span>Audio</span></button><button data-sheet="format"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="3" width="10" height="18" rx="2"/></svg><span>Format</span></button><button data-sheet="templates"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/></svg><span>Templates</span></button></nav>
+  <nav class="mtools" id="mtools" aria-label="Tools"><button data-sheet="lyrics"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h10M4 18h13"/></svg><span>Lyrics</span></button><button data-sheet="style"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/></svg><span>Templates</span></button><button data-sheet="clips"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m10 9 5 3-5 3z"/></svg><span>Clips</span></button><button data-sheet="text"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 6V4h14v2"/><path d="M12 4v16"/><path d="M9 20h6"/></svg><span>Text</span></button><button data-sheet="hook"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="8" rx="4"/></svg><span>Hook</span></button><button data-sheet="audio"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg><span>Audio</span></button><button data-sheet="format"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="3" width="10" height="18" rx="2"/></svg><span>Format</span></button><button data-sheet="font"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19 9 5l5 14M6 14h6M15 19h5M17.5 12v7"/></svg><span>Font</span></button></nav>
   <div class="msheet" id="msheet" hidden><div class="msheet-h"><b id="msheetTitle"></b><button class="btn small" id="msheetDone">Done</button></div><div class="msheet-b" id="msheetBody"></div></div>
 </div>
 
@@ -498,10 +529,12 @@
 </div>
 <div class="toast" id="toast" hidden></div>
 
+<script src="js/auth.js"></script>
 <script src="js/backend.js"></script>
 <script src="js/studio.js"></script>
 <script src="js/styles-extra.js"></script>
 <script src="js/styles-more.js"></script>
+<script src="js/styles-trend.js"></script>
 <script src="js/transcribe.js"></script>
 <script src="js/lyrics.js"></script>
 <script src="js/app.js"></script>

@@ -82,19 +82,9 @@ window.SLSApp = (() => {
   langSel.innerHTML = '<option value="">Detect automatically</option>' + SLSTranscribe.LANGUAGES.map(([c, n]) => `<option value="${c}">${n}</option>`).join("");
   langSel.value = keep.get("sls-lang") || ""; langSel.onchange = () => keep.set("sls-lang", langSel.value);
 
-  /* ---------- passcode ---------- */
-  function askPass(message){
-    return new Promise(resolve => {
-      const m = $("#passModal"), inp = $("#passInput"), err = $("#passErr"), form = $("#passForm");
-      err.hidden = !message; err.textContent = message || ""; inp.value = ""; m.hidden = false; setTimeout(() => inp.focus(), 30);
-      const finish = v => { m.hidden = true; form.onsubmit = null; $("#passCancel").onclick = null; resolve(v); };
-      $("#passCancel").onclick = () => finish(false);
-      form.onsubmit = async e => { e.preventDefault(); const v = inp.value.trim(); if(!v) return; $("#passOk").disabled = true;
-        try { await api.unlock(v); finish(true); initTemplates(); }
-        catch(ex){ if(ex.code === "unauthorized" || ex.code === "rate_limited"){ err.hidden = false; err.textContent = ex.message; inp.select(); } else finish(ex); }
-        finally { $("#passOk").disabled = false; } };
-    });
-  }
+  /* ---------- login ---------- */
+  // everything that needs the server waits until someone is logged in (auth.js shows the login window)
+  const loggedIn = async () => { await SLSAuth.ready; return true; };
 
   /* ---------- song in, lyrics out ---------- */
   async function pick(file){
@@ -121,11 +111,11 @@ window.SLSApp = (() => {
     const ctl = job = new AbortController();
     $("#workSong").textContent = S.songName; showHome("work"); progress({ stage: "read", pct: 0.02 }); paintSteps();
     try {
-      if(!api.hasPass()){ const ok = await askPass(); if(ok !== true){ if(ok && ok.code) throw ok; throw new api.ApiError("cancelled", "Cancelled.", 0); } }
+      await loggedIn();
       let out;
-      for(;;){
+      for(let tries = 0;; tries++){
         try { out = await SLSTranscribe.run(S.audio, { language: langSel.value || null, signal: ctl.signal, onProgress: progress, lyrics: given }); break; }
-        catch(err){ if(err.code !== "unauthorized") throw err; const ok = await askPass("That passcode isn't right. Try again."); if(ok !== true){ if(ok && ok.code) throw ok; throw new api.ApiError("cancelled", "Cancelled.", 0); } }
+        catch(err){ if(err.code !== "unauthorized" || tries > 2) throw err; await SLSAuth.ready; await new Promise(r => { const off = SLSAuth.onChange(u => { if(u){ off(); r(); } }); }); }
       }
       if(ctl.signal.aborted) return;
       if(given && !out.words.length){
@@ -152,7 +142,7 @@ window.SLSApp = (() => {
       if(ctl.signal.aborted || err.code === "cancelled"){ if(S.P.words.length) go(lastStep); else oops("Stopped", "The song is loaded, but the lyrics weren't written. You can try again or type them in.", {}); return; }
       const MSG = {
         offline: ["Can't reach the lyric AI", "The studio server isn't answering. Check your connection, or type the lyrics in yourself."],
-        not_configured: ["The lyric AI isn't switched on yet", "The studio passcode hasn't been set on the server. Until then you can type or paste the lyrics."],
+        not_configured: ["The lyric AI isn't switched on yet", "Logins aren't set up on the server yet. Until then you can type or paste the lyrics."],
         no_ai: ["The lyric AI isn't connected", "The server is running but has no speech model attached. You can type or paste the lyrics for now."],
         rate_limited: ["Too many requests", "Wait a minute, then try again."],
         timeout: ["That took too long", "The lyric AI didn't answer in time. Trying again usually works."],
@@ -213,12 +203,10 @@ window.SLSApp = (() => {
   (function frame(){ try { if(home.hidden && body.dataset.step === "lyrics"){ SLSLyricsUI.tick(); if(!seeking) seekBar.value = songTime(); } } catch(err){ if(!frame.warned){ frame.warned = true; console.error(err); } } requestAnimationFrame(frame); })();
 
   body.dataset.step = "lyrics"; S.review = false; showHome("drop"); paintSteps();
-  /* asks for the passcode if this browser doesn't have it yet; true when unlocked */
+  /* true once someone is logged in (the login window is up until then) */
   async function ensurePass(){
-    if(api.hasPass()) return true;
-    const ok = await askPass(); if(ok === true) return true;
-    if(ok && ok.message) toast(ok.message);
-    return false;
+    if(SLSAuth.signedIn()) return true;
+    SLSAuth.requireLogin("Log in to carry on."); await SLSAuth.ready; return SLSAuth.signedIn();
   }
   /* the "working" card on the start screen, for other parts of the app (opening a project) */
   function working(title, step){ $("#workSong").textContent = title; showHome("work"); $("#workStep").textContent = step; $("#workBar").style.width = "35%"; $$("#workList li").forEach(li => { li.className = ""; }); paintSteps(); }

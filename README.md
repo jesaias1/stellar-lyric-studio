@@ -79,3 +79,16 @@ choice for videos you publish.
 - Songs are sent to the backend in 30 second pieces for transcription only. Nothing is stored.
 - Projects are saved in the browser. Shared templates need the `TEMPLATES` storage (see `wrangler.jsonc`).
 - `brand/` holds the original logo. `samples/` holds an example LRC and SRT.
+
+## Accounts (logins)
+
+Everyone logs in with their own email and password. Projects (the edit: lyrics, timing, style, cuts, texts) and
+linked YouTube, Instagram and TikTok accounts belong to that login, and follow it to any computer. Songs and
+footage stay in the browser they were added in.
+
+- The accounts live in Supabase. Run `supabase/schema.sql` once in the project's SQL editor (tables, row-level
+  security, the team-code check), and turn off "Confirm email" under Authentication > Sign In / Providers.
+- Set `SUPABASE_URL` and `SUPABASE_KEY` (the publishable key) on the host. Both are public values.
+- Signing up needs the team code, kept inside the database (private.settings). Change it with:
+  `insert into private.settings (key, value) values ('team_code', 'NEW-CODE') on conflict (key) do update set value = excluded.value;`
+- Without the two Supabase settings the studio falls back to the single shared passcode (`SLS_PASSCODE`).

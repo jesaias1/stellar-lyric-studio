@@ -24,9 +24,10 @@ window.SLSTemplates = (() => {
     { id: "s-glitch", name: "Glitch Club", desc: "RGB glitch words, spin cuts every beat", style: { preset: "glitch", color: "#ffffff", scrim: 0.35 }, cuts: { mode: "beat", every: 1, transition: "spin", xf: 0.25 }, gens: ["Ultra", "Night drive"], bg: ["#000", "#5a3cff"] },
     { id: "s-karaoke", name: "Clean Karaoke", desc: "Classic sing-along fill, push cuts", style: { preset: "karaoke", color: "#ffffff", scrim: 0.3, his: { karaoke: "#ffe14a" } }, cuts: { mode: "lines", transition: "push", xf: 0.4 }, gens: ["Lagoon", "Dusk"], bg: ["#062421", "#139a87"] },
   ];
-  const pane = $('[data-pane="templates"]');
+  const pane = $("#tplPane");
   pane.innerHTML = `
-    <div class="tp-head"><span class="label">Templates</span><button class="btn small primary" id="tpNew">+ Save as template</button></div>
+    <div class="tp-head"><span class="label">Complete looks</span><button class="btn small" id="tpNew">+ Save current look</button></div>
+    <div class="hint">A complete look also carries the cuts, transitions, format and footage, not just the lyric template.</div>
     <form class="tp-form card" id="tpForm" hidden>
       <label class="field"><span class="hint">Name</span><input type="text" id="tpName" placeholder="e.g. Ingrid · Christmas look" maxlength="80"></label>
       <div class="field"><span class="hint">What it should carry</span><div class="tp-parts" id="tpParts">${PARTS.map(p => `<label class="tp-part"><input type="checkbox" value="${p.id}" ${p.off ? "" : "checked"}><span><b>${p.name}</b><i>${p.desc}</i></span></label>`).join("")}</div></div>

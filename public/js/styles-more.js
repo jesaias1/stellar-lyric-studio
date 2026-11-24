@@ -195,7 +195,7 @@
     { id: "band", name: "Band", cat: "layered", caseDef: "upper", demo: "cut it out", def: { pf: "anton", hi: "#ffffff" }, tags: { e: "mid", m: ["hype", "dramatic"] },
       draw(c, W, H, s, t, st, o){   // dark letters punched through a bright band that wipes across
         const opt = { caseDef: "upper", px: 0.07, maxW: 0.8, lh: 1.08 }, m = measure(c, W, H, s, st, o, opt), k = ease((t - s.start) / 0.3);
-        c.fillStyle = o.hi; c.fillRect(0, m.top - m.px * 0.22, W * k, m.lay.lines * m.lh + m.px * 0.3);
+        c.fillStyle = o.hi; bandFill(c, W, m.top - m.px * 0.22, m.lay.lines * m.lh + m.px * 0.3, k);
         c.textBaseline = "top";
         lineLayout(c, W, H, s, st, o, { ...opt, each(it, i, x, y){ c.save(); c.fillStyle = "#0b0b10"; c.globalAlpha *= sung(s, i) ? 1 : 0.18; c.fillText(it.s, x, y); c.restore(); } });
     } },
@@ -215,7 +215,7 @@
       draw(c, W, H, s, t, st, o){   // the line runs past on an endless ticker band, the sung word lit up
         const yc = cy(H, st), px = H * 0.06, words = s.words.map(w => caseOf(st, "upper", w.w)); c.font = fnt(o.pf, px); c.textBaseline = "middle"; c.textAlign = "left";
         const sep = "  ✦  ", sw = c.measureText(sep).width, ws = words.map(w => c.measureText(w).width), total = ws.reduce((a, b) => a + b + sw, 0);
-        c.fillStyle = "rgba(0,0,0,.55)"; c.fillRect(0, yc - px * 0.85, W, px * 1.7); c.fillStyle = o.hi; c.fillRect(0, yc - px * 0.85, W, Math.max(1, px * 0.04)); c.fillRect(0, yc + px * 0.81, W, Math.max(1, px * 0.04));
+        c.fillStyle = "rgba(0,0,0,.55)"; bandFill(c, W, yc - px * 0.85, px * 1.7); c.fillStyle = o.hi; bandFill(c, W, yc - px * 0.85, Math.max(1, px * 0.04)); bandFill(c, W, yc + px * 0.81, Math.max(1, px * 0.04));
         let x = -((t * px * 2.2) % total); while(x < W){ words.forEach((w, i) => { c.save(); c.globalAlpha *= sung(s, i) ? 1 : 0.35; c.fillStyle = i === s.rev - 1 ? o.hi : o.tx; c.fillText(w, x, yc); c.restore(); x += ws[i]; c.fillStyle = o.hi; c.fillText(sep, x, yc); x += sw; }); }
     } },
 
@@ -316,7 +316,7 @@
     { id: "letterbox", name: "Letterbox", cat: "cinematic", caseDef: "as", demo: "in another life", def: { pf: "serif", hi: "#ffffff" }, tags: { e: "low", m: ["dramatic", "sad", "calm"] },
       draw(c, W, H, s, t, st, o){   // cinema bars close in while the line plays
         const k = ease((t - s.start) / 0.6), bar = H * 0.11 * k;
-        c.save(); c.globalAlpha = Math.max(c.globalAlpha, 0.001) * 0.92; c.fillStyle = "#000"; c.fillRect(0, 0, W, bar); c.fillRect(0, H - bar, W, bar); c.restore();
+        c.save(); c.globalAlpha = Math.max(c.globalAlpha, 0.001) * 0.92; c.fillStyle = "#000"; onFrame(c, W, H, (FW, FH) => { const b = FH * 0.11 * k; c.fillRect(0, 0, FW, b); c.fillRect(0, FH - b, FW, b); }); c.restore();
         c.textBaseline = "top";
         lineLayout(c, W, H, s, st, o, { caseDef: "as", px: 0.046, maxW: 0.78, lh: 1.3, each(it, i, x, y){ if(!sung(s, i)) return; c.save(); c.globalAlpha *= ease(ageOf(s, i, t) / 0.5); c.fillStyle = o.tx; c.fillText(it.s, x, y); c.restore(); } });
     } },

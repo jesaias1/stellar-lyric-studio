@@ -13,10 +13,10 @@ window.SLSPublish = (() => {
     tiktok: `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="5" fill="#000"/><path d="M13.5 6v8.2a2.3 2.3 0 1 1-2.3-2.3" fill="none" stroke="#25f4ee" stroke-width="1.8" transform="translate(-.6 .4)"/><path d="M13.5 6v8.2a2.3 2.3 0 1 1-2.3-2.3M13.5 6c.3 1.8 1.6 3 3.4 3.1" fill="none" stroke="#fe2c55" stroke-width="1.8" transform="translate(.6 -.4)"/><path d="M13.5 6v8.2a2.3 2.3 0 1 1-2.3-2.3M13.5 6c.3 1.8 1.6 3 3.4 3.1" fill="none" stroke="#fff" stroke-width="1.8"/></svg>`,
   };
 
-  /* ---------- accounts, kept in this browser ---------- */
-  const accounts = () => keep.get("sls-accounts", []).filter(a => a && a.id && P[a.platform] && a.sealed);
-  const saveAccounts = list => keep.set("sls-accounts", list);
-  const updateAccount = (id, patch) => saveAccounts(accounts().map(a => a.id === id ? { ...a, ...patch } : a));
+  /* ---------- accounts: they belong to the logged-in user (kept in their account, see auth.js) ---------- */
+  const store = window.SLSAuth.accounts;
+  const accounts = () => store.all().filter(a => a && a.id && P[a.platform] && a.sealed);
+  const updateAccount = (id, patch) => store.update(id, patch);
   let selected = new Set(keep.get("sls-pub-sel", []));
   const saveSel = () => keep.set("sls-pub-sel", [...selected]);
 
@@ -192,8 +192,8 @@ window.SLSPublish = (() => {
       inp.onblur = () => done(true); return; }
     const rm = e.target.closest("[data-rm]");
     if(rm){ if(!rm.dataset.sure){ rm.dataset.sure = "1"; rm.textContent = "Remove?"; setTimeout(() => { if(rm.isConnected){ delete rm.dataset.sure; rm.textContent = "✕"; } }, 3000); return; }
-      const a = accounts().find(x => x.id === rm.dataset.rm); saveAccounts(accounts().filter(x => x.id !== rm.dataset.rm)); selected.delete(rm.dataset.rm); saveSel(); paint();
-      if(a) toast(`${a.name} removed from this browser. To cut the app off completely, remove its access in ${P[a.platform]}'s settings.`); }
+      const a = accounts().find(x => x.id === rm.dataset.rm); store.remove(rm.dataset.rm); selected.delete(rm.dataset.rm); saveSel(); paint();
+      if(a) toast(`${a.name} removed from your account. To cut the app off completely, remove its access in ${P[a.platform]}'s settings.`); }
   });
   $("#pubYtPriv").onclick = e => { const b = e.target.closest("button"); if(!b) return; ytPriv = b.dataset.v; keep.set("sls-pub-ytpriv", ytPriv); paint(); };
 
@@ -210,11 +210,12 @@ window.SLSPublish = (() => {
   };
   addEventListener("message", e => {
     if(e.origin !== location.origin || !e.data || e.data.sls !== "account") return;
-    if(e.data.ok){ if(e.data.id){ selected.add(e.data.id); saveSel(); } const a = accounts().find(x => x.id === e.data.id); toast(`${a ? a.name : "The account"} is linked.` + (a && !a.label ? " Give it an artist name to group it." : "")); }
+    if(e.data.ok){ if(e.data.record && e.data.record.sealed) store.put(e.data.record); else store.adoptNew();
+      if(e.data.id){ selected.add(e.data.id); saveSel(); } const a = accounts().find(x => x.id === e.data.id); toast(`${a ? a.name : "The account"} is linked.` + (a && !a.label ? " Give it an artist name to group it." : "")); }
     else if(e.data.problem) toast(e.data.problem);
     if(!m.hidden){ paint(); loadCreators(); }
   });
-  addEventListener("storage", e => { if(e.key === "sls-accounts" && !m.hidden) paint(); });
+  addEventListener("sls-accounts", () => { if(!m.hidden) paint(); });
 
   /* ---------- posting ---------- */
   let posting = false;
@@ -266,7 +267,8 @@ window.SLSPublish = (() => {
   async function toBlob(file, onProgress){
     const lib = await import(window.SLS_BLOB_CLIENT || "https://esm.sh/@vercel/blob@2/client");
     const ext = (video && video.f && video.f.ext) || "mp4", name = (S.songName || "lyric-video").replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-").slice(0, 60) || "lyric-video";
-    const r = await lib.upload(`sls-posts/${name}.${ext}`, file, { access: "public", handleUploadUrl: "/api/publish/blob", contentType: file.type || "video/mp4",
+    const who = window.SLSAuth && SLSAuth.user(), dir = who && who.id ? who.id + "/" : "";
+    const r = await lib.upload(`sls-posts/${dir}${name}.${ext}`, file, { access: "public", handleUploadUrl: "/api/publish/blob", contentType: file.type || "video/mp4",
       clientPayload: JSON.stringify({ pass: api.passcode() }), multipart: file.size > 20 * 1048576, onUploadProgress: e => onProgress((e && e.percentage || 0) / 100) });
     return r.url;
   }

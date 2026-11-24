@@ -54,13 +54,22 @@ export async function publishPublicRoute(request, env, url, path, method) {
   return null;
 }
 
-export async function publishRoute(request, env, url, path, method, { json }) {
-  if (path === "/api/publish/connect" && method === "POST") return connect(env, request, url, json);
-  if (path === "/api/publish/creator" && method === "POST") return creatorInfo(env, request, json);
-  if (path === "/api/publish/status" && method === "POST") return status(env, request, url, json);
+export async function publishRoute(request, env, url, path, method, { json, user = {} }) {
+  if (path === "/api/publish/connect" && method === "POST") return connect(env, request, url, json, user);
+  if (path === "/api/publish/creator" && method === "POST") return creatorInfo(env, request, json, user);
+  if (path === "/api/publish/status" && method === "POST") return status(env, request, url, json, user);
   const m = path.match(/^\/api\/publish\/(youtube|instagram|tiktok)$/);
-  if (m && method === "POST") return upload(env, request, url, m[1], json);
+  if (m && method === "POST") return upload(env, request, url, m[1], json, user);
   return null;
+}
+
+/* A linked account belongs to the person who linked it: the sealed record carries their user id, and only
+   they can post with it (copying the sealed text to another login doesn't work). */
+async function openAccount(env, sealed, p, user) {
+  const a = await unseal(env, sealed || "");
+  if (!a || a.p !== p) throw new Fail(`That ${NAMES[p] || ""} account can't be read here (the site's TOKEN_KEY may have changed). Link it again.`, "relink", 409);
+  if (user && user.id && a.uid !== user.id) throw new Fail(`That ${NAMES[p]} account was linked under another login. Link it again from your own account.`, "relink", 409);
+  return a;
 }
 
 /* ---------- sealing: AES-GCM with a key derived from TOKEN_KEY ---------- */
@@ -101,12 +110,12 @@ function configured(env, p) {
 const fail = (json, e) => json({ error: e.code || "publish_failed", message: e.message || "Publishing failed." }, e.status || 502);
 
 /* ---------- 1. linking an account ---------- */
-async function connect(env, request, url, json) {
+async function connect(env, request, url, json, user) {
   const b = await body(request), p = b.platform;
   try {
     if (!NAMES[p]) throw new Fail("Unknown platform.", "bad_request", 400);
     configured(env, p);
-    const base = origin(env, url), state = await seal(env, { k: "state", p, base, t: Date.now(), n: b64u(crypto.getRandomValues(new Uint8Array(9))) });
+    const base = origin(env, url), state = await seal(env, { k: "state", p, base, uid: user.id || null, t: Date.now(), n: b64u(crypto.getRandomValues(new Uint8Array(9))) });
     const ru = redirectUri(base, p);
     let auth;
     if (p === "youtube") auth = "https://accounts.google.com/o/oauth2/v2/auth?" + form({ client_id: env.GOOGLE_CLIENT_ID, redirect_uri: ru, response_type: "code",
@@ -130,7 +139,7 @@ async function oauthReturn(env, url, p) {
     const ru = redirectUri(st.base, p);
     const acct = p === "youtube" ? await youtubeLink(env, code, ru) : p === "instagram" ? await instagramLink(env, code, ru) : await tiktokLink(env, code, ru);
     const { secret, ...pub } = acct;
-    const record = { ...pub, id: `${p}:${pub.rid}`, platform: p, sealed: await seal(env, { k: "acct", p, rid: pub.rid, ...secret }), linkedAt: Date.now() };
+    const record = { ...pub, id: `${p}:${pub.rid}`, platform: p, sealed: await seal(env, { k: "acct", p, rid: pub.rid, uid: st.uid || null, ...secret }), linkedAt: Date.now() };
     return page(null, record);
   } catch (e) {
     console.error("oauth failed", p, e && e.message);
@@ -138,8 +147,9 @@ async function oauthReturn(env, url, p) {
   }
 }
 
-/* The page the login window lands on. It saves the account in this browser (same site, same storage as the
-   studio), tells the studio window, and closes itself. */
+/* The page the login window lands on. It hands the linked account to the studio window (which saves it to
+   the user's own account list), and closes itself. If the studio window can't be reached, the account waits in
+   this browser's storage and the studio picks it up next time it opens. */
 function page(problem, record) {
   const title = problem ? "Couldn't link the account" : `${NAMES[record.platform]} account linked`;
   const data = JSON.stringify({ problem, record: record || null }).replace(/</g, "\\u003c");
@@ -151,15 +161,10 @@ var d = ${data};
 document.getElementById("t").textContent = ${JSON.stringify(title)};
 if (d.problem) { document.getElementById("m").textContent = d.problem; }
 else {
-  var r = d.record, list = [];
-  try { list = JSON.parse(localStorage.getItem("sls-accounts") || "[]") || []; } catch (e) {}
-  var old = list.filter(function (a) { return a.id === r.id; })[0];
-  if (old && old.label) r.label = old.label;
-  list = list.filter(function (a) { return a.id !== r.id; }); list.push(r);
-  try { localStorage.setItem("sls-accounts", JSON.stringify(list)); } catch (e) {}
-  document.getElementById("m").textContent = (r.name || "The account") + " is ready to post to. You can close this window.";
+  try { var q = JSON.parse(localStorage.getItem("sls-account-new") || "[]") || []; q = q.filter(function (a) { return a.id !== d.record.id; }); q.push(d.record); localStorage.setItem("sls-account-new", JSON.stringify(q.slice(-10))); } catch (e) {}
+  document.getElementById("m").textContent = (d.record.name || "The account") + " is ready to post to. You can close this window.";
 }
-try { if (window.opener) { window.opener.postMessage({ sls: "account", ok: !d.problem, id: d.record && d.record.id, problem: d.problem }, location.origin); setTimeout(function () { window.close(); }, d.problem ? 4000 : 900); } } catch (e) {}
+try { if (window.opener) { window.opener.postMessage({ sls: "account", ok: !d.problem, id: d.record && d.record.id, record: d.record, problem: d.problem }, location.origin); setTimeout(function () { window.close(); }, d.problem ? 4000 : 900); } } catch (e) {}
 </script></html>`;
   return new Response(html, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "referrer-policy": "no-referrer" } });
 }
@@ -351,11 +356,10 @@ function tiktokError(e, status) {
   };
   return known[code] || "TikTok said: " + (e.message || code || status);
 }
-async function creatorInfo(env, request, json) {
+async function creatorInfo(env, request, json, user) {
   try {
     configured(env, "tiktok");
-    const b = await body(request), a0 = await unseal(env, b.account);
-    if (!a0 || a0.p !== "tiktok") throw new Fail("That account can't be read here. Link it again.", "relink", 409);
+    const b = await body(request), a0 = await openAccount(env, b.account, "tiktok", user);
     const { a, changed } = await tiktokAccess(env, a0);
     const d = await ttCall(a, "/post/publish/creator_info/query/");
     return json({ ...d, account: changed ? await seal(env, a) : undefined });
@@ -390,11 +394,10 @@ async function tiktokStatus(env, a, ref) {
 }
 
 /* ---------- 2. posting ---------- */
-async function upload(env, request, url, p, json) {
+async function upload(env, request, url, p, json, user) {
   try {
     configured(env, p);
-    const a0 = await unseal(env, request.headers.get("x-sls-account") || "");
-    if (!a0 || a0.p !== p) throw new Fail("That account can't be read here (the site's TOKEN_KEY or passcode may have changed). Link it again.", "relink", 409);
+    const a0 = await openAccount(env, request.headers.get("x-sls-account"), p, user);
     let meta = {};
     try { meta = JSON.parse(dec.decode(unb64u(request.headers.get("x-sls-meta") || "e30"))); } catch {}
     let type = (request.headers.get("content-type") || "video/mp4").split(";")[0], bytes, src = null;
@@ -425,12 +428,12 @@ async function upload(env, request, url, p, json) {
   } catch (e) { console.error("publish failed", p, e && e.message); return fail(json, e); }
 }
 
-async function status(env, request, url, json) {
+async function status(env, request, url, json, user) {
   const b = await body(request), p = b.platform;
   try {
+    if (!NAMES[p]) throw new Fail("Unknown platform.", "bad_request", 400);
     configured(env, p);
-    const a0 = await unseal(env, b.account || "");
-    if (!a0 || a0.p !== p) throw new Fail("That account can't be read here. Link it again.", "relink", 409);
+    const a0 = await openAccount(env, b.account, p, user);
     let a = a0, changed = false, out;
     if (p === "youtube") out = { state: "done" };
     if (p === "instagram") { ({ a, changed } = await instagramToken(env, a)); out = await instagramStatus(env, a, b.ref); }
