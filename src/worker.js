@@ -16,6 +16,7 @@
  *   PUT    /api/templates/:id     save a template
  *   DELETE /api/templates/:id     delete a template
  *   GET    /api/stock/search      free stock videos (Pixabay, Pexels)          } see src/media.js
+ *   POST   /api/tiktok/sound      a TikTok sound's details and audio, from a sound or video link (src/tiktok-sound.js)
  *   GET    /api/media             relays a video file the backend vouched for   }
  *   POST   /api/bg/prompts        lyrics in, background video ideas out         }
  *   POST   /api/bg/estimate       price of an AI background video (Higgsfield)  }
@@ -35,6 +36,7 @@
 import { hooksRoute } from "./hooks.js";
 import { loginRoute } from "./login.js";
 import { catalogRoute } from "./catalog.js";
+import { tiktokSoundRoute } from "./tiktok-sound.js";
 import { cronRoute } from "./schedule.js";
 import { captionRoute } from "./caption.js";
 import { authConfigured, userFrom, bearer } from "./auth.js";
@@ -108,6 +110,8 @@ async function route(request, env, url) {
 
   const catalog = await catalogRoute(request, env, path, method, { json });
   if (catalog) return catalog;
+  const ttSound = await tiktokSoundRoute(request, env, path, method, { json });
+  if (ttSound) return ttSound;
   const caption = await captionRoute(request, env, path, method, { hasAI: hasAI(env), runModel, json });
   if (caption) return caption;
   const hooks = await hooksRoute(request, env, path, method, { hasAI: hasAI(env), runModel, json });

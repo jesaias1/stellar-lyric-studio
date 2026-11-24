@@ -130,7 +130,7 @@ window.SLSPublish = (() => {
   async function loadSound(){
     const k = songKey(); if(!k || sounds[k] || SLSAuth.mode !== "accounts") return;
     sounds[k] = { loading: true };
-    try { const rows = await SLSAuth.rest(`song_sounds?select=tiktok_url,title&key=eq.${encodeURIComponent(k)}`); sounds[k] = { url: rows && rows[0] ? rows[0].tiktok_url : "" }; }
+    try { const rows = await SLSAuth.rest(`song_sounds?select=tiktok_url,title&key=eq.${encodeURIComponent(k)}`); sounds[k] = { url: rows && rows[0] ? rows[0].tiktok_url || "" : "" }; }
     catch { sounds[k] = { url: "", error: true }; }
     paint();
   }

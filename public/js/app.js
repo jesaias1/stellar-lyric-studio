@@ -131,6 +131,8 @@ window.SLSApp = (() => {
       S.P.words = out.words; S.P.lyrics = out.lyrics; S.P.lang = out.language; S.P.srcLyrics = given || "";
       if(given){ homeLyrics.value = ""; keep.set("sls-home-lyrics", ""); paintHomeLyrics(); }   // used up: the next song starts with an empty box
       // the video starts on the best part for TikTok (or, without one, where the singing starts)
+      // the team's TikTok sound for this song goes first, so the video starts where the popular sound starts
+      S.P.ttSound = null; if(window.SLSTikTokSound) await SLSTikTokSound.attach({ use: false });
       if(S.P.bites.length) useBite(0, { quiet: true });
       else if(out.words.length && S.audio.duration > 60){ const len = S.P.section.b - S.P.section.a, a = clamp(out.words[0].t - 0.6, 0, S.audio.duration - len); S.P.section = { a: +a.toFixed(2), b: +(a + len).toFixed(2) }; }
       sortWords(); syncUI(); dirty(); SLSLyricsUI.forgetReview();
@@ -191,8 +193,8 @@ window.SLSApp = (() => {
   function biteCards(where){
     const bites = S.P.bites || [];
     return bites.map((p, i) => { const on = biteOn(p), len = Math.round(Math.min(p.b, p.a + 60) - p.a);
-      return `<div class="bite${on ? " on" : ""}" data-i="${i}">
-        <div class="bite-top"><span class="bite-n">${i + 1}</span><b>${esc(p.label)}</b><span class="bite-score" title="How well this part fits what works on TikTok and Reels, out of 100">${p.score}</span></div>
+      return `<div class="bite${on ? " on" : ""}${p.tiktok ? " tt" : ""}" data-i="${i}">
+        <div class="bite-top"><span class="bite-n">${i + 1}</span><b>${esc(p.label)}</b>${p.tiktok ? `<span class="bite-score bite-tt" title="Matched to the sound people use on TikTok">TikTok</span>` : `<span class="bite-score" title="How well this part fits what works on TikTok and Reels, out of 100">${p.score}</span>`}</div>
         <div class="bite-time">${clock(p.a)} to ${clock(Math.min(p.b, p.a + 60))} · ${len} s</div>
         <ul class="bite-why">${(p.reasons || []).map(r => `<li>${esc(r)}</li>`).join("")}</ul>
         <div class="bite-btns">${where === "lyrics" ? `<button class="btn small ghost" data-bact="hear">${'<svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor"><path d="M4 2.5v11l9-5.5z"/></svg>'} Hear it</button>` : ""}${on ? `<span class="bite-in">In your video</span>` : `<button class="btn small" data-bact="use">Use this</button>`}</div>
@@ -200,9 +202,11 @@ window.SLSApp = (() => {
   }
   function paintBites(){
     const bites = S.P.bites || [], box = $("#bites"), real = S.audio && S.songName !== "Demo track";
-    box.hidden = !bites.length || !real;
-    $("#bitesBtn").hidden = !bites.length || !real;
-    if(!bites.length) return;
+    box.hidden = !real;      // shown even without suggestions: "Match the TikTok sound" lives here
+    $("#bitesBtn").hidden = !real;
+    const matched = !!(S.P.ttSound && window.SLSTikTokSound && S.P.ttSound.key === SLSTikTokSound.key());
+    $$(".tt-match").forEach(b => { b.innerHTML = `${TT_ICON}<span>${matched ? "TikTok sound matched · change" : "Match the TikTok sound"}</span>`; b.classList.toggle("on", matched); });
+    if(!bites.length){ $("#bitesRow").innerHTML = $("#bitesPopRow").innerHTML = `<p class="hint bites-none">No suggestions for this song. Match the TikTok sound, or drag the clip window to choose a part.</p>`; return; }
     $("#bitesTitle").textContent = S.P.bitesHook ? (bites.length > 1 ? `Your hook is sung ${bites.length} times. Pick one for the video` : "Your hook") : "Best parts for TikTok & Reels";
     $("#bitesSub").textContent = S.P.bitesHook ? "You pasted the hook, so the video is just the hook." : "Picked from what the viral sounds have in common: the hook, energy, a strong start and quotable lyrics.";
     $("#bitesRow").innerHTML = biteCards("lyrics");
@@ -214,6 +218,9 @@ window.SLSApp = (() => {
     if(act === "use" || (!act && !biteOn(p))) useBite(i, { hear: document.body.dataset.step === "design" });
     if(e.currentTarget.id === "bitesPopRow") $("#bitesPop").hidden = true;
   }
+  const TT_ICON = `<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M13.5 4v10.2a2.8 2.8 0 1 1-2.8-2.8M13.5 4c.4 2.2 1.9 3.6 4 3.8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`;
+  document.addEventListener("click", e => { if(e.target.closest(".tt-match") && window.SLSTikTokSound){ $("#bitesPop").hidden = true; SLSTikTokSound.open(); } });
+  addEventListener("sls-bites", () => paintBites());
   $("#bitesRow").addEventListener("click", onBiteClick);
   $("#bitesPopRow").addEventListener("click", onBiteClick);
   $("#bitesBtn").onclick = e => { e.stopPropagation(); paintBites(); $("#bitesPop").hidden = !$("#bitesPop").hidden; };

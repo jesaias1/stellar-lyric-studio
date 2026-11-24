@@ -47,7 +47,8 @@ export async function mediaLink(env, u) { return `/api/media?u=${encodeURICompon
 async function relay(env, url, request, json) {
   const u = url.searchParams.get("u") || "", s = url.searchParams.get("s") || "";
   if (!/^https:\/\//.test(u) || s !== (await sign(env, u))) return json({ error: "bad_link", message: "That link isn't valid." }, 403);
-  const up = await fetch(u, { redirect: "follow", headers: { "user-agent": "StellarLyricStudio/1.0" } });
+  const tt = /^https:\/\/[a-z0-9.-]+\.(tiktokcdn|tiktokcdn-us|tiktokv|ibytedtos|byteoversea)\.com\//i.test(u);   // TikTok's audio host wants a browser and TikTok as the referrer
+  const up = await fetch(u, { redirect: "follow", headers: tt ? { "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36", referer: "https://www.tiktok.com/" } : { "user-agent": "StellarLyricStudio/1.0" } });
   if (!up.ok || !up.body) return json({ error: "upstream", message: `The host answered ${up.status}.` }, 502);
   let type = (up.headers.get("content-type") || "").split(";")[0].trim();
   const pic = u.match(/\.(jpe?g|png|webp|gif|avif)(\?|$)/i);

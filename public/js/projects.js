@@ -112,6 +112,7 @@ window.SLSProjects = (() => {
       renderClips(); syncUI(); updateMeta();
       opening = false;
       SLSApp.go(STEP[rec.step] ? rec.step : "lyrics");
+      if(window.SLSTikTokSound) SLSTikTokSound.attach({ use: false }).then(() => SLSApp.paintBites());   // a TikTok sound a teammate matched since
       if(!quiet) toast(`"${rec.name}" is open.`);
       return true;
     } catch(err){ console.error("project open failed", err); opening = false; toast(`"${rec.name}" couldn't be opened.`); SLSApp.go("song"); return false; }

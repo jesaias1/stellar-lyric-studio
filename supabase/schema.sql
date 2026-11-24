@@ -167,3 +167,11 @@ create policy "team saves sounds" on public.song_sounds for insert to authentica
 create policy "team changes sounds" on public.song_sounds for update to authenticated using (true) with check (true);
 revoke all on public.song_sounds from anon;
 grant select, insert, update on public.song_sounds to authenticated;
+-- Match the TikTok sound: where the popular TikTok sound sits in the song (so every video of it starts there)
+alter table public.song_sounds alter column tiktok_url drop not null;
+alter table public.song_sounds add column if not exists clip_start numeric check (clip_start >= 0 and clip_start < 3600);
+alter table public.song_sounds add column if not exists clip_len numeric check (clip_len > 0 and clip_len <= 600);
+alter table public.song_sounds add column if not exists clip_url text check (char_length(clip_url) <= 500 and clip_url ~ '^https://([a-z]+\.)?tiktok\.com/');
+alter table public.song_sounds add column if not exists clip_title text check (char_length(clip_title) <= 200);
+alter table public.song_sounds add column if not exists clip_videos bigint check (clip_videos >= 0);
+

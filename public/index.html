@@ -210,7 +210,7 @@
         </span>
       </div>
       <div class="bites" id="bites" hidden>
-        <div class="bites-head"><b id="bitesTitle">Best parts for TikTok &amp; Reels</b><span class="hint" id="bitesSub"></span></div>
+        <div class="bites-head"><div class="bites-hrow"><b id="bitesTitle">Best parts for TikTok &amp; Reels</b><button class="btn small tt-match" type="button">Match the TikTok sound</button></div><span class="hint" id="bitesSub"></span></div>
         <div class="bites-row" id="bitesRow"></div>
       </div>
       <div class="ly-list" id="lyList"></div>
@@ -370,7 +370,7 @@
         <div class="seg" id="secLen"><button data-v="10">10s</button><button data-v="15">15s</button><button data-v="20">20s</button><button data-v="30">30s</button></div>
         <label class="row hint" style="gap:6px">or <input type="number" id="secLenIn" min="2" max="60" step="0.5" style="width:74px;padding:5px 8px" aria-label="Soundbite length in seconds"> s</label>
         <div class="bites-wrap"><button class="btn small" id="bitesBtn" type="button" hidden aria-haspopup="dialog">Best parts</button>
-          <div class="bites-pop" id="bitesPop" hidden><div class="bites-head"><b>Best parts for TikTok &amp; Reels</b><span class="hint">Choose one to put it in your video.</span></div><div class="bites-row" id="bitesPopRow"></div></div></div>
+          <div class="bites-pop" id="bitesPop" hidden><div class="bites-head"><div class="bites-hrow"><b>Best parts for TikTok &amp; Reels</b><button class="btn small tt-match" type="button">Match the TikTok sound</button></div><span class="hint">Choose one to put it in your video.</span></div><div class="bites-row" id="bitesPopRow"></div></div></div>
         <span class="hint" id="stageHint" style="margin-left:auto"></span>
       </div>
       <div class="viewport"><canvas id="stage" width="720" height="1280"></canvas></div>
@@ -573,6 +573,7 @@
 <script src="js/styles-trend.js"></script>
 <script src="js/transcribe.js"></script>
 <script src="js/soundbites.js"></script>
+<script src="js/soundmatch.js"></script>
 <script src="js/lyrics.js"></script>
 <script src="js/app.js"></script>
 <script src="js/artists.js"></script>
@@ -583,6 +584,7 @@
 <script src="js/export.js"></script>
 <script src="js/publish.js"></script>
 <script src="js/calendar.js"></script>
+<script src="js/ttsound.js"></script>
 <script src="js/projects.js"></script>
 </body>
 </html>
