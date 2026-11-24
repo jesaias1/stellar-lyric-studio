@@ -1,5 +1,6 @@
 "use strict";
-/* Logins. Everyone has their own account (email + password, plus the team code once when signing up), and their
+/* Logins. Everyone has their own account: a username and the team code (no passwords; the server logs them in,
+   see src/login.js). Their
    projects and linked social media accounts belong to that account. The accounts live in Supabase; this file
    talks to it directly over its HTTP API (no library needed):
      /auth/v1/...  sign up, log in, refresh, log out
@@ -48,10 +49,10 @@ window.SLSAuth = (() => {
   function nice(d, status){
     const m = String(d.msg || d.message || d.error_description || d.error || "");
     if(/wrong_team_code/i.test(m)) return "That team code isn't right. Ask Stellar Music for it.";
-    if(/invalid login credentials|invalid_grant/i.test(m) || d.error_code === "invalid_credentials") return "Wrong email or password.";
-    if(/already (registered|exists)/i.test(m) || d.error_code === "user_already_exists") return "There's already an account with that email. Log in instead.";
+    if(/invalid login credentials|invalid_grant/i.test(m) || d.error_code === "invalid_credentials") return "Wrong username or password.";
+    if(/already (registered|exists)/i.test(m) || d.error_code === "user_already_exists") return "That username is taken. Pick another, or log in if it's yours.";
     if(/password/i.test(m) && /(short|weak|characters|at least)/i.test(m)) return "Pick a longer password (at least 8 characters).";
-    if(/valid email|email address/i.test(m) && /invalid/i.test(m)) return "That doesn't look like an email address.";
+    if(/valid email|email address/i.test(m) && /invalid/i.test(m)) return "Use letters and numbers in the username.";
     if(status === 429 || /rate limit|too many/i.test(m)) return "Too many tries. Wait a minute and try again.";
     if(/signups? not allowed|disabled/i.test(m)) return "New accounts can't be made right now.";
     return m || "Something went wrong (" + status + ").";
@@ -77,14 +78,22 @@ window.SLSAuth = (() => {
   function emit(){ listeners.forEach(fn => { try { fn(user()); } catch(err){ console.error(err); } }); paintMenus(); }
   const user = () => mode === "passcode" ? (ls.get(PKEY) ? { id: "", email: "", name: "Team" } : null) : session ? session.user : null;
 
-  async function signIn(email, password, remember){
-    const d = await gotrue("/token?grant_type=password", { email: email.trim(), password });
-    storeSession(fromAuth(d), remember); emit(); return user();
-  }
-  async function signUp(name, email, password, code, remember){
-    const d = await gotrue("/signup", { email: email.trim(), password, data: { name: name.trim().slice(0, 80), team_code: code.trim() } });
-    if(!d.access_token) throw Object.assign(new Error("The account was made, but it needs to be confirmed by email first."), { code: "confirm" });
-    storeSession(fromAuth(d), remember); emit(); return user();
+  /* Logins are by username. Supabase needs an email address, so each username gets a made-up one on the
+     studio's own domain (no mail is ever sent to it). Something typed with an @ is used as a real email. */
+  const USER_DOMAIN = "users.lyrics.stellarmusic.dk";
+  const slug = name => String(name || "").trim().toLowerCase().replace(/æ/g, "ae").replace(/ø/g, "oe").replace(/å/g, "aa").replace(/ß/g, "ss")
+    .normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, ".").replace(/[^a-z0-9._-]/g, "");
+  const loginEmail = name => String(name).includes("@") ? String(name).trim() : slug(name) + "@" + USER_DOMAIN;
+  const shownName = u => u ? (u.name || (u.email && !u.email.endsWith("@" + USER_DOMAIN) ? u.email.split("@")[0] : (u.email || "").split("@")[0]) || "Account") : "";
+  async function enter(name, code, remember){
+    let r;
+    try { r = await fetch("/api/enter", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ username: name, code }) }); }
+    catch { throw new Error("Can't reach the studio. Check the internet connection."); }
+    const d = await r.json().catch(() => ({}));
+    if(!r.ok) throw Object.assign(new Error(d.message || "You couldn't be logged in. Try again."), { code: d.error });
+    storeSession(fromAuth(d), remember); emit();
+    if(d.created) setTimeout(() => { if(typeof toast === "function") toast(`Welcome, ${name}! Your account is made. Log in with the same username and code next time.`); }, 900);
+    return user();
   }
   async function signOut(){
     if(mode === "passcode"){ ls.del(PKEY); location.reload(); return; }
@@ -154,17 +163,14 @@ window.SLSAuth = (() => {
   gate.className = "auth-gate"; gate.id = "authGate"; gate.hidden = true;
   gate.innerHTML = `
     <div class="auth-card" role="dialog" aria-modal="true" aria-labelledby="authTitle">
-      <div class="auth-brand"><span class="wordmark">SLS</span><span class="brand-sub">Stellar Lyric Studio</span></div>
-      <div class="seg auth-tabs" id="authTabs" role="tablist"><button type="button" data-v="in" role="tab">Log in</button><button type="button" data-v="up" role="tab">Create account</button></div>
+      <div class="auth-brand"><img class="logo-sls" src="img/logo-sls.webp" alt="SLS" width="185" height="144" draggable="false"><span class="brand-sub">Stellar Lyric Studio</span></div>
       <form id="authForm" autocomplete="on" novalidate>
         <h2 id="authTitle">Log in</h2>
         <p class="auth-why" id="authWhy"></p>
-        <label class="auth-f" data-for="up"><span>Your name</span><input id="authName" name="name" autocomplete="name" maxlength="80"></label>
-        <label class="auth-f" data-for="in up"><span>Email</span><input id="authEmail" name="email" type="email" autocomplete="username" inputmode="email" maxlength="200" required></label>
-        <label class="auth-f" data-for="in up"><span>Password</span><input id="authPass" name="password" type="password" autocomplete="current-password" minlength="8" maxlength="200" required></label>
-        <label class="auth-f" data-for="up"><span>Team code</span><input id="authCode" name="team-code" autocomplete="off" maxlength="120" spellcheck="false"></label>
+        <label class="auth-f" data-for="in"><span>Username</span><input id="authEmail" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="40" required></label>
+        <label class="auth-f" data-for="in"><span>Team code</span><input id="authCode" name="team-code" type="text" autocomplete="off" autocapitalize="characters" maxlength="120" spellcheck="false"></label>
         <label class="auth-f" data-for="pass"><span>Studio passcode</span><input id="authPasscode" type="password" autocomplete="current-password" maxlength="200"></label>
-        <label class="auth-rem" data-for="in up"><input type="checkbox" id="authRemember" checked> Remember me on this computer</label>
+        <label class="auth-rem" data-for="in"><input type="checkbox" id="authRemember" checked> Remember me on this device</label>
         <div class="auth-err" id="authErr" role="alert" hidden></div>
         <button class="btn primary auth-go" type="submit" id="authGo">Log in</button>
         <p class="auth-note" id="authNote"></p>
@@ -175,17 +181,12 @@ window.SLSAuth = (() => {
   const $g = s => gate.querySelector(s);
   let tab = "in";
   function paintGate(){
-    const t = mode === "passcode" ? "pass" : tab;
-    $g("#authTabs").hidden = mode === "passcode";
-    gate.querySelectorAll("#authTabs button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.v === tab)));
-    gate.querySelectorAll("#authTabs button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === tab)));
+    const t = mode === "passcode" ? "pass" : "in";
     gate.querySelectorAll("[data-for]").forEach(el => { el.hidden = !el.dataset.for.split(" ").includes(t); });
-    $g("#authTitle").textContent = t === "pass" ? "Studio passcode" : t === "up" ? "Create your account" : "Log in";
-    $g("#authGo").textContent = t === "pass" ? "Unlock" : t === "up" ? "Create account" : "Log in";
-    $g("#authPass").autocomplete = t === "up" ? "new-password" : "current-password";
-    $g("#authNote").textContent = t === "up" ? "Your projects and linked social accounts are saved to your account, so you can pick up on any computer. The team code comes from Stellar Music." : t === "in" ? "No account yet? Choose Create account." : "";
+    $g("#authTitle").textContent = t === "pass" ? "Studio passcode" : "Log in";
+    $g("#authGo").textContent = t === "pass" ? "Unlock" : "Continue";
+    $g("#authNote").textContent = t === "in" ? "New here? Pick any username and type the team code from Stellar Music: your account is made right away. Next time, the same username and code open it again, on any device." : "";
   }
-  $g("#authTabs").onclick = e => { const b = e.target.closest("button"); if(!b) return; tab = b.dataset.v; showErr(""); paintGate(); (tab === "up" ? $g("#authName") : $g("#authEmail")).focus(); };
   const showErr = t => { const e = $g("#authErr"); e.textContent = t || ""; e.hidden = !t; };
   $g("#authForm").onsubmit = async e => {
     e.preventDefault(); showErr("");
@@ -200,24 +201,17 @@ window.SLSAuth = (() => {
         if(!r.ok){ ls.del(PKEY); const d = await r.json().catch(() => ({})); return showErr(d.message || "That passcode isn't right."); }
         return done();
       }
-      const email = $g("#authEmail").value.trim(), pw = $g("#authPass").value;
-      if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return showErr("Type your email address.");
-      if(tab === "up"){
-        const name = $g("#authName").value.trim(), code = $g("#authCode").value.trim();
-        if(!name) return showErr("Type your name.");
-        if(pw.length < 8) return showErr("Pick a password of at least 8 characters.");
-        if(!code) return showErr("Type the team code.");
-        await signUp(name, email, pw, code, remember);
-      } else {
-        if(!pw) return showErr("Type your password.");
-        await signIn(email, pw, remember);
-      }
+      const typed = $g("#authEmail").value.trim().replace(/\s+/g, " "), code = $g("#authCode").value.trim();
+      if(!typed) return showErr("Type a username.");
+      if(!/^[a-z0-9][a-z0-9._-]{1,39}$/.test(slug(typed))) return showErr("Pick a username of at least 2 letters or numbers.");
+      if(!code) return showErr("Type the team code.");
+      await enter(typed, code, remember);
       done();
     } catch(err){ showErr(err.message || "Something went wrong."); }
     finally { go.disabled = false; }
   };
   function done(){
-    gate.hidden = true; gateOpen = false; $g("#authPass").value = ""; $g("#authPasscode").value = ""; $g("#authCode").value = "";
+    gate.hidden = true; gateOpen = false; $g("#authPasscode").value = ""; $g("#authCode").value = "";
     document.body.classList.remove("auth-locked");
     accounts.init(); emit();
     readyResolve(user());
@@ -227,9 +221,9 @@ window.SLSAuth = (() => {
     gateOpen = true; gate.hidden = false; document.body.classList.add("auth-locked");
     $g("#authWhy").textContent = why || ""; $g("#authWhy").hidden = !why;
     const last = ls.get("sls-last-email"); if(last && !$g("#authEmail").value) $g("#authEmail").value = last;
-    paintGate(); setTimeout(() => { const f = mode === "passcode" ? $g("#authPasscode") : $g("#authEmail").value ? $g("#authPass") : $g("#authEmail"); f && f.focus(); }, 50);
+    paintGate(); setTimeout(() => { const f = mode === "passcode" ? $g("#authPasscode") : $g("#authEmail").value ? $g("#authCode") : $g("#authEmail"); f && f.focus(); }, 50);
   }
-  listeners.add(u => { if(u && u.email) ls.set("sls-last-email", u.email); });
+  listeners.add(u => { if(u && u.email) ls.set("sls-last-email", u.email.endsWith("@" + USER_DOMAIN) ? shownName(u) : u.email); });
 
   /* ---------- who's logged in, in the top bars ---------- */
   function paintMenus(){
@@ -237,9 +231,9 @@ window.SLSAuth = (() => {
     document.querySelectorAll("[data-sls-user]").forEach(el => {
       el.hidden = !u;
       if(!u) return;
-      const label = u.name || (u.email || "").split("@")[0] || "Account";
-      el.innerHTML = `<button class="btn ghost small acct-btn" type="button" aria-haspopup="menu" aria-expanded="false" title="${esc(u.email || "")}"><span class="acct-dot" aria-hidden="true">${esc(label.slice(0, 1).toUpperCase())}</span><span class="acct-name">${esc(label)}</span></button>
-        <div class="tmenu acct-menu" role="menu" hidden><div class="acct-who"><b>${esc(label)}</b><span>${esc(u.email || (mode === "passcode" ? "Shared passcode" : ""))}</span></div><button role="menuitem" type="button" data-act="out">Log out</button></div>`;
+      const label = shownName(u), real = u.email && !u.email.endsWith("@" + USER_DOMAIN) ? u.email : "";
+      el.innerHTML = `<button class="btn ghost small acct-btn" type="button" aria-haspopup="menu" aria-expanded="false" title="${esc(real || label)}"><span class="acct-dot" aria-hidden="true">${esc(label.slice(0, 1).toUpperCase())}</span><span class="acct-name">${esc(label)}</span></button>
+        <div class="tmenu acct-menu" role="menu" hidden><div class="acct-who"><b>${esc(label)}</b><span>${esc(real || (mode === "passcode" ? "Shared passcode" : "Your account"))}</span></div><button role="menuitem" type="button" data-act="out">Log out</button></div>`;
     });
   }
   document.addEventListener("click", e => {

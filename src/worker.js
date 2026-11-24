@@ -6,6 +6,8 @@
  *   GET    /api/health            is the backend up, and is it configured? (no passcode needed)
  *   POST   /api/session           check the login (or the passcode)
  *   POST   /api/transcribe        one chunk of audio in, words with timings out (Workers AI Whisper)
+ *   POST   /api/enter             log in or sign up with a username and the team code (src/login.js)
+ *   POST   /api/hooks             rates candidate soundbites' lyrics for TikTok / Reels (src/hooks.js)
  *   GET    /api/templates         the team's shared templates
  *   PUT    /api/templates/:id     save a template
  *   DELETE /api/templates/:id     delete a template
@@ -26,6 +28,8 @@
  * (SUPABASE_URL and SUPABASE_KEY, see src/auth.js), otherwise the shared SLS_PASSCODE.
  */
 
+import { hooksRoute } from "./hooks.js";
+import { loginRoute } from "./login.js";
 import { authConfigured, userFrom, bearer } from "./auth.js";
 import { mediaRoute, mediaHealth } from "./media.js";
 import { photosRoute, photosHealth } from "./photos.js";
@@ -64,6 +68,10 @@ async function route(request, env, url) {
   const pub = await publishPublicRoute(request, env, url, path, method);
   if (pub) return pub;
 
+  // Logging in (username + team code): public, it's how a session starts
+  const enter = await loginRoute(request, env, path, method, { json });
+  if (enter) return enter;
+
   // Everything below is private.
   const who = await guard(request, env);
   if (who instanceof Response) return who;
@@ -76,6 +84,8 @@ async function route(request, env, url) {
   if (m && method === "PUT") return saveTemplate(request, env, m[1]);
   if (m && method === "DELETE") return deleteTemplate(env, m[1]);
 
+  const hooks = await hooksRoute(request, env, path, method, { hasAI: hasAI(env), runModel, json });
+  if (hooks) return hooks;
   const media = await mediaRoute(request, env, url, path, method, { hasAI: hasAI(env), runModel, json });
   if (media) return media;
   const photos = await photosRoute(request, env, url, path, method, { hasAI: hasAI(env), runModel, json });

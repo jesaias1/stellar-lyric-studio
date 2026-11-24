@@ -15,7 +15,8 @@ language plpgsql security definer set search_path = '' as $$
 declare want text;
 begin
   select value into want from private.settings where key = 'team_code';
-  if want is not null and coalesce(new.raw_user_meta_data->>'team_code', '') <> want then
+  -- capitals and spaces around it don't matter
+  if want is not null and upper(btrim(coalesce(new.raw_user_meta_data->>'team_code', ''))) <> upper(btrim(want)) then
     raise exception 'wrong_team_code' using errcode = 'P0001';
   end if;
   new.raw_user_meta_data := coalesce(new.raw_user_meta_data, '{}'::jsonb) - 'team_code';

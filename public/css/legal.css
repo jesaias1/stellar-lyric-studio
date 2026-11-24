@@ -14,3 +14,5 @@ li{margin:6px 0}
 a{color:var(--stellar)}
 footer{max-width:720px;margin:0 auto;padding:24px clamp(16px,4vw,40px) 48px;border-top:1px solid var(--line);font-size:13px;color:var(--muted)}
 footer a{color:var(--muted)}
+.mark{display:inline-flex;align-items:center;gap:10px}
+.mark img{height:32px;width:auto;display:block}

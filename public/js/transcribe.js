@@ -460,6 +460,37 @@ window.SLSTranscribe = (() => {
     const lines = []; out.forEach(w => { (lines[w.l] = lines[w.l] || []).push(w.w); });
     return { words: out, lyrics: lines.filter(Boolean).map(L => L.join(" ")).join("\n"), matched: found / (U.length + droppedWords), dropped };
   }
+  /* Pasted lyrics that are only a part of the song (usually the hook): every place in the song where that part is
+     sung, as [{a, b, cov}] in time order, or null when the paste is the whole song (or can't be placed).
+     Each place is the best local match of the pasted words against the words heard (Smith-Waterman), and a
+     match found is blanked out before looking for the next one. */
+  function findParts(U, heard, dur){
+    const real = U.filter(u => !u.opt), H = splitChars(heard).map(w => ({ ...w }));
+    if(real.length < 3 || dur < 45 || real.length >= H.length * 0.55) return null;
+    const n = real.length, m = H.length, Wd = m + 1, out = [];
+    for(let round = 0; round < 6; round++){
+      const sc = new Float32Array((n + 1) * Wd), from = new Uint8Array((n + 1) * Wd);
+      let best = 0, bi = 0, bj = 0;
+      for(let i = 1; i <= n; i++) for(let j = 1; j <= m; j++){
+        const h = H[j - 1].n, sim = h ? similar(real[i - 1].n, h) : 0, ok = sim >= (Math.min(real[i - 1].n.length, h.length) <= 5 ? 0.78 : 0.68);
+        let v = 0, f = 0;
+        const d = sc[(i - 1) * Wd + j - 1] + (ok ? 1 + sim : -1); if(d > v){ v = d; f = 1; }
+        const up = sc[(i - 1) * Wd + j] - 0.9; if(up > v){ v = up; f = 2; }      // a pasted word not heard
+        const lf = sc[i * Wd + j - 1] - 0.4; if(lf > v){ v = lf; f = 3; }        // an extra word heard (ad-lib)
+        sc[i * Wd + j] = v; from[i * Wd + j] = f; if(v > best){ best = v; bi = i; bj = j; }
+      }
+      if(best <= 0) break;
+      let i = bi, j = bj, hits = 0, j0 = bj;
+      while(i > 0 && j > 0 && sc[i * Wd + j] > 0){ const f = from[i * Wd + j]; if(f === 1){ if(H[j - 1].n && similar(real[i - 1].n, H[j - 1].n) >= 0.68) hits++; j0 = j; i--; j--; } else if(f === 2) i--; else if(f === 3){ j0 = j; j--; } else break; }
+      const cov = hits / n, a = H[j0 - 1].s, b = H[bj - 1].e;
+      if(cov < (out.length ? Math.max(0.35, out[0].cov * 0.5) : 0.3)) break;
+      out.push({ a, b, cov });
+      for(let k = j0 - 1; k < bj; k++) H[k].n = "";                                // blank it out, find the next time
+    }
+    if(!out.length) return null;
+    if(out.some(o => o.b - o.a > dur * 0.6)) return null;                          // it covers most of the song: not a part
+    return out.sort((x, y) => x.a - y.a);
+  }
   // the part of the pasted lyrics most likely sung in a piece of the song, as a hint for the AI
   function promptFor(U, c, dur){
     if(!U.length) return "";
@@ -476,6 +507,8 @@ window.SLSTranscribe = (() => {
     const mono = await toMono16k(buf), dur = mono.length / RATE; stop();
     const loud = envelope(mono), voice = envelope(await voiceBand(buf)) || loud; stop();
     const given = lyrics && lyrics.trim() ? tokenize(lyrics) : [];
+    // far fewer words than a whole song has: probably just the hook (a song sings about 2 words a second overall)
+    const shortPaste = given.length > 0 && dur > 45 && given.length < dur * 0.9;
     const first = Math.min(CHUNK / 2 - 1, Math.max(4, dur / 2));
     const A = plan(dur, 0), B = dur > 6 ? plan(dur, first) : [];
     const jobs = [...A.map((c, k) => ({ c, k, pass: "A" })), ...B.map((c, k) => ({ c, k, pass: "B" }))], res = { A: [], B: [] };
@@ -486,7 +519,7 @@ window.SLSTranscribe = (() => {
       if(lang) payload.language = lang;
       // the first pass gets the pasted lyrics as a hint; the second listens without, so a hint the AI
       // merely repeated back (it can, over instrumental parts) doesn't end up placing words
-      if(given.length && job.pass === "A"){ const hint = promptFor(given, job.c, dur); if(hint) payload.prompt = hint; }
+      if(given.length && job.pass === "A"){ const hint = shortPaste ? given.map(u => u.w).join(" ").slice(0, 550).replace(/\s+\S*$/, "") : promptFor(given, job.c, dur); if(hint) payload.prompt = hint; }
       for(let attempt = 0; ; attempt++){
         stop();
         try { return await api.transcribe(payload, signal); }
@@ -520,6 +553,19 @@ window.SLSTranscribe = (() => {
     const edges = P => P.flatMap((c, k) => [k > 0 ? c.s : null, k < P.length - 1 ? c.e : null]).filter(x => x != null);
     const ctx = { env: voice, covB: B.filter((c, k) => res.B[k] && heardIn(b, c) >= Math.max(1, 0.3 * heardIn(a, c))).map(c => [c.s, c.e]), cuts: [...edges(A), ...edges(B)] };
     if(given.length){
+      // only part of the song pasted (the hook): find each time it's sung and time the lyrics there
+      const occ = findParts(given, b.length >= a.length * 0.5 ? b : a, dur);
+      if(occ){
+        const near = (list, o) => list.filter(w => w.s >= o.a - 2.5 && w.s <= o.b + 2.5);
+        const parts = occ.map(o => ({ o, al: alignLyrics(lyrics, near(a, o), near(b, o), ctx) })).filter(x => x.al && x.al.words.length && x.al.matched >= 0.3)
+          .map(({ o, al }) => ({ a: al.words[0].t, b: Math.max(...al.words.map(w => w.t + w.d)), words: al.words, lyrics: al.lyrics, matched: al.matched, dropped: al.dropped, unsure: al.words.filter(w => w.u).length }));
+        if(parts.length){
+          parts.sort((x, y) => x.a - y.a);
+          const best = parts.reduce((x, y) => y.matched > x.matched + 0.05 ? y : x, parts[0]);
+          onProgress({ stage: "time", pct: 1 });
+          return { words: best.words, lyrics: best.lyrics, matched: best.matched, dropped: best.dropped, mode: "aligned", part: true, occurrences: parts, language: lang || detected || null, unsure: best.unsure, doubleChecked: b.length > 0 };
+        }
+      }
       const al = alignLyrics(lyrics, a, b, ctx);
       onProgress({ stage: "time", pct: 1 });
       return { ...al, mode: "aligned", language: lang || detected || null, unsure: al.words.filter(w => w.u).length, doubleChecked: b.length > 0 };
@@ -529,5 +575,5 @@ window.SLSTranscribe = (() => {
     return { ...final, mode: "heard", language: lang || detected || null, unsure: final.words.filter(w => w.u).length, doubleChecked: b.length > 0 };
   }
 
-  return { run, cleanLyrics, LANGUAGES, langName, _test: { plan, stitch, reconcile, finish, norm, tidy, tokenize, similar, matchUp, alignLyrics, envelope, dropSilent, fixStarts } };
+  return { run, cleanLyrics, LANGUAGES, langName, _test: { plan, stitch, reconcile, finish, norm, tidy, tokenize, similar, matchUp, alignLyrics, envelope, dropSilent, fixStarts, findParts } };
 })();

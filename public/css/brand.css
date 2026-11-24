@@ -189,3 +189,11 @@ textarea:focus,input:focus,select:focus{box-shadow:none!important;border-color:v
 .style-peek span{font:italic 300 12px/1.2 var(--ui);color:var(--muted)}
 .style-peek.in{animation:peek-in .16s ease-out}
 @keyframes peek-in{from{opacity:0;transform:translateY(4px) scale(.98)}}
+
+/* the SLS logo (white on transparent) in place of the typed wordmark */
+.logo-sls{display:block;width:auto;height:30px;user-select:none;-webkit-user-drag:none}
+.brand:has(.logo-sls),.auth-brand:has(.logo-sls){align-items:center}
+.home .brand .logo-sls{height:36px}
+.auth-brand .logo-sls{height:58px}
+#brandBtn .logo-sls{height:28px}
+[data-theme="light"] #brandBtn .logo-sls{filter:brightness(0)}

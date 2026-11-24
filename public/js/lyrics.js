@@ -29,7 +29,9 @@ window.SLSLyricsUI = (() => {
     groups.forEach((L, li) => {
       const prev = groups[li - 1], gap = prev ? L[0].t - (prev[prev.length - 1].t + prev[prev.length - 1].d) : L[0].t;
       if(gap > 8){ const g = document.createElement("div"); g.className = "ly-gap"; g.textContent = "music · " + Math.round(gap) + "s"; frag.append(g); }
-      const row = document.createElement("div"); row.className = "ly-line" + (L.every(w => w.g) ? " missing" : ""); row.dataset.li = li;
+      const sec = S.P.section, inCut = S.audio && L[0].t >= sec.a - 0.1 && L[0].t < sec.b;
+      const row = document.createElement("div"); row.className = "ly-line" + (L.every(w => w.g) ? " missing" : "") + (inCut ? " in-cut" : ""); row.dataset.li = li;
+      if(inCut) row.dataset.cut = "In your video";
       if(L.every(w => w.g)) row.title = "None of this line could be found in the song. It may not be sung in this version.";
       const t = document.createElement("button"); t.className = "ly-t"; t.title = "Play from this line"; t.innerHTML = IC.play + "<span>" + clock(L[0].t) + "</span>";
       const ws = document.createElement("div"); ws.className = "ly-words"; if(/[֐-ࣿ]/.test(L[0].w)) ws.dir = "rtl";
@@ -176,5 +178,5 @@ window.SLSLyricsUI = (() => {
 
   slsOn("change", () => { if(open && document.activeElement && document.activeElement.id === "lyInput") return; schedule(); });
 
-  return { render, tick, schedule, resetMarks, commit: () => { if(open) commit(); }, reviewFirst: () => { const nx = nextUnsure(null); if(nx) openWord(nx); }, clearHear: () => { hearEnd = null; }, forgetReview: () => { hadUnsure = false; } };
+  return { render, tick, schedule, resetMarks, commit: () => { if(open) commit(); }, reviewFirst: () => { const nx = nextUnsure(null); if(nx) openWord(nx); }, clearHear: () => { hearEnd = null; }, hear: (a, b) => { if(open) commit(); S.t = Math.max(0, a); hearEnd = b; play({}); }, forgetReview: () => { hadUnsure = false; } };
 })();

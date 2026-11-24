@@ -46,7 +46,7 @@
 <!-- ============ start screen: drop a song ============ -->
 <section class="home" id="home" aria-label="Start">
   <div class="home-bar">
-    <div class="brand"><span class="wordmark">SLS</span><span class="brand-sub">Stellar Lyric Studio</span></div>
+    <div class="brand"><img class="logo-sls" src="img/logo-sls.webp" alt="SLS" width="185" height="144" draggable="false"><span class="brand-sub">Stellar Lyric Studio</span></div>
     <nav class="home-nav" aria-label="Start screen"><a href="#projects" id="navProjects">projects</a><a href="#" id="navDemo">demo</a><a href="https://stellarmusic.dk" target="_blank" rel="noopener">stellar music</a></nav>
     <div class="home-bar-r">
       <button class="btn ghost small" id="homeBack" hidden>Back to my project</button>
@@ -92,6 +92,7 @@
         <li data-k="listen">Listen for the words</li>
         <li data-k="check">Listen again to double-check</li>
         <li data-k="time">Time every word</li>
+        <li data-k="bites">Find the best parts for TikTok</li>
       </ol>
       <button class="btn ghost small" id="workCancel">Cancel</button>
     </div>
@@ -140,7 +141,7 @@
 
 <div class="app">
   <header class="top">
-    <button class="brand" id="brandBtn" title="Start screen"><span class="wordmark">SLS</span><span class="brand-sub">Stellar Lyric Studio</span></button>
+    <button class="brand" id="brandBtn" title="Start screen"><img class="logo-sls" src="img/logo-sls.webp" alt="SLS" width="185" height="144" draggable="false"><span class="brand-sub">Stellar Lyric Studio</span></button>
     <nav class="steps" id="steps" aria-label="Steps">
       <button data-go="song"><i>01</i><span>song</span></button>
       <button data-go="lyrics"><i>02</i><span>lyrics</span></button>
@@ -189,6 +190,10 @@
           <button class="btn small" id="lyNextU">Review next</button>
           <button class="btn small ghost" id="lyAcceptAll">Accept all</button>
         </span>
+      </div>
+      <div class="bites" id="bites" hidden>
+        <div class="bites-head"><b id="bitesTitle">Best parts for TikTok &amp; Reels</b><span class="hint" id="bitesSub"></span></div>
+        <div class="bites-row" id="bitesRow"></div>
       </div>
       <div class="ly-list" id="lyList"></div>
       <footer class="ly-foot">
@@ -346,6 +351,8 @@
         <span class="label">Length</span>
         <div class="seg" id="secLen"><button data-v="10">10s</button><button data-v="15">15s</button><button data-v="20">20s</button><button data-v="30">30s</button></div>
         <label class="row hint" style="gap:6px">or <input type="number" id="secLenIn" min="2" max="60" step="0.5" style="width:74px;padding:5px 8px" aria-label="Soundbite length in seconds"> s</label>
+        <div class="bites-wrap"><button class="btn small" id="bitesBtn" type="button" hidden aria-haspopup="dialog">Best parts</button>
+          <div class="bites-pop" id="bitesPop" hidden><div class="bites-head"><b>Best parts for TikTok &amp; Reels</b><span class="hint">Choose one to put it in your video.</span></div><div class="bites-row" id="bitesPopRow"></div></div></div>
         <span class="hint" id="stageHint" style="margin-left:auto"></span>
       </div>
       <div class="viewport"><canvas id="stage" width="720" height="1280"></canvas></div>
@@ -536,6 +543,7 @@
 <script src="js/styles-more.js"></script>
 <script src="js/styles-trend.js"></script>
 <script src="js/transcribe.js"></script>
+<script src="js/soundbites.js"></script>
 <script src="js/lyrics.js"></script>
 <script src="js/app.js"></script>
 <script src="js/footage.js"></script>

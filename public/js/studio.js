@@ -29,7 +29,7 @@ const S = {
 };
 function defaultProject(){
   return {
-    v:1, song:{name:"Demo track", duration:25}, section:{a:2.5, b:17.5},
+    v:1, song:{name:"Demo track", duration:25}, section:{a:2.5, b:17.5}, bites:[], bitesHook:false,
     bpm:96, offset:0, lyrics:"", words:[],
     style:{preset:"stack", size:1, x:0.5, y:0.5, scrim:0.25, color:"#ffffff", case:"auto", fonts:{}, his:{}, vars:{}},
     hook:{on:false, text:"New single out now", dur:3, start:0, look:"pill", font:"sans", size:1, x:0.5, y:0.09, color:"#ffffff", bg:"#0a090e", anim:"fade"},
@@ -145,6 +145,30 @@ function makeDemoSong(){
   const g=.9/pk; for(let i=0;i<n;i++){ L[i]*=g; R[i]*=g; }
   const buf = ctx().createBuffer(2, n, sr); buf.copyToChannel(L,0); buf.copyToChannel(R,1);
   return buf;
+}
+
+/* the demo's singer: each lyric word is sung on the beat of the demo loop as a vowel ("ah", "oo", "ee"...), so the
+   lyrics on screen line up with a voice you can hear. Built from harmonics shaped by the vowel's formants. */
+function addDemoVoice(buf, words){
+  const sr = buf.sampleRate, L = buf.getChannelData(0), R = buf.getChannelData(1), bar = 4*60/96;
+  const CH = [[440,523.25,659.25],[349.23,440,523.25],[523.25,659.25,392],[392,493.88,587.33]];   // the loop's chords, up an octave
+  const VOW = { a:[[730,1],[1090,.5],[2440,.25]], o:[[570,1],[840,.6],[2410,.2]], u:[[300,1],[870,.4],[2240,.15]], e:[[530,1],[1840,.45],[2480,.3]], i:[[270,1],[2290,.4],[3010,.3]] };
+  const peak = (f, [fc, g]) => g / (1 + ((f - fc) / (fc * 0.12)) ** 2);
+  words.forEach((w, wi) => {
+    const syl = (String(w.w).toLowerCase().match(/[aeiouy]+/g) || ["a"]), per = Math.max(0.1, w.d) / syl.length;
+    syl.forEach((v, k) => {
+      const t0 = w.t + k*per, ch = CH[Math.floor(t0/bar) % 4], f0 = ch[(wi + k) % 3], vow = VOW[v.replace(/y/, "i")[0]] || VOW.a;
+      const harm = []; for(let h = 1; h*f0 < 4200; h++){ const f = h*f0; harm.push([f, (1/h) * vow.reduce((a, fm) => a + peak(f, fm), 0)]); }
+      const s0 = Math.floor(t0*sr), len = Math.floor(Math.max(0.08, per*0.92)*sr);
+      for(let i = 0; i < len && s0+i < L.length; i++){
+        const x = i/sr, env = Math.min(1, x/0.03) * Math.min(1, (len/sr - x)/0.07), vib = 1 + 0.004*Math.sin(2*Math.PI*5.5*x)*Math.min(1, x/0.25);
+        let y = 0; for(const [f, g] of harm) y += g * Math.sin(2*Math.PI*f*vib*x);
+        y *= 0.2 * env; L[s0+i] += y; R[s0+i] += y;
+      }
+    });
+  });
+  let pk = 0; for(let i = 0; i < L.length; i++) pk = Math.max(pk, Math.abs(L[i]), Math.abs(R[i]));
+  if(pk > 0.95){ const g = 0.92/pk; for(let i = 0; i < L.length; i++){ L[i] *= g; R[i] *= g; } }
 }
 
 function computePeaks(buf, count=1400){
@@ -1133,6 +1157,9 @@ function drawOverview(){
   ovc.fillStyle = col("--tape"); ovc.globalAlpha = .14; ovc.fillRect(xa, 0, xb-xa, h); ovc.globalAlpha = 1;
   ovc.save(); ovc.beginPath(); ovc.rect(xa,0,xb-xa,h); ovc.clip(); ovc.fillStyle = col("--text");
   for(let x=Math.floor(xa);x<xb;x+=2){ const p = S.peaks[Math.floor(x/w*n)] || 0; const hh = Math.max(1,p*(h/2-3)); ovc.fillRect(x, h/2-hh, 1.4, hh*2); } ovc.restore();
+  // the suggested best parts: a numbered mark along the top
+  (S.P.bites || []).forEach((p, i) => { const x0 = p.a/dur*w, x1 = Math.min(p.b, p.a + 60)/dur*w; ovc.fillStyle = col("--muted"); ovc.globalAlpha = .55; ovc.fillRect(x0, 0, Math.max(2, x1-x0), 3); ovc.globalAlpha = 1;
+    ovc.font = "600 9px system-ui, sans-serif"; ovc.fillText(String(i+1), x0 + 2, 12); });
   ovc.strokeStyle = col("--tape"); ovc.lineWidth = 2; ovc.strokeRect(xa+1, 1, xb-xa-2, h-2);
   ovc.fillStyle = col("--tape"); ovc.fillRect(xa, 0, 5, h); ovc.fillRect(xb-5, 0, 5, h);
   ovc.fillRect(songTime()/dur*w - 1, 0, 2, h);
@@ -2166,6 +2193,7 @@ function boot(){
   p.lyrics = "neon on the water\nwe don't have to go home\nsay it like you mean it\nunder all the city glow";
   p.song = {name:"Demo track", duration:S.audio.duration};
   S.P = p; S.P.words = parseLyrics(p.lyrics); autoSpace(S.P.words);
+  addDemoVoice(S.audio, S.P.words); S.peaks = computePeaks(S.audio);
   applyProject(S.P);
   setTimeout(() => { HIST.last = JSON.stringify(S.P); syncUndoUI(); }, 0);
   if(window.matchMedia("(max-width:700px) and (pointer:coarse)").matches){ S.zoom = 2.5; $("#zoom").value = 2.5; }

@@ -53,7 +53,7 @@ window.SLSApp = (() => {
   /* ---------- start screen states ---------- */
   function showHome(state){ home.hidden = false; if(window.SLSProjects) setTimeout(() => SLSProjects.paint(), 0); $("#start").hidden = state !== "drop"; $("#homeOpts").hidden = state !== "drop"; $("#work").hidden = state !== "work"; $("#oops").hidden = state !== "oops"; $(".how").hidden = state !== "drop"; if(state !== "drop") home.scrollTop = 0; }
   function progress(p){
-    const LABEL = { read: "Reading your song", listen: "Listening for the words", check: "Listening again to double-check", time: "Timing every word" }, order = ["read", "listen", "check", "time"];
+    const LABEL = { read: "Reading your song", listen: "Listening for the words", check: "Listening again to double-check", time: "Timing every word", bites: "Finding the best parts for TikTok and Reels" }, order = ["read", "listen", "check", "time", "bites"];
     $("#workStep").textContent = LABEL[p.stage] + (p.total && p.stage !== "time" && p.stage !== "read" ? "…" : "");
     $("#workBar").style.width = (clamp(p.pct, 0, 1) * 100).toFixed(1) + "%";
     $$("#workList li").forEach(li => { const a = order.indexOf(li.dataset.k), b = order.indexOf(p.stage); li.classList.toggle("on", a === b); li.classList.toggle("ok", a < b); });
@@ -118,6 +118,7 @@ window.SLSApp = (() => {
         catch(err){ if(err.code !== "unauthorized" || tries > 2) throw err; await SLSAuth.ready; await new Promise(r => { const off = SLSAuth.onChange(u => { if(u){ off(); r(); } }); }); }
       }
       if(ctl.signal.aborted) return;
+      if(out.words.length){ progress({ stage: "bites", pct: 0.98 }); await findBites(out); if(ctl.signal.aborted) return; }
       if(given && !out.words.length){
         // nothing in the song matched the pasted lyrics: keep them, spread evenly, and say so
         S.P.srcLyrics = given; $("#lyricsText").value = SLSTranscribe.cleanLyrics(given).join("\n"); $("#applyLyrics").click();
@@ -125,13 +126,15 @@ window.SLSApp = (() => {
       }
       S.P.words = out.words; S.P.lyrics = out.lyrics; S.P.lang = out.language; S.P.srcLyrics = given || "";
       if(given){ homeLyrics.value = ""; keep.set("sls-home-lyrics", ""); paintHomeLyrics(); }   // used up: the next song starts with an empty box
-      // start the clip where the singing starts
-      if(out.words.length && S.audio.duration > 60){ const len = S.P.section.b - S.P.section.a, a = clamp(out.words[0].t - 0.6, 0, S.audio.duration - len); S.P.section = { a: +a.toFixed(2), b: +(a + len).toFixed(2) }; }
+      // the video starts on the best part for TikTok (or, without one, where the singing starts)
+      if(S.P.bites.length) useBite(0, { quiet: true });
+      else if(out.words.length && S.audio.duration > 60){ const len = S.P.section.b - S.P.section.a, a = clamp(out.words[0].t - 0.6, 0, S.audio.duration - len); S.P.section = { a: +a.toFixed(2), b: +(a + len).toFixed(2) }; }
       sortWords(); syncUI(); dirty(); SLSLyricsUI.forgetReview();
-      S.t = out.words.length ? Math.max(0, out.words[0].t - 0.5) : 0;
+      S.t = S.P.words.length ? Math.max(0, S.P.words[0].t - 0.5) : 0;
       go("lyrics");
       const s = n => n === 1 ? "" : "s";
       if(!out.words.length) toast("No sung words were found. You can paste the lyrics instead.");
+      else if(out.part){ const n = out.occurrences.length; toast(n > 1 ? `Your lyrics are the hook, so the video is just the hook. It's sung ${n} times: pick which one at the top.` : "Your lyrics are the hook, so the video is just the hook."); }
       else if(out.mode === "aligned" && out.matched < 0.4) toast(`Only ${Math.round(out.matched * 100)}% of your lyrics were found in the song. Check they belong to this song, and pick the song's language.`);
       else if(out.mode === "aligned"){
         const left = out.dropped ? ` ${out.dropped} line${s(out.dropped)} from your paste ${out.dropped === 1 ? "isn't" : "aren't"} sung in the song, so ${out.dropped === 1 ? "it was" : "they were"} left out.` : "";
@@ -153,6 +156,68 @@ window.SLSApp = (() => {
     } finally { if(job === ctl) job = null; }
   }
   slsOn("pick", pick);
+
+  /* ---------- the best parts for TikTok and Reels (js/soundbites.js) ----------
+     S.P.bites: up to 3 suggestions [{a, b, label, score, reasons, words?, lyrics?}], best first. When only the
+     hook was pasted, each suggestion is one time the hook is sung, with its own timed words. */
+  const clock = t => { t = Math.max(0, t); const m = Math.floor(t / 60); return m + ":" + String(Math.floor(t - m * 60)).padStart(2, "0"); };
+  const esc = v => String(v).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  async function findBites(out){
+    S.P.bites = []; S.P.bitesHook = false;
+    if(!window.SLSSoundbites || !S.audio) return;
+    try {
+      if(out.part && out.occurrences && out.occurrences.length){
+        const occ = out.occurrences, all = occ.flatMap((o, k) => o.words.map(w => ({ ...w, l: w.l + k * 1000 })));
+        const r = await SLSSoundbites.find(S.audio, all, { title: S.songName, ranges: occ.map(o => ({ a: o.a, b: o.b })) });
+        S.P.bites = r.parts.map(p => ({ ...p, words: occ[p.occ].words, lyrics: occ[p.occ].lyrics })); S.P.bitesHook = true;
+      } else {
+        const r = await SLSSoundbites.find(S.audio, out.words, { title: S.songName, lyrics: out.lyrics || "", ask: body => api.api("/api/hooks", { method: "POST", body, timeout: 15000 }) });
+        S.P.bites = r.parts;
+      }
+    } catch(err){ console.error("finding the best parts failed:", err); S.P.bites = []; }
+  }
+  const biteOn = p => Math.abs(S.P.section.a - p.a) < 0.3 && Math.abs(S.P.section.b - Math.min(p.b, p.a + 60)) < 0.3;
+  function useBite(i, { quiet = false, hear = false } = {}){
+    const p = (S.P.bites || [])[i]; if(!p || !S.audio) return;
+    if(p.words){ S.P.words = p.words.map(w => ({ ...w })); S.P.lyrics = p.lyrics || ""; sortWords(); $("#lyricsText").value = S.P.lyrics; }
+    const a = clamp(p.a, 0, S.audio.duration - 2), b = clamp(p.b, a + 2, Math.min(S.audio.duration, a + 60));
+    setSection(a, b); if(quiet) return;
+    syncUI(); dirty(); paintBites(); SLSLyricsUI.render();
+    if(hear){ S.t = a; play({}); }
+    toast(`"${p.label}" is in your video: ${clock(a)} to ${clock(b)}.`);
+  }
+  function biteCards(where){
+    const bites = S.P.bites || [];
+    return bites.map((p, i) => { const on = biteOn(p), len = Math.round(Math.min(p.b, p.a + 60) - p.a);
+      return `<div class="bite${on ? " on" : ""}" data-i="${i}">
+        <div class="bite-top"><span class="bite-n">${i + 1}</span><b>${esc(p.label)}</b><span class="bite-score" title="How well this part fits what works on TikTok and Reels, out of 100">${p.score}</span></div>
+        <div class="bite-time">${clock(p.a)} to ${clock(Math.min(p.b, p.a + 60))} · ${len} s</div>
+        <ul class="bite-why">${(p.reasons || []).map(r => `<li>${esc(r)}</li>`).join("")}</ul>
+        <div class="bite-btns">${where === "lyrics" ? `<button class="btn small ghost" data-bact="hear">${'<svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor"><path d="M4 2.5v11l9-5.5z"/></svg>'} Hear it</button>` : ""}${on ? `<span class="bite-in">In your video</span>` : `<button class="btn small" data-bact="use">Use this</button>`}</div>
+      </div>`; }).join("");
+  }
+  function paintBites(){
+    const bites = S.P.bites || [], box = $("#bites"), real = S.audio && S.songName !== "Demo track";
+    box.hidden = !bites.length || !real;
+    $("#bitesBtn").hidden = !bites.length || !real;
+    if(!bites.length) return;
+    $("#bitesTitle").textContent = S.P.bitesHook ? (bites.length > 1 ? `Your hook is sung ${bites.length} times. Pick one for the video` : "Your hook") : "Best parts for TikTok & Reels";
+    $("#bitesSub").textContent = S.P.bitesHook ? "You pasted the hook, so the video is just the hook." : "Picked from what the viral sounds have in common: the hook, energy, a strong start and quotable lyrics.";
+    $("#bitesRow").innerHTML = biteCards("lyrics");
+    $("#bitesPopRow").innerHTML = biteCards("design");
+  }
+  function onBiteClick(e){
+    const card = e.target.closest(".bite"); if(!card) return; const i = +card.dataset.i, p = S.P.bites[i], act = e.target.closest("[data-bact]")?.dataset.bact;
+    if(act === "hear"){ if(p.words && !biteOn(p)) useBite(i, { quiet: false }); SLSLyricsUI.hear(p.a, Math.min(p.b, p.a + 60)); return; }
+    if(act === "use" || (!act && !biteOn(p))) useBite(i, { hear: document.body.dataset.step === "design" });
+    if(e.currentTarget.id === "bitesPopRow") $("#bitesPop").hidden = true;
+  }
+  $("#bitesRow").addEventListener("click", onBiteClick);
+  $("#bitesPopRow").addEventListener("click", onBiteClick);
+  $("#bitesBtn").onclick = e => { e.stopPropagation(); paintBites(); $("#bitesPop").hidden = !$("#bitesPop").hidden; };
+  document.addEventListener("click", e => { const pop = $("#bitesPop"); if(!pop.hidden && !pop.contains(e.target) && e.target.id !== "bitesBtn") pop.hidden = true; });
+  slsOn("change", () => paintBites());
+  slsOn("step", () => paintBites());
 
   /* drop zone */
   const drop = $("#drop"), homeFile = $("#homeFile");
@@ -210,5 +275,5 @@ window.SLSApp = (() => {
   }
   /* the "working" card on the start screen, for other parts of the app (opening a project) */
   function working(title, step){ $("#workSong").textContent = title; showHome("work"); $("#workStep").textContent = step; $("#workBar").style.width = "35%"; $$("#workList li").forEach(li => { li.className = ""; }); paintSteps(); }
-  return { go, pick, listen, paste, ensurePass, working, get step(){ return home.hidden ? body.dataset.step : "song"; }, get lastStep(){ return lastStep; } };
+  return { go, pick, listen, paste, ensurePass, working, useBite, paintBites, get step(){ return home.hidden ? body.dataset.step : "song"; }, get lastStep(){ return lastStep; } };
 })();

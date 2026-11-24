@@ -82,13 +82,23 @@ choice for videos you publish.
 
 ## Accounts (logins)
 
-Everyone logs in with their own email and password. Projects (the edit: lyrics, timing, style, cuts, texts) and
-linked YouTube, Instagram and TikTok accounts belong to that login, and follow it to any computer. Songs and
-footage stay in the browser they were added in.
+Everyone logs in with a username and the team code. There are no passwords: the server checks the team code
+and logs the person in (src/login.js). A new username gets an account straight away. "Remember me" keeps a device
+logged in until the person logs out. Anyone with the team code can open any account by typing its username:
+that's the trade-off for no passwords, so keep the code inside the team.
+
+Projects (the edit: lyrics, timing, style, cuts, texts) and linked YouTube, Instagram and TikTok accounts belong to
+the account and follow it to any device. Songs and footage stay in the browser they were added in.
 
 - The accounts live in Supabase. Run `supabase/schema.sql` once in the project's SQL editor (tables, row-level
   security, the team-code check), and turn off "Confirm email" under Authentication > Sign In / Providers.
-- Set `SUPABASE_URL` and `SUPABASE_KEY` (the publishable key) on the host. Both are public values.
-- Signing up needs the team code, kept inside the database (private.settings). Change it with:
+- On the host: `SUPABASE_URL` and `SUPABASE_KEY` (the publishable key, a public value), `TEAM_CODE`, and
+  `TOKEN_KEY` (already used for linked accounts; the login secrets are worked out from it, so changing it locks
+  everyone out of their accounts).
+- Each username is stored in Supabase as `<username>@users.lyrics.stellarmusic.dk`; no mail is sent there.
+- Changing the team code: set `TEAM_CODE` on the host and redeploy, and run in the SQL editor
   `insert into private.settings (key, value) values ('team_code', 'NEW-CODE') on conflict (key) do update set value = excluded.value;`
-- Without the two Supabase settings the studio falls back to the single shared passcode (`SLS_PASSCODE`).
+  Capitals don't matter. Everyone keeps their account; they just type the new code.
+- An email for every new account: make a free account at resend.com with the address that should get the emails
+  (linas@stellarmusic.dk), create an API key and set it as `RESEND_API_KEY`. `NOTIFY_EMAIL` changes the address.
+- Without the Supabase settings the studio falls back to the single shared passcode (`SLS_PASSCODE`).
