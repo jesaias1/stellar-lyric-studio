@@ -128,7 +128,7 @@ window.SLSApp = (() => {
         S.P.srcLyrics = given; $("#lyricsText").value = SLSTranscribe.cleanLyrics(given).join("\n"); $("#applyLyrics").click();
         go("lyrics"); toast("None of your lyrics could be found in the song, so they're spread evenly. Check the song and the language."); return;
       }
-      S.P.words = out.words; S.P.lyrics = out.lyrics; S.P.lang = out.language; S.P.srcLyrics = given || "";
+      S.P.words = out.words; S.P.wordShift = 0; S.P.lyrics = out.lyrics; S.P.lang = out.language; S.P.srcLyrics = given || "";
       if(given){ homeLyrics.value = ""; keep.set("sls-home-lyrics", ""); paintHomeLyrics(); }   // used up: the next song starts with an empty box
       // the video starts on the best part for TikTok (or, without one, where the singing starts)
       // the team's TikTok sound for this song goes first, so the video starts where the popular sound starts

@@ -244,7 +244,10 @@
           </div>
           <div class="hint">One line per lyric line. Apply keeps your timings when the word count is unchanged.</div>
           <div class="row"><label class="btn small file">Import LRC / SRT<input id="lrcFile" type="file" accept=".lrc,.srt,.txt"></label><button class="btn small ghost" id="lrcOut">Export LRC</button><button class="btn small ghost" id="srtOut">Export SRT</button></div>
-          <div class="row"><span class="hint">Shift all words</span><button class="btn small ghost" data-shift="-0.1">−0.1s</button><button class="btn small ghost" data-shift="-0.02">−0.02s</button><button class="btn small ghost" data-shift="0.02">+0.02s</button><button class="btn small ghost" data-shift="0.1">+0.1s</button></div>
+          <div class="field shift-f"><span class="row" style="justify-content:space-between"><span class="label">Shift all words</span><button class="link-btn" id="shiftReset" type="button">Reset</button></span>
+            <div class="row shift-row"><button class="btn small ghost" id="shiftDown" type="button" aria-label="Earlier by 0.05 seconds" title="Earlier by 0.05 s">−</button><input type="number" id="shiftNum" step="0.01" min="-10" max="10" inputmode="decimal" aria-label="Offset in seconds"><span class="hint">s</span><button class="btn small ghost" id="shiftUp" type="button" aria-label="Later by 0.05 seconds" title="Later by 0.05 s">+</button></div>
+            <input type="range" id="shiftRange" min="-2" max="2" step="0.01" aria-label="Offset">
+            <span class="hint">Below 0 moves every word earlier, above 0 later. Type an exact offset, or use the arrow keys for 0.01 s steps.</span></div>
         </div>
 
         <div class="card" id="vidCard">
@@ -393,7 +396,7 @@
       <div class="rtabs" role="tablist" aria-label="Look">
         <button class="rtab" role="tab" data-rtab="looks" aria-selected="true">Templates</button>
         <button class="rtab" role="tab" data-rtab="type" aria-selected="false">Text</button>
-        <button class="rtab" role="tab" data-rtab="titles" aria-selected="false">Titles</button>
+        <button class="rtab" role="tab" data-rtab="titles" aria-selected="false">Text boxes</button>
       </div>
       <section class="pane" data-rpane="looks">
         <div class="shead">
@@ -415,6 +418,12 @@
         </div>
       </section>
       <section class="pane" data-rpane="type" hidden>
+        <div class="card lyr-show">
+          <div class="label">Lyrics on screen</div>
+          <div class="seg seg-wrap" id="sShow" role="group" aria-label="How the lyrics appear"><button type="button" data-v="words">Word by word</button><button type="button" data-v="line">Full line</button></div>
+          <label class="srow"><span>Transition</span><select id="sTrans" aria-label="How each lyric line comes in"><option value="template">The template's own</option><option value="none">None</option><option value="fade">Fade</option><option value="pop">Pop</option><option value="slide">Slide up</option><option value="blur">Blur in</option></select></label>
+          <span class="hint">How each line comes in. None shows it straight away.</span>
+        </div>
         <div class="card">
           <div class="label" id="ssTitle">Text for Stack</div>
           <label class="srow"><span>Font</span><select id="sPf"></select></label>
@@ -447,7 +456,7 @@
             <label class="srow"><span>Font</span><select id="hFont"></select></label>
             <label class="srow"><span>Size</span><input type="range" id="hSize" min="0.6" max="5" step="0.05"></label>
             <div class="srow"><span>Colours</span><div class="swatches"><input type="color" id="hColor" title="Text colour"><input type="color" id="hBg" title="Background colour"></div></div>
-            <label class="srow"><span>Entrance</span><select id="hAnim"><option value="fade">Fade</option><option value="pop">Pop</option><option value="slide">Slide up</option><option value="type">Type on</option><option value="none">None</option></select></label>
+            <label class="srow"><span>Text transition</span><select id="hAnim"><option value="none">None</option><option value="fade">Fade in</option><option value="pop">Pop</option><option value="slide">Slide up</option><option value="type">Type on</option></select></label>
             <div class="grid2"><label class="field"><span class="hint">Left / right</span><input type="range" id="hX" min="0" max="1" step="0.01"></label>
               <label class="field"><span class="hint">Up / down</span><input type="range" id="hY" min="0" max="1" step="0.01"></label></div>
             <span class="hint">Or drag the hook on the preview.</span>
@@ -458,7 +467,7 @@
         <div class="card" id="textCard">
           <div class="row" style="justify-content:space-between"><span class="label">Text boxes</span><button class="btn small" id="txtAdd">+ Add text</button></div>
           <div class="chips" id="txtList"></div>
-          <span class="hint" id="txtEmpty">Add your own text anywhere in the video. It appears at the playhead; drag it on the preview to place it and on the timeline to time it.</span>
+          <span class="hint" id="txtEmpty">Add your own text, like in TikTok: it starts in the middle in the TikTok font and stays on for the whole video. Drag it on the preview to move it.</span>
           <div class="field" id="txtEdit" hidden>
             <textarea id="txtText" rows="3" style="min-height:70px;font:14px/1.4 var(--ui)" placeholder="Type your text"></textarea>
             <label class="srow"><span>Font</span><select id="txtFont"></select></label>
@@ -469,14 +478,16 @@
             <div class="srow"><span>Character</span><div class="row" style="gap:8px;flex-wrap:nowrap"><input type="number" id="txtLs" step="1" style="width:70px"><span class="hint">Line</span><input type="number" id="txtLsp" step="5" style="width:70px"></div></div>
             <div class="srow"><span>Alignment</span><div class="ib-row" id="txtAlign"><button class="ib" data-v="left" title="Align left"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 10h10M4 14h16M4 18h10"/></svg></button><button class="ib" data-v="center" title="Centre"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M7 10h10M4 14h16M7 18h10"/></svg></button><button class="ib" data-v="right" title="Align right"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M10 10h10M4 14h16M10 18h10"/></svg></button></div></div>
             <div class="field"><span class="label">Preset style</span><div class="aa-grid" id="txtPresets"></div></div>
-            <label class="srow"><span>Animation</span><select id="txtAnim"><option value="fade">Fade in</option><option value="pop">Pop</option><option value="slide">Slide up</option><option value="type">Type on</option><option value="none">None</option></select></label>
+            <label class="srow"><span>Text transition</span><select id="txtAnim"><option value="none">None</option><option value="fade">Fade in</option><option value="pop">Pop</option><option value="slide">Slide up</option><option value="type">Type on</option></select></label>
             <div class="field"><span class="label">Transform</span>
               <label class="srow"><span>Scale</span><span class="row" style="gap:8px;flex:1;flex-wrap:nowrap"><input type="range" id="txtScale" min="20" max="400" step="1"><span class="hint" id="txtScaleVal" style="min-width:40px;text-align:right">100%</span></span></label>
               <div class="srow"><span>Position</span><div class="row" style="gap:6px;flex-wrap:nowrap"><span class="hint">X</span><input type="number" id="txtPX" min="-100" max="100" step="1" style="width:66px"><span class="hint">Y</span><input type="number" id="txtPY" min="-100" max="100" step="1" style="width:66px"></div></div>
               <label class="srow"><span>Rotation</span><span class="row" style="gap:8px;flex:1;flex-wrap:nowrap"><input type="range" id="txtRot" min="-180" max="180" step="1"><input type="number" id="txtRotN" min="-180" max="180" step="1" style="width:66px"></span></label>
             </div>
-            <div class="grid2"><label class="field"><span class="hint">Starts at (s)</span><input type="number" id="txtStart" min="0" step="0.05"></label>
-              <label class="field"><span class="hint">Lasts (s)</span><input type="number" id="txtDur" min="0.2" step="0.05"></label></div>
+            <div class="field txt-time"><span class="row" style="justify-content:space-between"><span class="label">On screen</span><button class="link-btn" id="txtWhole" type="button">Whole video</button></span>
+              <div class="grid2"><label class="field"><span class="hint">From (s)</span><span class="row txt-tr"><input type="number" id="txtStart" min="0" step="0.05"><button class="btn small ghost" id="txtStartNow" type="button" title="Start where the playhead is">Now</button></span></label>
+                <label class="field"><span class="hint">Until (s)</span><span class="row txt-tr"><input type="number" id="txtEnd" min="0.2" step="0.05"><button class="btn small ghost" id="txtEndNow" type="button" title="End where the playhead is">Now</button></span></label></div>
+              <span class="hint">Play to the moment and press Now, type the seconds, or drag its ends on the timeline.</span></div>
             <div class="row"><button class="btn small ghost" id="txtDup">Duplicate</button><button class="btn small ghost" id="txtDel">Delete text</button></div>
           </div>
         </div>

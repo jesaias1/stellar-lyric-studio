@@ -32,7 +32,7 @@ function defaultProject(){
     v:1, song:{name:"Demo track", duration:25}, section:{a:2.5, b:17.5}, bites:[], bitesHook:false,
     bpm:96, offset:0, lyrics:"", words:[],
     style:{preset:"stack", size:1, x:0.5, y:0.5, scrim:0.25, color:"#ffffff", case:"auto", fonts:{}, his:{}, vars:{}},
-    hook:{on:false, text:"New single out now", dur:3, start:0, look:"pill", font:"sans", size:1, x:0.5, y:0.09, color:"#ffffff", bg:"#0a090e", anim:"fade"},
+    hook:{on:false, text:"New single out now", dur:3, start:0, look:"pill", font:"sans", size:1, x:0.5, y:0.09, color:"#ffffff", bg:"#0a090e", anim:"none"},
     cuts:{every:2, seed:7, mode:"beat", count:8, transition:"none"}, aspect:"9:16",
     tTracks:[{}], aux:[], mainVol:1, mainMute:false
   };
@@ -799,14 +799,30 @@ function renderFrame(tr0){
   // hook
   if(!rv) drawHook(sc, W, H, P, t);
   // lyrics
-  const ls = lyricState(tl0);
+  let ls = lyricState(tl0);
+  /* "Lyrics on screen": Full line shows the whole line from its first word; a chosen transition replaces the
+     template's own entrance (its words are handed over as if they came in a while ago, so nothing animates in)
+     and then moves the whole line in its own way. */
+  const show = st.show || "words", trans = st.trans || "template";
+  let lineK = 1;
+  if(ls && (show === "line" || trans !== "template")){
+    const back = trans !== "template" ? 5 : 0;
+    ls = { ...ls, words: ls.words.map(w => ({ ...w, t: (show === "line" ? ls.start : w.t) - back })), start: ls.start - back,
+      rev: show === "line" ? ls.words.length : ls.rev, fade: trans !== "template" ? clamp((ls.end - tl0) / 0.12, 0, 1) : ls.fade, _start: ls.start };
+    if(trans !== "template" && trans !== "none") lineK = ease(clamp((tl0 - ls._start) / 0.32, 0, 1));
+  }
   if(ls && ls.rev > 0){
     const pr = styleDef(st.preset);
     // horizontal position: lyrics live in a column that narrows as it moves toward an edge, so they never leave the frame
     const xp = st.x ?? 0.5, Wn = W*(1 - Math.abs(xp - 0.5)*0.9), left = xp*(W - Wn);
     const yc = cy(H,st), k = st.size || 1;
     LYRF = { m: sc.getTransform(), W, H };
-    sc.save(); sc.globalAlpha = ls.fade; sc.translate(left + Wn/2, yc); sc.scale(k, k); sc.translate(-Wn/2, -yc);
+    sc.save(); sc.globalAlpha = ls.fade;
+    if(lineK < 1){ sc.globalAlpha *= trans === "pop" ? Math.min(1, lineK * 1.6) : lineK;
+      if(trans === "slide") sc.translate(0, (1 - lineK) * H * 0.035);
+      if(trans === "pop"){ const z = 0.82 + 0.18 * lineK + Math.sin(lineK * Math.PI) * 0.05; sc.translate(left + Wn/2, yc); sc.scale(z, z); sc.translate(-(left + Wn/2), -yc); }
+      if(trans === "blur" && "filter" in sc) sc.filter = `blur(${((1 - lineK) * Math.min(W, H) * 0.012).toFixed(1)}px)`; }
+    sc.translate(left + Wn/2, yc); sc.scale(k, k); sc.translate(-Wn/2, -yc);
     try { pr.draw(sc, Wn, H, ls, tl0, st, styleOpts(st, pr)); } finally { sc.restore(); LYRF = null; }
   }
 }
@@ -1330,7 +1346,8 @@ function syncUI(){ setTimeout(syncTextEditor, 0);
   const P = S.P, st = P.style;
   $("#lyricsText").value = P.lyrics; $("#bpm").value = P.bpm;
   $("#sX").value = st.x ?? 0.5; paintSizePx(); $("#sY").value = st.y; $("#sScrim").value = st.scrim;
-  $("#sCase").value = st.case; $("#sColor").value = st.color; syncStylePanel();
+  $("#sCase").value = st.case; $("#sColor").value = st.color; syncStylePanel(); syncShift();
+  $$("#sShow button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === (st.show || "words")))); $("#sTrans").value = st.trans || "template";
   $$("#hookSeg button").forEach(b => b.setAttribute("aria-pressed", String((b.dataset.v === "on") === !!P.hook.on))); $("#hFields").hidden = !P.hook.on; $("#hOffHint").hidden = !!P.hook.on; syncHookUI(); $("#hText").value = P.hook.text; $("#hDur").value = P.hook.dur; $("#hDurVal").textContent = (+P.hook.dur).toFixed(1) + "s";
   $$("#presets .preset").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.id === st.preset)));
   $$("#cutEvery button").forEach(b => b.setAttribute("aria-pressed", String(+b.dataset.v === P.cuts.every)));
@@ -1400,10 +1417,10 @@ $$(".tabs [data-tab]").forEach(b => b.onclick = () => showTab(b.dataset.tab));
 const SHEETS = {
   lyrics: ["Lyrics", () => [$('[data-pane="lyrics"]')]],
   style: ["Templates", () => [$('[data-rpane="looks"]')]],
-  font: ["Font and size", () => [$('[data-rpane="type"]')]],
+  font: ["Lyric text", () => [$('[data-rpane="type"]')]],
   clips: ["Clips", () => [$('[data-pane="clips"]')]],
   hook: ["Hook", () => [$("#hookSeg").closest(".card")]],
-  text: ["Text", () => [$("#textCard")]],
+  text: ["Text boxes", () => [$("#textCard")]],
   audio: ["Audio", () => [$("#vocalMode"), $(".tlbar")]],
   format: ["Format", () => [$(".stagebar"), $("#secRow")]]
 };
@@ -1441,7 +1458,7 @@ function showTab(name){ document.body.dataset.mtab = name; $$(".tabs [data-tab]"
 // the clip timings are edited on the timeline, so it opens (once per visit) when you go to Clips
 let tlOpenedForClips = false;
 function openTimelineOnce(){ if(tlOpenedForClips || isPhone()) return; tlOpenedForClips = true; if(document.body.dataset.tl !== "open" && $("#tlToggle")) $("#tlToggle").click(); }
-/* the right-hand panel: Templates (the looks), Text (font, size, colour, position), Titles (hook and text boxes) */
+/* the right-hand panel: Templates (the looks), Text (font, size, colour, position), Text boxes (hook and your own text) */
 function showRTab(name){
   if(!$(`[data-rpane="${name}"]`)) name = "looks";
   $$(".rtabs [data-rtab]").forEach(b => b.setAttribute("aria-selected", String(b.dataset.rtab === name)));
@@ -1453,6 +1470,8 @@ $$(".rtabs [data-rtab]").forEach(b => b.onclick = () => showRTab(b.dataset.rtab)
 try { const t = localStorage.getItem("sls-rtab"); if(t) setTimeout(() => showRTab(t), 0); } catch {}
 
 const bindStyle = (id, key, num) => $(id).addEventListener("input", e => { S.P.style[key] = num ? +e.target.value : e.target.value; saveDraft(); });
+bindStyle("#sTrans", "trans");
+$("#sShow").onclick = e => { const b = e.target.closest("button[data-v]"); if(!b) return; S.P.style.show = b.dataset.v; syncUI(); saveDraft(); };
 /* Lyric size on a 0 to 100 scale. 50 is the template's own size; every step is the same visible change, so
    the low end goes far smaller (0 is 4% of normal) and the top end three times bigger. Stored as a multiplier. */
 const SIZE_LO = 0.04, SIZE_HI = 3;
@@ -1963,7 +1982,20 @@ $("#vidFile").onchange = async e => {
     vidUI(false, msg, 0);
   } finally { URL.revokeObjectURL(url); vidAbort = null; }
 };
-$$("[data-shift]").forEach(b => b.onclick = () => { const d = +b.dataset.shift; S.P.words.forEach(w => w.t = Math.max(0, w.t + d)); dirty(); });
+/* Shift all words: one offset in seconds (kept with the project as wordShift), set by typing, the − / + steps or the slider */
+function setShift(v, commit = true){
+  v = clamp(Math.round((+v || 0) * 100) / 100, -10, 10); const d = v - (S.P.wordShift || 0); if(!d && !commit) return;
+  S.P.words.forEach(w => w.t = +Math.max(0, w.t + d).toFixed(3)); S.P.wordShift = v; syncShift(); tlDirty = true;
+  if(commit) dirty(); else saveDraft();
+}
+function syncShift(){ const v = S.P.wordShift || 0, n = $("#shiftNum"); if(document.activeElement !== n) n.value = v.toFixed(2); $("#shiftRange").value = clamp(v, -2, 2); }
+$("#shiftNum").addEventListener("change", e => setShift(e.target.value));
+$("#shiftNum").addEventListener("keydown", e => { if(e.key === "Enter") setShift(e.target.value); });
+$("#shiftRange").addEventListener("input", e => setShift(e.target.value, false));
+$("#shiftRange").addEventListener("change", () => dirty());
+$("#shiftDown").onclick = () => setShift((S.P.wordShift || 0) - 0.05);
+$("#shiftUp").onclick = () => setShift((S.P.wordShift || 0) + 0.05);
+$("#shiftReset").onclick = () => setShift(0);
 
 /* ============ built-in Stellar templates ============ */
 const FP_AL = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
@@ -2041,12 +2073,13 @@ function presetSwatch(pr, i){
 const textById = id => (S.P.texts || []).find(x => x.id === id);
 function selectText(id){ S.sel = {type:"text", id}; tlDirty = true; syncTextEditor(); if(isPhone() && sheetOpen !== "text") openSheet("text"); }
 function addText(trackIdx){ S.P.texts = S.P.texts || [];
-  const len = S.P.section.b - S.P.section.a, start = clamp(+(songTime() - S.P.section.a).toFixed(2), 0, Math.max(0, len - 0.5)), dur = Math.min(3, len - start), T = tTracks();
+  // like TikTok: on for the whole video, in the middle, in the TikTok font, no animation (all easy to change)
+  const len = S.P.section.b - S.P.section.a, start = 0, dur = +len.toFixed(2), T = tTracks();
   // like CapCut: use the lowest unlocked text track with room at the playhead, otherwise open a new track
   const free = i => !textTrackLocked(i) && !S.P.texts.some(o => (o.tr || 0) === i && o.start < start + dur && o.start + o.dur > start) && !(i === 0 && S.P.hook.on && S.P.hook.text && (S.P.hook.start || 0) < start + dur && (S.P.hook.start || 0) + S.P.hook.dur > start);
   let tr = trackIdx ?? T.findIndex((_, i) => free(i)); if(tr == null || tr < 0){ T.push({}); tr = T.length - 1; }
   if(textTrackLocked(tr)){ toast("That text track is locked"); return; }
-  const it = {id: "t" + Date.now().toString(36), tr, text: "Your text", start, dur, look: "plain", font: "sans", size: 1.4, x: 0.5, y: 0.5, color: "#ffffff", bg: "#000000", anim: "fade", align: "center", tcase: "", ls: 0, lsp: 0, rot: 0};
+  const it = {id: "t" + Date.now().toString(36), tr, text: "Your text", start, dur, look: "plain", font: FONTLIB.tiktokb ? "tiktokb" : "sans", size: 1.4, x: 0.5, y: 0.5, color: "#ffffff", bg: "#000000", anim: "none", align: "center", tcase: "", ls: 0, lsp: 0, rot: 0};
   S.P.texts.push(it); selectText(it.id); dirty(); setTimeout(() => { const ta = $("#txtText"); if(ta && !isPhone()){ ta.focus(); ta.select(); } }, 50); }
 function deleteText(id){ if(textLocked(textById(id))){ toast("That text track is locked"); return; } S.P.texts = (S.P.texts || []).filter(x => x.id !== id); if(S.sel?.type === "text") S.sel = null; syncTextEditor(); dirty(); toast("Text deleted"); }
 function syncTextEditor(){
@@ -2056,7 +2089,7 @@ function syncTextEditor(){
   fillFonts("#txtFont");
   const setV = (id, v) => { const el = $(id); if(document.activeElement !== el) el.value = v; };
   setV("#txtText", cur.text); setV("#txtFont", cur.font); setV("#txtSize", cur.size); setV("#txtColor", cur.color); setV("#txtBg", cur.bg); setV("#txtAnim", cur.anim);
-  setV("#txtStart", (+cur.start).toFixed(2)); setV("#txtDur", (+cur.dur).toFixed(2)); setV("#txtLs", cur.ls || 0); setV("#txtLsp", cur.lsp || 0);
+  setV("#txtStart", (+cur.start).toFixed(2)); setV("#txtEnd", (+cur.start + +cur.dur).toFixed(2)); setV("#txtLs", cur.ls || 0); setV("#txtLsp", cur.lsp || 0);
   const sc = Math.round((cur.size || 1)/1.4*100); setV("#txtScale", sc); $("#txtScaleVal").textContent = sc + "%";
   setV("#txtPX", Math.round(((cur.x ?? .5) - 0.5)*200)); setV("#txtPY", Math.round((0.5 - (cur.y ?? .5))*200)); setV("#txtRot", cur.rot || 0); setV("#txtRotN", cur.rot || 0);
   $("#txtB").setAttribute("aria-pressed", String(!!cur.bold)); $("#txtU").setAttribute("aria-pressed", String(!!cur.underline)); $("#txtI").setAttribute("aria-pressed", String(!!cur.italic));
@@ -2081,12 +2114,21 @@ $("#txtPY").oninput = e => textSet({y: clamp(0.5 - (+e.target.value || 0)/200, 0
 $("#txtRot").oninput = e => { const it = curText(); if(!it) return; it.rot = +e.target.value; $("#txtRotN").value = it.rot; saveDraft(); };
 $("#txtRotN").oninput = e => { const it = curText(); if(!it) return; it.rot = clamp(+e.target.value || 0, -180, 180); $("#txtRot").value = it.rot; saveDraft(); };
 function setVQuiet(id, v){ const el = $(id); if(el && document.activeElement !== el) el.value = v; }
-[["#txtText","text"],["#txtFont","font"],["#txtSize","size",1],["#txtColor","color"],["#txtBg","bg"],["#txtAnim","anim"],["#txtLs","ls",1],["#txtLsp","lsp",1],["#txtStart","start",1],["#txtDur","dur",1]].forEach(([id, key, num]) =>
+[["#txtText","text"],["#txtFont","font"],["#txtSize","size",1],["#txtColor","color"],["#txtBg","bg"],["#txtAnim","anim"],["#txtLs","ls",1],["#txtLsp","lsp",1],["#txtStart","start",1]].forEach(([id, key, num]) =>
   $(id).addEventListener("input", e => { const it = S.sel?.type === "text" && textById(S.sel.id); if(!it) return; let v = num ? +e.target.value : e.target.value;
     if(key === "start") v = clamp(v, 0, S.P.section.b - S.P.section.a - 0.1); if(key === "dur") v = Math.max(0.2, v);
     it[key] = v; if(key === "font") document.fonts.load(fnt(v, 40)).catch(()=>{}); if(key === "text") $("#txtList").querySelector(`[data-id="${it.id}"]`)?.replaceChildren(document.createTextNode((v.split("\n")[0] || "Text").slice(0, 18)));
     if(key === "size"){ const sc = Math.round(v/1.4*100); setVQuiet("#txtScale", sc); $("#txtScaleVal").textContent = sc + "%"; }
     tlDirty = true; saveDraft(); }));
+/* when a text box is on screen: from / until, with Now (the playhead) and Whole video */
+const curT = () => S.sel?.type === "text" && textById(S.sel.id);
+const secLen = () => S.P.section.b - S.P.section.a;
+function setTextTime(it, a, b){ a = clamp(a, 0, secLen() - 0.2); b = clamp(b, a + 0.2, secLen()); it.start = +a.toFixed(2); it.dur = +(b - a).toFixed(2); tlDirty = true; syncTextEditor(); saveDraft(); }
+$("#txtEnd").addEventListener("input", e => { const it = curT(); if(!it) return; it.dur = Math.max(0.2, Math.min(secLen() - it.start, +e.target.value - it.start)); tlDirty = true; saveDraft(); });
+$("#txtEnd").addEventListener("change", () => syncTextEditor());
+$("#txtStartNow").onclick = () => { const it = curT(); if(!it) return; const now = songTime() - S.P.section.a; setTextTime(it, now, Math.max(now + 0.2, it.start + it.dur)); };
+$("#txtEndNow").onclick = () => { const it = curT(); if(!it) return; setTextTime(it, it.start, songTime() - S.P.section.a); };
+$("#txtWhole").onclick = () => { const it = curT(); if(!it) return; setTextTime(it, 0, secLen()); };
 $("#txtDel").onclick = () => { if(S.sel?.type === "text") deleteText(S.sel.id); };
 $("#txtDup").onclick = () => { const it = S.sel?.type === "text" && textById(S.sel.id); if(!it) return; const c = {...it, id: "t" + Date.now().toString(36), y: clamp((it.y ?? .5) + 0.08, 0, 1)}; S.P.texts.push(c); selectText(c.id); dirty(); };
 
