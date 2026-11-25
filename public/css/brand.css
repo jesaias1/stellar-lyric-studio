@@ -163,9 +163,9 @@ textarea:focus,input:focus,select:focus{box-shadow:none!important;border-color:v
 .lg-letters{opacity:1;clip-path:inset(0 100% 0 0);animation:lg-wipe .75s cubic-bezier(.65,0,.35,1) .15s forwards}
 @keyframes lg-wipe{to{clip-path:inset(0 0 0 0)}}
 /* the orbit is drawn like a comet: it starts low on the right, passes under the letters, comes over the top and
-   reaches the star (at 47 degrees, 87% of the way), then curls down the right side. In img/logo-orbit.webp the oval is one
-   unbroken line: it runs into the star's centre and out of its lower-right corner into the right-hand curve, so the
-   star grows on top of a connected oval with no gap on either side */
+   reaches the star (at 47 degrees, 87% of the way), then curls down the right side. img/logo-orbit.svg is drawn on one
+   true ellipse (fitted to the original logo) with a smoothly changing thickness, unbroken through the star; its two
+   strokes end, tapered, behind the letters. Every part of it lies inside this sweep (it starts at 121.6 degrees) */
 .lg-orbit{-webkit-mask:conic-gradient(from 120deg at 50% 52%,#000 var(--sweep),transparent calc(var(--sweep) + .5deg));mask:conic-gradient(from 120deg at 50% 52%,#000 var(--sweep),transparent calc(var(--sweep) + .5deg));animation:lg-orbit 1.15s linear .55s both}
 @keyframes lg-orbit{from{--sweep:0deg}to{--sweep:332deg}}
 /* the star grows from its own centre the moment the line reaches it, and never rotates, so it stays on the line */
