@@ -3,7 +3,7 @@
 <!-- the editor can switch between light and dark (js/app.js); the blue start screen looks the same in both -->
 <head>
 <meta charset="utf-8">
-<meta name="sls-build" content="202611251302">
+<meta name="sls-build" content="202611251343">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Stellar Lyric Studio</title>
 <meta name="description" content="Turn a song into a lyric video for social media. Upload the track and the lyrics write and time themselves.">
@@ -295,7 +295,8 @@
         <div class="hint">Tap a tile to include or leave it out of the shuffle. Imported clips stay in this browser session.</div>
         <div class="field">
           <span class="label">How cuts are chosen</span>
-          <div class="seg seg-wrap" id="cutMode"><button data-v="lines">Each lyric line</button><button data-v="beat">On the beat</button><button data-v="count">I pick how many</button><button data-v="manual">Custom</button></div>
+          <div class="seg seg-wrap" id="cutMode"><button data-v="lines">Each lyric line</button><button data-v="beat">On the beat</button><button data-v="feel" title="The pace follows the song: calm songs get longer shots and soft crossfades, lively ones cut on the beat">Follow the song</button><button data-v="count">I pick how many</button><button data-v="manual">Custom</button></div>
+          <span class="hint" id="cutFeelHint" hidden></span>
           <div class="seg" id="cutOrder"><button data-v="shuffle">Shuffle</button><button data-v="inorder">In the order added</button></div>
           <span class="hint">Drag any cut on the timeline to move it. Moving one switches to Custom.</span>
         </div>
@@ -309,6 +310,12 @@
           <div class="seg seg-wrap" id="cutTrans"><button data-v="none">None</button><button data-v="mix" title="A different transition at every cut">Mix</button><button data-v="crossfade">Crossfade</button><button data-v="slide">Slide</button><button data-v="push">Push</button><button data-v="zoom">Zoom</button><button data-v="wipe">Wipe</button><button data-v="blur">Blur</button><button data-v="spin">Spin</button><button data-v="flash">Flash</button><button data-v="dip">Dip</button></div>
           <span class="hint">None is a clean, instant cut. Pick a cut on the timeline to give it its own transition.</span>
           <label class="field" id="xfField" hidden><span class="row" style="justify-content:space-between"><span class="hint">Transition length</span><span class="hint" id="xfDurVal">0.35s</span></span><input type="range" id="xfDur" min="0.05" max="2" step="0.05"></label>
+        </div>
+        <div class="field" id="tintField">
+          <span class="row" style="justify-content:space-between"><span class="label">Song colour</span><button class="link-btn" id="tintOff" type="button" hidden>Remove</button></span>
+          <button class="btn small" id="tintOn" type="button">Use the song's colour</button>
+          <div class="row tint-row" id="tintCtl" hidden><input type="color" id="tintColor" aria-label="Song colour"><input type="range" id="tintAmt" min="5" max="100" step="1" aria-label="How strong the colour is"><span class="hint" id="tintVal">35%</span></div>
+          <span class="hint">A soft colour from the song over all the footage, so clips from different places look like one video.</span>
         </div>
         <div class="field">
           <span class="label">Photos move</span>
@@ -413,7 +420,8 @@
           <canvas id="stylePrev" width="300" height="200" aria-label="Animated preview of the selected template"></canvas>
         </div>
         <div class="chips" id="styleCats"><button data-v="all">All</button><button data-v="fav">Favourites</button><button data-v="trend">Trending</button><button data-v="minimal">Minimal</button><button data-v="bold">Bold</button><button data-v="layered">Layered</button><button data-v="glow">Glow</button><button data-v="cinematic">Cinematic</button><button data-v="playful">Playful</button><button data-v="editorial">Editorial</button></div>
-        <div class="presets" id="presets"></div>
+        <div class="style-tip hint" id="styleSuggest" hidden></div>
+          <div class="presets" id="presets"></div>
         <div class="tpl-pane" id="tplPane">
           <input type="text" id="tplName" hidden><button id="tplSave" hidden></button>
           <div class="hint" id="tplWhere"></div>

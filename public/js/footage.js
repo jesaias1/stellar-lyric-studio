@@ -94,6 +94,7 @@ window.SLSFootage = (() => {
     if(v){
       $("#stockVibe").textContent = `This song: ${SLSVibe.line(v)}`;
       if(v.video.length) $("#stockIdeas").innerHTML = ideaChips(v.video);
+      SLSVibe.prefill($("#stockQ"), v.video[0]);
     } else {
       $("#stockVibe").textContent = NOTE; $("#stockIdeas").innerHTML = ideaChips(IDEAS);
       if(fetch && SLSVibe.songLyrics().trim()) SLSVibe.get().then(x => { if(x) paintVibe(); });

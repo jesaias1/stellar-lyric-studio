@@ -17,7 +17,24 @@ window.SLSExport = (() => {
   const QUAL = [{ id: "MEDIUM", label: "Standard" }, { id: "HIGH", label: "High" }, { id: "VERY_HIGH", label: "Best" }];
   const keep = { get(k, d){ try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } }, set(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch {} } };
   let opt = Object.assign({ format: "mp4", res: 1080, fps: 30, q: "HIGH" }, keep.get("sls-export", {}));
-  let MB = null, support = null, job = null, result = null;
+  let MB = null, support = null, job = null, result = null, extras = [], picked = new Set();
+
+  /* ---------- extra versions ----------
+     Other frame shapes (the same video for Stories, the feed and YouTube) and the song's other best parts (the same look
+     on another part of the song, to see which one does better). Each is rendered after the main one, the same way. */
+  const SIZES = [{ a: "9:16", l: "9:16 · TikTok, Reels" }, { a: "4:5", l: "4:5 · Instagram feed" }, { a: "1:1", l: "1:1 · Square" }, { a: "16:9", l: "16:9 · YouTube" }];
+  const clock = t => { t = Math.max(0, t); const m = Math.floor(t / 60); return m + ":" + String(Math.floor(t - m * 60)).padStart(2, "0"); };
+  const sameAsNow = p => Math.abs(S.P.section.a - p.a) < 0.3 && Math.abs(S.P.section.b - Math.min(p.b, p.a + 60)) < 0.3;
+  function versionChoices(){
+    const out = SIZES.filter(x => x.a !== S.P.aspect).map(x => ({ id: "size:" + x.a, label: x.l, aspect: x.a }));
+    (S.P.bites || []).forEach((p, i) => { if(!sameAsNow(p)) out.push({ id: "part:" + i, label: `Best part ${i + 1} · ${clock(p.a)} to ${clock(Math.min(p.b, p.a + 60))}`, part: i }); });
+    return out;
+  }
+  function paintVersions(){
+    const list = versionChoices(); for(const id of [...picked]) if(!list.some(x => x.id === id)) picked.delete(id);
+    $("#exVersF").hidden = !list.length || support === false;
+    $("#exVers").innerHTML = list.map(x => `<button type="button" data-ver="${x.id}" aria-pressed="${picked.has(x.id)}">${esc(x.label)}</button>`).join("");
+  }
 
   const modal = $("#exportModal");
   modal.innerHTML = `
@@ -29,6 +46,8 @@ window.SLSExport = (() => {
       <div class="ex-row"><div class="field"><span class="label">Resolution</span><div class="seg" id="exRes"></div></div>
         <div class="field"><span class="label">Frame rate</span><div class="seg" id="exFps"></div></div>
         <div class="field"><span class="label">Quality</span><div class="seg" id="exQ"></div></div></div>
+      <div class="field ex-vers-f" id="exVersF" hidden><span class="label">Also make</span><div class="chips ex-vers" id="exVers"></div>
+        <span class="hint" id="exVersHint">Same look, one file each. Handy for posting everywhere, or for trying two parts of the song against each other.</span></div>
       <div class="hint" id="exEst"></div>
       <div class="row"><button class="btn primary" id="exGo">Export</button><button class="btn ghost" id="exClose">Cancel</button></div>
     </div>
@@ -40,6 +59,7 @@ window.SLSExport = (() => {
     <div id="exDone" class="field" hidden>
       <video id="exVideo" controls playsinline></video>
       <div class="hint" id="exNote"></div>
+      <div class="ex-files" id="exFiles" hidden></div>
       <div class="row"><button class="btn primary" id="exSave">Save video</button><button class="btn" id="exAgain">Export another version</button><button class="btn ghost" id="exDone2">Close</button></div>
     </div>
   </div>`;
@@ -79,15 +99,21 @@ window.SLSExport = (() => {
     const mbps = { MEDIUM: 0.09, HIGH: 0.16, VERY_HIGH: 0.3 }[opt.q] * w * h * opt.fps / 1e6 / 30 * (FORMATS.find(f => f.id === opt.format).video === "avc" ? 1 : 0.65);
     $("#exEst").textContent = support === null ? "Checking what this computer can encode…" : support === false ? "This browser can't encode video files, so the video will be recorded in real time instead (WebM or MP4, depending on the browser). Chrome or Edge can export every format."
       : `About ${Math.max(1, mbps * len / 8 + 0.03 * len).toFixed(0)} MB. Rendering takes a few seconds to a minute; you can keep working in other tabs.`;
-    $("#exGo").textContent = support === false ? "Record in real time" : "Export";
+    $("#exGo").textContent = support === false ? "Record in real time" : picked.size ? `Export ${picked.size + 1} videos` : "Export";
+    paintVersions();
   }
   async function open(){
     if(S.tap) return; pause(); SLSLyricsUI.commit && SLSLyricsUI.commit();
-    $("#exSetup").hidden = false; $("#exRun").hidden = true; $("#exDone").hidden = true; modal.hidden = false;
+    $("#exSetup").hidden = false; $("#exRun").hidden = true; $("#exDone").hidden = true; modal.hidden = false; picked = new Set();
     support = null; paint(); const s = await check(); support = s || false; paint();
   }
   $("#exMore").onclick = () => { const all = $("#exFormats").classList.toggle("all"); $("#exMore").textContent = all ? "Fewer file types" : "More file types"; };
   modal.addEventListener("click", e => {
+    const vb = e.target.closest("button[data-ver]");
+    if(vb){ const id = vb.dataset.ver; if(picked.has(id)) picked.delete(id); else picked.add(id); paint(); return; }
+    const sv = e.target.closest("button[data-save]");
+    if(sv){ const x = extras[+sv.dataset.save]; if(x) saveOne(x); return; }
+    if(e.target.closest("#exSaveAll")){ (async () => { for(const x of [{ r: result, suffix: "" }, ...extras]) await saveOne(x); })(); return; }
     const b = e.target.closest("button[data-v]"); if(!b || b.disabled) return; const p = b.parentElement.id, v = b.dataset.v;
     if(p === "exFormats" || b.classList.contains("ex-f")) opt.format = v; else if(p === "exRes") opt.res = +v; else if(p === "exFps") opt.fps = +v; else if(p === "exQ") opt.q = v; else return;
     keep.set("sls-export", opt); if(p === "exRes"){ support = null; paint(); check().then(s => { support = s || false; paint(); }); } else paint();
@@ -151,15 +177,12 @@ window.SLSExport = (() => {
     out.gain.setValueAtTime(0, 0); out.gain.linearRampToValueAtTime(1, 0.01); out.gain.setValueAtTime(1, Math.max(0.02, len - 0.03)); out.gain.linearRampToValueAtTime(0, len);   // no clicks at the cut points
     return oc.startRendering();
   }
-  async function run(){
-    if(support === false){ legacy(); return; }
-    const mb = await load(), f = FORMATS.find(x => x.id === opt.format), s = support && support[f.id]; if(!mb || !s) return;
+  // one video with the project as it is now: frame by frame, encoded, packed
+  async function renderOne(mb, f, s, tag){
     const { a, b } = S.P.section, fps = opt.fps, dt = 1 / fps, total = Math.max(1, Math.round((b - a) * fps)), [w, h] = dims();
-    $("#exSetup").hidden = true; $("#exRun").hidden = false; $("#exBar").style.width = "0%";
-    job = { cancel: false }; S.exporting = { offline: true }; S.review = false;
     const selWas = S.sel; S.sel = null; tlDirty = true;
     const keepSize = [stage.width, stage.height]; stage.width = w; stage.height = h;
-    const t0 = performance.now(); let ok = false, err = null;
+    const t0 = performance.now();
     try {
       const output = new mb.Output({ format: new mb[f.fmt](), target: new mb.BufferTarget() });
       const quality = mb["QUALITY_" + opt.q];
@@ -168,7 +191,7 @@ window.SLSExport = (() => {
       const audio = new mb.AudioBufferSource({ codec: s.audio, bitrate: quality });
       output.addAudioTrack(audio);
       await output.start();
-      $("#exStatus").textContent = "Mixing the audio…";
+      $("#exStatus").textContent = tag + "Mixing the audio…";
       const audioBuf = await renderAudio(a, b, 48000);
       const frames = new Frames(mb, w, h, a, dt, total);
       for(let i = 0; i < total; i++){
@@ -177,40 +200,75 @@ window.SLSExport = (() => {
         if(!(await frames.at(i, t))) await prepFrame(t);
         renderFrame(t);
         await video.add(i * dt, dt);
-        if(i % 3 === 0 || i === total - 1){ const p = (i + 1) / total, el = (performance.now() - t0) / 1000, left = el / p - el;
-          $("#exBar").style.width = (p * 92).toFixed(1) + "%"; $("#exStatus").textContent = `Rendering frame ${i + 1} of ${total}` + (i > 15 ? ` · about ${Math.max(1, Math.round(left))} s left` : "");
+        if(i % 3 === 0 || i === total - 1){ const p = (job.done + (i + 1) / total) / job.of, el = (performance.now() - t0) / 1000, left = el / ((i + 1) / total) - el;
+          $("#exBar").style.width = (p * 92).toFixed(1) + "%"; $("#exStatus").textContent = tag + `Rendering frame ${i + 1} of ${total}` + (i > 15 ? ` · about ${Math.max(1, Math.round(left))} s left` : "");
           await new Promise(r => setTimeout(r, 0)); }   // let the page breathe
       }
-      $("#exStatus").textContent = "Encoding the audio and finishing the file…"; $("#exBar").style.width = "96%";
+      $("#exStatus").textContent = tag + "Encoding the audio and finishing the file…";
       await audio.add(audioBuf);
       await output.finalize();
-      result = { blob: new Blob([output.target.buffer], { type: f.mime }), f, w, h, fps };
-      ok = true;
-    } catch(e){ err = e; if(!e || !e.cancelled) console.error("export failed", e); }
-    finally {
+      return { blob: new Blob([output.target.buffer], { type: f.mime }), f, w, h, fps, secs: (performance.now() - t0) / 1000 };
+    } finally {
       S.clips.forEach(c => { delete c.xf; });
-      stage.width = keepSize[0]; stage.height = keepSize[1]; S.exporting = null; S.sel = selWas; tlDirty = true; syncUI(); fitStage(); job = null;
+      stage.width = keepSize[0]; stage.height = keepSize[1]; S.sel = selWas; tlDirty = true;
     }
+  }
+  // the project switched to an extra version for a moment (another frame shape, or another best part), then back
+  async function asVersion(x, fn){
+    const was = { aspect: S.P.aspect, section: { ...S.P.section }, words: S.P.words, lyrics: S.P.lyrics };
+    try {
+      if(x.aspect) S.P.aspect = x.aspect;
+      if(x.part != null){ const p = S.P.bites[x.part];
+        if(p.words){ S.P.words = p.words.map(w => ({ ...w })); S.P.lyrics = p.lyrics || ""; sortWords(); }
+        S.P.section = { a: clamp(p.a, 0, S.audio.duration - 2), b: clamp(p.b, p.a + 2, Math.min(S.audio.duration, p.a + 60)) }; }
+      return await fn();
+    } finally { S.P.aspect = was.aspect; S.P.section = was.section; S.P.words = was.words; S.P.lyrics = was.lyrics; sortWords(); }
+  }
+  async function run(){
+    if(support === false){ legacy(); return; }
+    const mb = await load(), f = FORMATS.find(x => x.id === opt.format), s = support && support[f.id]; if(!mb || !s) return;
+    const vers = versionChoices().filter(x => picked.has(x.id));
+    $("#exSetup").hidden = true; $("#exRun").hidden = false; $("#exBar").style.width = "0%";
+    job = { cancel: false, done: 0, of: 1 + vers.length }; S.exporting = { offline: true }; S.review = false; extras = [];
+    const t0 = performance.now(); let ok = false, err = null;
+    try {
+      const n = 1 + vers.length, tagOf = (k, what) => n > 1 ? `Video ${k} of ${n}${what ? " (" + what + ")" : ""}: ` : "";
+      result = await renderOne(mb, f, s, tagOf(1, ""));
+      ok = true;
+      for(let k = 0; k < vers.length; k++){
+        job.done = k + 1; const x = vers[k];
+        const r = await asVersion(x, () => renderOne(mb, f, s, tagOf(k + 2, x.aspect || "best part " + (x.part + 1))));
+        extras.push({ r, label: x.label, suffix: x.aspect ? "_" + x.aspect.replace(":", "x") : "_part" + (x.part + 1) });
+      }
+    } catch(e){ err = e; if(!e || !e.cancelled) console.error("export failed", e); }
+    finally { S.exporting = null; syncUI(); fitStage(); job = null; }
     if(ok){
       const url = URL.createObjectURL(result.blob), v = $("#exVideo"); if(v.dataset.url) URL.revokeObjectURL(v.dataset.url); v.dataset.url = url; v.src = url;
       $("#exRun").hidden = true; $("#exDone").hidden = false;
       const secs = ((performance.now() - t0) / 1000).toFixed(0);
-      $("#exNote").textContent = `${(result.blob.size / 1048576).toFixed(1)} MB ${result.f.label} · ${result.w}×${result.h} · ${result.fps} fps · made in ${secs} s.` + (result.f.id === "mov" || result.f.id === "mkv" ? " The preview may not play in the browser; the file opens in editing apps." : "");
+      $("#exNote").textContent = `${(result.blob.size / 1048576).toFixed(1)} MB ${result.f.label} · ${result.w}×${result.h} · ${result.fps} fps · made in ${secs} s.` + (result.f.id === "mov" || result.f.id === "mkv" ? " The preview may not play in the browser; the file opens in editing apps." : "")
+        + (err && !err.cancelled ? " One of the extra versions failed: " + ((err && err.message) || "unknown error") + "." : err && err.cancelled && extras.length < vers.length ? " Stopped before all the extra versions were made." : "");
+      const fl = $("#exFiles"); fl.hidden = !extras.length;
+      fl.innerHTML = extras.length ? `<div class="ex-file"><span><b>This one</b> · ${result.w}×${result.h} · ${(result.blob.size / 1048576).toFixed(1)} MB</span></div>` + extras.map((x, i) => `<div class="ex-file"><span><b>${esc(x.label)}</b> · ${x.r.w}×${x.r.h} · ${(x.r.blob.size / 1048576).toFixed(1)} MB</span><button class="btn small" type="button" data-save="${i}">Save</button></div>`).join("")
+        + `<div class="row"><button class="btn small" type="button" id="exSaveAll">Save all ${extras.length + 1}</button></div>` : "";
     } else {
       $("#exRun").hidden = true; $("#exSetup").hidden = false;
       $("#exEst").textContent = err && err.cancelled ? "Export stopped." : "The export failed: " + ((err && err.message) || "unknown error") + ". Try another file type or a lower resolution.";
     }
   }
-  $("#exGo").onclick = run;
-  $("#exSave").onclick = async () => {
-    if(!result) return;
-    // Song_Title_2026-11-24.mp4: the song title and today's date, so exports are easy to find and tell apart
+  // Song_Title_2026-11-24.mp4 (plus _16x9 or _part2 for the extra versions): easy to find and tell apart
+  function fileName(r, suffix){
     const d = new Date(), day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     const title = String(S.songName || "Lyric video").replace(/\.[a-z0-9]{2,4}$/i, "").normalize("NFC").replace(/[\\/:*?"<>|#%&{}$!'@+`=]+/g, "").trim().replace(/\s+/g, "_").slice(0, 80) || "Lyric_video";
-    const name = `${title}_${day}.${result.f.ext}`;
-    const ok = await saveFile(name, result.blob);
+    return `${title}_${day}${suffix || ""}.${r.f.ext}`;
+  }
+  async function saveOne(x){
+    const ok = await saveFile(fileName(x.r, x.suffix), x.r.blob);
     if(ok) toast("Video saved"); else if(ok === false) $("#exNote").textContent = "Saving isn't available in this view. Right-click the video and choose Save video as.";
-  };
+    return ok;
+  }
+  $("#exGo").onclick = run;
+  $("#exSave").onclick = () => { if(result) saveOne({ r: result, suffix: "" }); };
 
   /* old real-time recorder, for browsers without WebCodecs (it lives in studio.js) */
   function legacy(){ $("#exSetup").hidden = true; $("#exRun").hidden = false; $("#exStatus").textContent = "Recording in real time…"; $("#exStart") ? $("#exStart").click() : legacyRecord(); }
@@ -226,5 +284,5 @@ window.SLSExport = (() => {
     S.t = S.P.section.a; S.exporting = { rec }; S.review = false; renderFrame(S.t); rec.start(250); play({ dest });
   }
   /* the last finished export, for posting it (js/publish.js) */
-  return { open, formats: FORMATS, get result(){ return result; }, get audioCodec(){ return result && support && support[result.f.id] ? support[result.f.id].audio : null; } };
+  return { open, formats: FORMATS, get result(){ return result; }, get extras(){ return extras; }, get audioCodec(){ return result && support && support[result.f.id] ? support[result.f.id].audio : null; } };
 })();

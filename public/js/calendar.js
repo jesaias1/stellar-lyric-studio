@@ -55,6 +55,7 @@ window.SLSCalendar = (() => {
       <div class="cal-side">
         <section class="cal-day" id="calDay" aria-live="polite"></section>
         <section class="cal-up" id="calUp" aria-label="Coming up"></section>
+        <section class="cal-up cal-res" id="calRes" aria-label="What worked" hidden></section>
       </div>
     </div>
     <div class="cal-scrim" id="calScrim" hidden></div>
@@ -62,6 +63,7 @@ window.SLSCalendar = (() => {
   document.body.append(root);
   const $c = s => root.querySelector(s);
 
+  let results = [], resLoaded = false;
   let view = null, posts = [], upcoming = [], filter = "", selDay = "", openId = "", editing = false, busy = false;
   let isOpen = false, opener = null, loadTok = 0, timer = null, err = "", loading = false, loadedOnce = false;
   const today = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
@@ -82,6 +84,45 @@ window.SLSCalendar = (() => {
       posts = Array.isArray(a) ? a : []; upcoming = Array.isArray(b) ? b : []; err = ""; loadedOnce = true;
     } catch(e){ if(tok !== loadTok) return; if(!quiet || !loadedOnce) err = (e && e.message) || "The calendar couldn't be loaded."; }
     loading = false; paint();
+  }
+  /* ---------- what worked ----------
+     Posts that went out and have results, from the last 90 days: per song, the versions side by side (which part of the
+     song, which look, which frame shape), best first. The results come from the platforms (see src/schedule.js). */
+  async function loadResults(){
+    try {
+      const since = new Date(Date.now() - 90 * 864e5).toISOString();
+      const rows = await SLSAuth.rest("posts?select=id,project_name,artist,account_name,platform,meta,stats,publish_at&status=eq.posted&stats=not.is.null&publish_at=gte." + encodeURIComponent(since) + "&order=publish_at.desc&limit=300");
+      results = Array.isArray(rows) ? rows : []; resLoaded = true; paintResults();
+    } catch { resLoaded = true; results = []; paintResults(); }
+  }
+  const n0 = x => +x || 0;
+  function versionOf(r){
+    const c = (r.meta && r.meta.clip) || {}, bits = [];
+    if(c.a != null && c.b != null) bits.push(c.part ? `Part ${c.part} (${clockOf(c.a)} to ${clockOf(c.b)})` : `${clockOf(c.a)} to ${clockOf(c.b)}`);
+    if(c.look) bits.push(c.look);
+    if(c.size) bits.push(c.size);
+    return bits.join(" · ") || "This video";
+  }
+  function paintResults(){
+    const box = $c("#calRes"); if(!box) return;
+    const rows = visible(results).filter(r => r.stats && (r.stats.views != null || r.stats.likes != null));
+    box.hidden = !resLoaded;
+    if(!rows.length){ box.innerHTML = `<h3>What worked</h3><p class="hint">Once posts are out, their views and likes show up here, with the versions of each song side by side.</p>`; return; }
+    const songs = new Map();
+    for(const r of rows){
+      const name = r.project_name || "Untitled", s = songs.get(name) || { name, who: who(r), views: 0, likes: 0, posts: 0, vers: new Map() };
+      const st = r.stats, k = versionOf(r), v = s.vers.get(k) || { k, views: 0, likes: 0, posts: 0, pl: new Set() };
+      s.views += n0(st.views); s.likes += n0(st.likes); s.posts++;
+      v.views += n0(st.views); v.likes += n0(st.likes); v.posts++; v.pl.add(PN[r.platform] || r.platform);
+      s.vers.set(k, v); songs.set(name, s);
+    }
+    const top = [...songs.values()].sort((a, b) => b.views - a.views || b.likes - a.likes).slice(0, 6);
+    box.innerHTML = `<h3>What worked</h3>` + top.map(s => {
+      const vs = [...s.vers.values()].sort((a, b) => b.views - a.views || b.likes - a.likes), max = Math.max(1, ...vs.map(v => v.views));
+      return `<div class="res-song"><div class="res-head"><b>${esc(s.name)}</b><span>${num(s.views)} views · ${num(s.likes)} likes · ${s.posts} post${s.posts > 1 ? "s" : ""}</span></div>`
+        + (vs.length > 1 ? vs.map((v, i) => `<div class="res-ver${i === 0 ? " best" : ""}"><span class="res-k">${i === 0 ? "<em>Best</em> " : ""}${esc(v.k)}</span><span class="res-n">${num(v.views)} views · ${num(v.likes)} likes · ${[...v.pl].join(", ")}</span><i style="width:${Math.max(3, Math.round(v.views / max * 100))}%"></i></div>`).join("")
+          : `<div class="res-one hint">${esc(vs[0].k)} · ${[...vs[0].pl].join(", ")}</div>`) + `</div>`;
+    }).join("") + `<p class="hint">Make versions in Export > Also make (another part of the song, or another frame shape) and post them on different days to see which one people like.</p>`;
   }
 
   /* ---------- painting ---------- */
@@ -106,7 +147,7 @@ window.SLSCalendar = (() => {
     if(filter && !names.includes(filter)) names.push(filter);
     const sel = $c("#calFilter"), want = `<option value="">All artists</option>` + names.map(n => `<option value="${esc(n)}"${n === filter ? " selected" : ""}>${esc(n)}</option>`).join("");
     if(sel.dataset.sig !== want){ sel.innerHTML = want; sel.dataset.sig = want; } sel.value = filter;
-    paintState(); paintGrid(); paintSide();
+    paintState(); paintGrid(); paintSide(); paintResults();
     if(openId) paintDetail();
   }
   function paintGrid(){
@@ -257,7 +298,7 @@ window.SLSCalendar = (() => {
     closeDetail(true); isOpen = true; root.hidden = false; document.body.classList.add("cal-open");
     document.addEventListener("keydown", onKey, true);
     clearInterval(timer); timer = setInterval(() => { if(isOpen && !document.hidden && !busy) load(true); }, 60000);
-    paint(); load();
+    paint(); load(); loadResults();
     setTimeout(() => { if(isOpen && !root.contains(document.activeElement)) $c(".cal-x").focus({ preventScroll: true }); }, 40);
   }
   function close(){

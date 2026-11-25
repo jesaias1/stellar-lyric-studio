@@ -330,7 +330,12 @@ window.SLSPublish = (() => {
   }
   const b64 = obj => btoa(unescape(encodeURIComponent(JSON.stringify(obj)))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
   // which part of the song the post uses (and whether it's the matched TikTok sound), kept with the post for comparing results
-  const clipInfo = () => ({ a: +S.P.section.a.toFixed(2), b: +S.P.section.b.toFixed(2), ...(S.P.ttSound && Math.abs(S.P.ttSound.a - S.P.section.a) < 0.3 ? { tiktok: true } : {}) });
+  // plus the look, the frame shape and which of the song's best parts it is, so the calendar can compare versions
+  const clipInfo = () => {
+    const part = (S.P.bites || []).findIndex(p => Math.abs(S.P.section.a - p.a) < 0.3 && Math.abs(S.P.section.b - Math.min(p.b, p.a + 60)) < 0.3);
+    return { a: +S.P.section.a.toFixed(2), b: +S.P.section.b.toFixed(2), ...(S.P.ttSound && Math.abs(S.P.ttSound.a - S.P.section.a) < 0.3 ? { tiktok: true } : {}),
+      look: styleDef(S.P.style.preset).name, size: S.P.aspect, ...(part >= 0 ? { part: part + 1 } : {}) };
+  };
   function metaFor(a){
     const caption = $("#pubCaption").value.trim(), ai = $("#pubAi").checked;
     if(a.platform === "youtube") return { title: $("#pubYtTitle").value.trim() || S.songName, caption, privacy: ytPriv, ai, tags: ["lyrics", "lyric video", S.songName].filter(Boolean) };

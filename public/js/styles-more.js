@@ -490,9 +490,13 @@
   };
   const CAT_DEFAULTS = { minimal: { e: "low", m: ["calm", "sad"] }, bold: { e: "high", m: ["hype", "party"] }, layered: { e: "mid", m: ["hype", "night"] }, glow: { e: "mid", m: ["night", "dreamy"] },
     cinematic: { e: "low", m: ["dramatic", "sad"] }, playful: { e: "high", m: ["happy", "party"] }, editorial: { e: "mid", m: ["calm", "romantic"] } };
+  // vibe mood words that don't appear in the lyric word lists above
+  const MOOD_OF = { bittersweet: "sad", melancholic: "sad", melancholy: "sad", wistful: "sad", reflective: "calm", introspective: "calm", tender: "romantic", warm: "romantic",
+    hopeful: "happy", uplifting: "happy", joyful: "happy", playful: "happy", euphoric: "party", energetic: "party", confident: "hype", empowering: "hype", defiant: "hype", aggressive: "hype",
+    moody: "night", mysterious: "night", nostalgic: "dreamy", dreamy: "dreamy", ethereal: "dreamy", epic: "dramatic", intense: "dramatic", haunting: "dark", eerie: "dark", peaceful: "calm", serene: "calm" };
   const tagsOf = p => p.tags || CAT_DEFAULTS[p.cat] || { e: "mid", m: [] };
   const wordMode = p => { if(p._wm == null){ try { p._wm = /curWord\(|\bone\(/.test(String(p.draw)); } catch { p._wm = false; } } return p._wm; };   // shows one word at a time
-  let lastKey = "", why = "";
+  let lastKey = "", why = "", best = "";
   function profile(){
     const P = S.P; if(!P || !P.words.length) return null;
     const { a, b } = P.section, ws = P.words.filter(w => w.t >= a - 0.2 && w.t < b); if(ws.length < 3) return null;
@@ -500,13 +504,21 @@
     const text = ws.map(w => w.w).join(" ") + " " + (S.songName || ""), lines = new Set(ws.map(w => w.l)).size;
     const moods = {}; for(const [k, re] of Object.entries(MOODS)){ const n = (text.match(re) || []).length; if(n) moods[k] = Math.min(3, n); }
     const wps = ws.length / len, bpm = P.bpm || 100;
-    const energy = (bpm >= 122 || wps >= 2.8) ? "high" : (bpm < 92 && wps < 1.8) || wps < 1.1 ? "low" : "mid";
+    let energy = (bpm >= 122 || wps >= 2.8) ? "high" : (bpm < 92 && wps < 1.8) || wps < 1.1 ? "low" : "mid";
+    // the song's vibe (js/vibe.js), when it has been read: its energy wins, and its mood words count double
+    const v = P.vibe && P.vibe.v;
+    if(v){
+      energy = { calm: "low", steady: "mid", lively: "high", intense: "high" }[v.energy] || energy;
+      const vt = [...(v.mood || []), ...(v.imagery || []), v.summary || "", v.light || ""].join(" ");
+      for(const [k, re] of Object.entries(MOODS)){ const n = (vt.match(re) || []).length; if(n) moods[k] = Math.min(4, (moods[k] || 0) + n * 2); }
+      for(const w of v.mood || []){ const k = MOOD_OF[String(w).toLowerCase()]; if(k) moods[k] = Math.min(4, (moods[k] || 0) + 2); }
+    }
     return { moods, wps, energy, perLine: ws.length / Math.max(1, lines), seed: [...(S.songName || "")].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7) };
   }
   function recommend(){
     const pr = profile(), key = pr ? JSON.stringify([pr.moods, pr.energy, Math.round(pr.wps * 2), Math.round(pr.perLine), pr.seed]) : "";
     if(key === lastKey) return; lastKey = key;
-    if(!pr){ styleRecs = new Set(); why = ""; renderPresetGrid(); return; }
+    if(!pr){ styleRecs = new Set(); why = ""; best = ""; renderPresetGrid(); paintSuggest(); return; }
     const order = ["low", "mid", "high"], r = rng(pr.seed);
     const scored = PRESETS.filter(p => p.id !== "none").map(p => {
       const tg = tagsOf(p); let sc = 0;
@@ -516,12 +528,30 @@
       else { if(pr.wps < 1.8) sc += 0.8; if(pr.perLine > 12) sc -= 0.8; }
       return { p, sc: sc + r() * 0.6 };   // a little variety between songs with the same profile
     }).sort((x, y) => y.sc - x.sc);
-    styleRecs = new Set(scored.slice(0, 6).map(x => x.p.id));
+    styleRecs = new Set(scored.slice(0, 6).map(x => x.p.id)); best = scored[0] ? scored[0].p.id : "";
     const top = Object.entries(pr.moods).sort((x, y) => y[1] - x[1]).slice(0, 2).map(x => x[0]);
     why = [{ low: "slow", mid: "mid-tempo", high: "fast" }[pr.energy], ...top].join(", ");
-    renderPresetGrid();
+    renderPresetGrid(); paintSuggest();
   }
+  /* One quiet line under the categories: the style that suits the song best. It's only a suggestion: it hides once
+     that style is in use, and × hides it for this song. */
+  const HIDE = "sls-style-tip-off";
+  const hidden = () => { try { return (JSON.parse(sessionStorage.getItem(HIDE)) || []).includes(S.songName || ""); } catch { return false; } };
+  function paintSuggest(){
+    const el = $("#styleSuggest"); if(!el) return;
+    const p = best && PRESETS.find(x => x.id === best);
+    if(!p || p.id === S.P.style.preset || hidden()){ el.hidden = true; return; }
+    el.hidden = false;
+    el.innerHTML = `<span>Suits this song: <button class="link-btn" type="button" data-use="${esc(p.id)}">${esc(p.name)}</button></span><button class="tip-x" type="button" aria-label="Hide this suggestion">✕</button>`;
+  }
+  document.addEventListener("click", e => {
+    const el = $("#styleSuggest"); if(!el || !el.contains(e.target)) return;
+    const use = e.target.closest("[data-use]");
+    if(use){ S.P.style.preset = use.dataset.use; S.P.style.case = "auto"; syncUI(); saveDraft(); renderPresetGrid(); paintSuggest(); return; }
+    if(e.target.closest(".tip-x")){ try { const l = JSON.parse(sessionStorage.getItem(HIDE)) || []; l.push(S.songName || ""); sessionStorage.setItem(HIDE, JSON.stringify(l.slice(-50))); } catch {} el.hidden = true; }
+  });
   window.SLSStyleRecs = { recommend, get why(){ return why; } };
-  let timer = 0; slsOn("change", () => { clearTimeout(timer); timer = setTimeout(recommend, 400); });
+  let timer = 0; slsOn("change", () => { clearTimeout(timer); timer = setTimeout(() => { recommend(); paintSuggest(); }, 400); });
+  slsOn("vibe", () => { lastKey = ""; recommend(); });
   recommend(); renderPresetGrid();
 })();

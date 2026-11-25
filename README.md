@@ -25,9 +25,12 @@
   backgrounds written from the lyrics, and your own moodboards (drag the images into order).
 - **Best parts and TikTok sounds.** Finds the parts of a song that work best as a soundbite, and finds where a
   TikTok sound sits in the song by listening to it.
+- **Made to fit the song.** The studio reads how the song feels and suggests a lyric style, search ideas, a soft
+  colour over the footage and cuts that follow its energy. All optional.
 - **Export in the browser.** MP4, MOV, WebM or MKV, 720p to 4K, rendered frame by frame on your own computer.
+  Extra versions in one go: other frame shapes, or the song's other best parts.
 - **Post and plan.** Post to YouTube, Instagram and TikTok accounts in one go, schedule posts for later and see
-  them in the calendar.
+  them in the calendar, with the versions of each song compared by views and likes.
 - **Works on phones.** The whole studio works on a phone, and it can be added to the home screen as an app.
 
 <table>

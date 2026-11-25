@@ -251,19 +251,31 @@ function snapTime(t, div=2){
   const g = beatLen()/div, off = S.P.offset;
   return off + Math.round((t-off)/g)*g;
 }
+/* "Follow the song": the pace comes from the song's energy (js/vibe.js). Calm songs hold each picture for a whole
+   lyric line or longer and blend softly; lively ones cut on every other beat; intense ones on every beat. */
+const FEEL = {
+  calm: { kind: "lines", gap: 3.2, tr: "crossfade", xf: 0.9 },
+  steady: { kind: "lines", gap: 1.8, tr: "crossfade", xf: 0.45 },
+  lively: { kind: "beat", every: 2, tr: "none", xf: 0.25 },
+  intense: { kind: "beat", every: 1, tr: "flash", xf: 0.18 },
+};
+const songEnergy = () => (S.P.vibe && S.P.vibe.v && S.P.vibe.v.energy) || "steady";
+const feelCuts = () => FEEL[songEnergy()] || FEEL.steady;
 function segments(){
-  const {a,b} = S.P.section, every = S.P.cuts.every, pts = [a];
+  const feel = S.P.cuts.mode === "feel" ? feelCuts() : null;
+  const mode = feel ? feel.kind : S.P.cuts.mode, gap = feel && feel.gap ? feel.gap : 0.6;
+  const {a,b} = S.P.section, every = feel && feel.every ? feel.every : S.P.cuts.every, pts = [a];
   if(S.P.cuts.mode === "manual" && Array.isArray(S.P.cuts.points)){
     S.P.cuts.points.filter(t => t > a + 0.1 && t < b - 0.1).sort((x,y)=>x-y).forEach(t => { if(t > pts[pts.length-1] + 0.1) pts.push(t); });
     pts.push(b); const segs = []; for(let i=0;i<pts.length-1;i++) segs.push({a:pts[i], b:pts[i+1], i}); return segs;
   }
-  if(S.P.cuts.mode === "lines"){   // a new picture or clip on every lyric line
+  if(mode === "lines"){   // a new picture or clip on every lyric line
     const starts = [...new Set(S.P.words.map(w => w.l))].map(l => Math.min(...S.P.words.filter(w => w.l === l).map(w => w.t))).sort((x,y)=>x-y);
     const lead = 0.12;   // change just before the line is sung, so the picture lands with the words
-    starts.forEach(t => { const p = Math.max(a, t - lead); if(p > a + 0.4 && p < b - 0.4 && p > pts[pts.length-1] + 0.6) pts.push(p); });
+    starts.forEach(t => { const p = Math.max(a, t - lead); if(p > a + 0.4 && p < b - 0.4 && p > pts[pts.length-1] + gap) pts.push(p); });
     pts.push(b); const segs = []; for(let i=0;i<pts.length-1;i++) segs.push({a:pts[i], b:pts[i+1], i}); return segs;
   }
-  if(S.P.cuts.mode === "count"){
+  if(mode === "count"){
     const n = clamp(Math.round(S.P.cuts.count||8), 1, 60), beats = beatsIn(a,b).map(x=>x.t).filter(t => t > a + 0.15 && t < b - 0.15);
     for(let k=1;k<n;k++){ const target = a + (b-a)*k/n; let best = target, bd = Infinity; for(const t of beats){ const d = Math.abs(t-target); if(d < bd){ bd = d; best = t; } }
       if(bd > beatLen()) best = target; if(best > pts[pts.length-1] + 0.12) pts.push(best); }
@@ -285,7 +297,7 @@ function defaultIn(i, v){ return (i*1.7) % Math.max(0.1, (v && v.duration ? v.du
 function resolvedIn(i){ const {order} = segInfo(), clip = S.clips.find(c => c.id === order[i]); const sl = slotOf(i); if(sl.in != null) return sl.in; return clip && clip.kind === "video" ? defaultIn(i, clip.el) : 0; }
 function segInfo(){
   const pool = S.clips.filter(c=>c.on);
-  const key = [S.P.section.a,S.P.section.b,S.P.bpm,S.P.offset,JSON.stringify(S.P.cuts),pool.map(c=>c.id).join(","),S.P.cuts.mode === "lines" ? S.P.words.map(w=>w.l+":"+w.t.toFixed(2)).join(",") : ""].join("|");
+  const key = [S.P.section.a,S.P.section.b,S.P.bpm,S.P.offset,JSON.stringify(S.P.cuts),pool.map(c=>c.id).join(","),S.P.cuts.mode === "lines" || S.P.cuts.mode === "feel" ? S.P.words.map(w=>w.l+":"+w.t.toFixed(2)).join(",") : "",S.P.cuts.mode === "feel" ? songEnergy() : ""].join("|");
   if(key === segCache.key) return segCache;
   const segs = segments(), r = rng(S.P.cuts.seed), order = [];
   if(S.P.cuts.slots && S.P.cuts.slots.length !== segs.length) S.P.cuts.slots = null;   // the cut layout changed: fall back to the automatic order
@@ -862,6 +874,10 @@ function renderFrame(tr0){
     sc.rotate((half ? k2 : k2 - 1)*0.5); const z = half ? 1 + k2*0.6 : 1.6 - k2*0.6; sc.scale(z, z); sc.translate(-W/2, -H/2); sc.drawImage(half ? cutC : footC, 0, 0); sc.restore(); }
   if(tr === "flash" && si > 0 && lt < XF){ sc.fillStyle = `rgba(255,255,255,${0.55*(1 - lt/XF)})`; sc.fillRect(0,0,W,H); }
   if(tr === "dip" && si > 0 && lt < XF){ sc.fillStyle = `rgba(0,0,0,${0.85*(1 - lt/XF)})`; sc.fillRect(0,0,W,H); }
+  // the song's colour, softly over all the footage (under the darkening and the lyrics)
+  const tn = P.tint; if(tn && tn.on && /^#[0-9a-f]{6}$/i.test(tn.color || "") && tn.amount > 0){ const k = clamp(tn.amount, 0, 1);
+    sc.save(); sc.fillStyle = tn.color; sc.globalCompositeOperation = "soft-light"; sc.globalAlpha = Math.min(1, k * 1.5); sc.fillRect(0,0,W,H);
+    sc.globalCompositeOperation = "source-over"; sc.globalAlpha = k * 0.16; sc.fillRect(0,0,W,H); sc.restore(); }
   if(st.scrim > 0){ sc.fillStyle = `rgba(6,5,10,${st.scrim})`; sc.fillRect(0,0,W,H);
     const vg = sc.createRadialGradient(W/2,H/2,Math.min(W,H)*0.3,W/2,H/2,Math.max(W,H)*0.75); vg.addColorStop(0,"rgba(0,0,0,0)"); vg.addColorStop(1,`rgba(0,0,0,${st.scrim*0.9})`); sc.fillStyle = vg; sc.fillRect(0,0,W,H); }
   // hook
@@ -1400,7 +1416,22 @@ function syncCutUI(){ const m = S.P.cuts.mode;
   if(document.activeElement !== $("#cutZoom")){ $("#cutZoom").value = Math.round(fxA.z * 100); $("#cutZoomVal").textContent = Math.round(fxA.z * 100) + "%"; }
   $("#xfField").hidden = (S.P.cuts.transition || "none") === "none" && !(S.P.cuts.slots || []).some(sl => sl && sl.tr && sl.tr !== "none"); $("#xfDur").value = S.P.cuts.xf ?? 0.35; $("#xfDurVal").textContent = (+(S.P.cuts.xf ?? 0.35)).toFixed(2) + "s";
   $$("#cutMode button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === m)));
-  $("#cutCountField").hidden = m !== "count"; $("#cutEveryField").hidden = m !== "beat"; $("#cutManualField").hidden = m !== "manual"; }
+  $("#cutCountField").hidden = m !== "count"; $("#cutEveryField").hidden = m !== "beat"; $("#cutManualField").hidden = m !== "manual";
+  const fh = $("#cutFeelHint"); if(fh){ fh.hidden = m !== "feel"; fh.textContent = m === "feel" ? FEEL_WORDS[songEnergy()] : ""; }
+  syncTintUI(); }
+const FEEL_WORDS = {
+  calm: "A calm song: each picture stays for a lyric line or longer, with soft crossfades.",
+  steady: "A steady song: a new picture on most lyric lines, with short crossfades.",
+  lively: "A lively song: a clean cut on every other beat.",
+  intense: "An intense song: a cut with a flash on every beat.",
+};
+function syncTintUI(){
+  const f = $("#tintField"); if(!f) return;
+  const tn = S.P.tint, on = !!(tn && tn.on), v = window.SLSVibe ? SLSVibe.cached() : null;
+  $("#tintOn").hidden = on; $("#tintCtl").hidden = !on; $("#tintOff").hidden = !on;
+  if(on){ if(document.activeElement !== $("#tintColor")) $("#tintColor").value = tn.color; if(document.activeElement !== $("#tintAmt")) $("#tintAmt").value = Math.round(tn.amount * 100); $("#tintVal").textContent = Math.round(tn.amount * 100) + "%"; }
+  $("#tintOn").textContent = v ? "Use the song's colour" : "Read the song and use its colour";
+}
 function syncHookUI(){ const h = S.P.hook, len = S.P.section.b - S.P.section.a;
   fillFonts("#hFont");
   $$("#hLook button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === (h.look || "pill"))));
@@ -1573,7 +1604,10 @@ $("#hookSeg").onclick = e => { const b = e.target.closest("button"); if(!b) retu
 $("#hText").oninput = e => { S.P.hook.text = e.target.value; dirty(); };
 $("#hDur").oninput = e => { S.P.hook.dur = +e.target.value; $("#hDurVal").textContent = (+e.target.value).toFixed(2)+"s"; dirty(); };
 $("#cutEvery").onclick = e => { const b = e.target.closest("button"); if(!b) return; S.P.cuts.every = +b.dataset.v; resetSlots(); selectNone(); syncUI(); dirty(); };
-$("#cutMode").onclick = e => { const b = e.target.closest("button"); if(!b) return; if(b.dataset.v === "manual"){ toManualCuts(); dirty(); return; } S.P.cuts.mode = b.dataset.v; selectNone(); syncUI(); dirty(); };
+$("#cutMode").onclick = async e => { const b = e.target.closest("button"); if(!b) return; if(b.dataset.v === "manual"){ toManualCuts(); dirty(); return; }
+  if(b.dataset.v === "feel"){
+    if(window.SLSVibe && !SLSVibe.cached()){ toast("Listening to the song…"); await SLSVibe.get(); }
+    const f = feelCuts(); S.P.cuts.mode = "feel"; S.P.cuts.transition = f.tr; S.P.cuts.xf = f.xf; resetSlots(); selectNone(); syncUI(); dirty(); return; } S.P.cuts.mode = b.dataset.v; selectNone(); syncUI(); dirty(); };
 $("#cutCount").oninput = e => { S.P.cuts.count = +e.target.value; resetSlots(); $("#cutCountVal").textContent = e.target.value; tlDirty = true; saveDraft(); };
 $("#secLen").onclick = e => { const b = e.target.closest("button"); if(!b || !S.audio) return; const len = Math.min(+b.dataset.v, S.audio.duration), a = clamp(S.P.section.a, 0, S.audio.duration - len); setSection(a, a + len); syncUI(); };
 const secMax = () => S.audio ? S.audio.duration : 60;
@@ -1584,6 +1618,16 @@ $("#secLenIn").oninput = e => { const v = +e.target.value; if(!(v >= 2) || S.pla
 // hook timing: the preview follows the slider (start shows the hook appearing, length shows its last moment)
 $("#hStart").addEventListener("input", () => { if(!S.playing) S.t = S.P.section.a + (S.P.hook.start || 0) + 0.05; });
 $("#hDur").addEventListener("input", () => { if(!S.playing) S.t = Math.min(S.P.section.b - 0.04, S.P.section.a + (S.P.hook.start || 0) + S.P.hook.dur - 0.05); });
+$("#tintOn").onclick = async () => {
+  let v = window.SLSVibe ? SLSVibe.cached() : null;
+  if(!v && window.SLSVibe){ $("#tintOn").textContent = "Listening to the song…"; v = await SLSVibe.get(); }
+  const c = (S.P.tint && S.P.tint.color) || (window.SLSVibe && SLSVibe.tintOf(v)) || "#c8913a";
+  S.P.tint = { on: true, color: c, amount: (S.P.tint && S.P.tint.amount) || 0.35 }; syncTintUI(); dirty();
+};
+$("#tintOff").onclick = () => { S.P.tint = { ...(S.P.tint || {}), on: false }; syncTintUI(); dirty(); };
+$("#tintColor").oninput = e => { if(!S.P.tint) return; S.P.tint.color = e.target.value; saveDraft(); };
+$("#tintAmt").oninput = e => { if(!S.P.tint) return; S.P.tint.amount = +e.target.value / 100; $("#tintVal").textContent = e.target.value + "%"; saveDraft(); };
+slsOn("vibe", () => { syncTintUI(); if(S.P.cuts.mode === "feel") syncCutUI(); });
 $("#cutOrder").onclick = e => { const b = e.target.closest("button"); if(!b) return; S.P.cuts.order = b.dataset.v; S.P.cuts.slots = null; syncCutUI(); dirty(); };
 $("#cutTrans").onclick = e => { const b = e.target.closest("button"); if(!b) return; S.P.cuts.transition = b.dataset.v; syncCutUI(); saveDraft(); if(!S.playing){ const {segs} = segInfo(); const k = segs.findIndex(x => x.a > S.t); if(k > 0){ S.t = segs[k].a - 0.6; play({}); } } };
 function addCutAt(t0){ if(S.locks.cuts){ toast("The cuts track is locked"); return false; } toManualCuts(); const t = snapTime(t0, 2), {a,b} = S.P.section; if(t <= a + 0.15 || t >= b - 0.15){ toast("Move the playhead inside the soundbite first"); return false; }

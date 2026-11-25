@@ -39,6 +39,21 @@ window.SLSVibe = (() => {
     return String(h);
   }
   const cached = () => S.P.vibe && S.P.vibe.k === key() ? S.P.vibe.v : null;
+
+  // the song's colour for the tint: the one the reading chose, or one from its colour words
+  const WORDS = [[/amber|gold|honey|ochre|mustard/, "#c8913a"], [/orange|rust|copper|terracotta|burnt/, "#c46a3a"], [/red|crimson|scarlet|wine|burgundy/, "#a83a3a"],
+    [/pink|rose|blush|magenta/, "#c86a8a"], [/purple|violet|lilac|lavender|plum/, "#7a5aa8"], [/teal|turquoise|aqua|cyan/, "#3a9a9a"], [/green|olive|sage|emerald|forest/, "#5a8a5a"],
+    [/navy|midnight|indigo|deep blue|dark blue/, "#2f3f7a"], [/blue|azure|sky|ice|steel/, "#4a7ab0"], [/beige|cream|sand|ivory|warm white|peach/, "#c8a882"],
+    [/brown|sepia|coffee|earth/, "#8a6a4a"], [/grey|gray|silver|ash|smoke/, "#8a8a92"], [/black|dark|shadow/, "#3a3540"], [/yellow|sun/, "#d0b040"]];
+  function tintOf(v){
+    if(!v) return "";
+    if(/^#[0-9a-f]{6}$/i.test(v.tint || "")) return v.tint;
+    const text = [...(v.colours || []), v.light || ""].join(" ").toLowerCase();
+    for(const [re, c] of WORDS) if(re.test(text)) return c;
+    return "";
+  }
+  // the first time a song is read, its colour goes over the footage, softly (Clips > Song colour turns it off)
+  function firstTint(v){ if(S.P.tint === undefined){ const c = tintOf(v); if(c) S.P.tint = { on: true, color: c, amount: 0.35 }; } }
   let pending = null, pendingKey = "";
   async function get(){
     const have = cached(); if(have) return have;
@@ -49,7 +64,7 @@ window.SLSVibe = (() => {
     pending = (async () => {
       try {
         const d = await api.api("/api/vibe", { method: "POST", body: { lyrics, title: title(), sound: snd }, timeout: 45000 });
-        if(d.vibe && key() === k){ S.P.vibe = { k, v: d.vibe }; saveDraft(); slsEmit("vibe"); }
+        if(d.vibe && key() === k){ S.P.vibe = { k, v: d.vibe }; firstTint(d.vibe); saveDraft(); slsEmit("vibe"); }
         return d.vibe || null;
       } catch { return null; }
       finally { if(pendingKey === k) pending = null; }
@@ -57,7 +72,7 @@ window.SLSVibe = (() => {
     return pending;
   }
   // a vibe the backend sent along with search results (it reads one itself when the app had none yet)
-  function keep(v){ if(v && !cached()){ S.P.vibe = { k: key(), v }; saveDraft(); slsEmit("vibe"); } }
+  function keep(v){ if(v && !cached()){ S.P.vibe = { k: key(), v }; firstTint(v); saveDraft(); slsEmit("vibe"); } }
   // one short line for the screen: "Bittersweet, hopeful · slow and calm · warm gold light"
   function line(v){
     if(!v) return "";
@@ -65,5 +80,22 @@ window.SLSVibe = (() => {
     const energy = { calm: "calm", steady: "steady", lively: "lively", intense: "intense" }[v.energy] || "";
     return [cap((v.mood || []).slice(0, 3).join(", ")), energy, v.light].filter(Boolean).join(" · ");
   }
-  return { get, cached, keep, sound, line, songLyrics };
+  /* A search box filled in with a suggestion from the song, which you can type over or remove with ✕. Once removed,
+     it stays empty for this song. Your own words are never replaced. */
+  const OFF = "sls-prefill-off";
+  const offFor = () => { try { return JSON.parse(sessionStorage.getItem(OFF)) || []; } catch { return []; } };
+  function prefill(input, text){
+    if(!input) return;
+    let x = input.parentElement && input.parentElement.classList.contains("pre-wrap") ? input.parentElement.querySelector(".pre-x") : null;
+    if(!x){
+      const wrap = document.createElement("span"); wrap.className = "pre-wrap"; input.before(wrap); wrap.append(input);
+      x = document.createElement("button"); x.type = "button"; x.className = "pre-x"; x.hidden = true; x.setAttribute("aria-label", "Remove the suggestion"); x.textContent = "✕"; wrap.append(x);
+      x.onclick = () => { input.value = ""; delete input.dataset.pre; x.hidden = true; const l = offFor(); l.push(input.id + "|" + (S.songName || "")); try { sessionStorage.setItem(OFF, JSON.stringify(l.slice(-100))); } catch {} input.focus(); };
+      input.addEventListener("input", () => { delete input.dataset.pre; x.hidden = !input.value; });
+    }
+    const mine = input.value.trim() && !input.dataset.pre;
+    if(!text || mine || offFor().includes(input.id + "|" + (S.songName || ""))){ x.hidden = !input.value; return; }
+    input.value = text; input.dataset.pre = "1"; x.hidden = false;
+  }
+  return { get, cached, keep, sound, line, songLyrics, tintOf, prefill };
 })();

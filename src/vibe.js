@@ -28,6 +28,7 @@ const clean = s => String(s || "").replace(/\s+/g, " ").trim();
 // a list the model wrote, as an array or as one comma-separated string
 const list = (x, n, len = 40) => (Array.isArray(x) ? x : typeof x === "string" ? x.split(/[,;\n]/) : []).map(v => clean(v).replace(/["#]/g, "").slice(0, len)).filter(Boolean).slice(0, n);
 const ENERGY = ["calm", "steady", "lively", "intense"];
+const hex = x => { const m = String(x || "").trim().match(/^#?([0-9a-f]{6})$/i); return m ? "#" + m[1].toLowerCase() : ""; };
 
 // the measured sound in words, for the model
 function soundWords(s) {
@@ -57,8 +58,8 @@ function fromModel(out) {
 // the shape asked for; Workers AI's JSON mode holds the model to it
 const strs = { type: "array", items: { type: "string" } };
 const SHAPE = { type: "object", properties: { summary: { type: "string" }, mood: strs, energy: { type: "string", enum: ENERGY }, colours: strs, light: { type: "string" },
-  places: strs, season: { type: "string" }, imagery: strs, avoid: strs, video: strs, photo: strs }, required: ["summary", "mood", "energy", "video", "photo"] };
-const EXAMPLE = '{"summary": "A slow, bittersweet song about learning to love your own flaws.", "mood": ["bittersweet", "hopeful", "tender"], "energy": "calm", "colours": ["amber", "gold", "soft grey"], "light": "soft golden hour", "places": ["quiet bedroom", "rainy street", "old stone wall"], "season": "autumn", "imagery": ["scars", "mirror", "rain"], "avoid": ["party crowds", "bright neon"], "video": ["rain on window", "candle flame dark", "dust in sunlight", "slow waves sunset", "curtains blowing", "city lights blur"], "photo": ["kintsugi bowl close up film photo", "rainy window golden light", "cracked stone wall gold painting", "empty room soft light 35mm"]}';
+  places: strs, season: { type: "string" }, imagery: strs, avoid: strs, video: strs, photo: strs, tint: { type: "string" } }, required: ["summary", "mood", "energy", "video", "photo"] };
+const EXAMPLE = '{"summary": "A slow, bittersweet song about learning to love your own flaws.", "mood": ["bittersweet", "hopeful", "tender"], "energy": "calm", "colours": ["amber", "gold", "soft grey"], "light": "soft golden hour", "places": ["quiet bedroom", "rainy street", "old stone wall"], "season": "autumn", "imagery": ["scars", "mirror", "rain"], "avoid": ["party crowds", "bright neon"], "video": ["rain on window", "candle flame dark", "dust in sunlight", "slow waves sunset", "curtains blowing", "city lights blur"], "photo": ["kintsugi bowl close up film photo", "rainy window golden light", "cracked stone wall gold painting", "empty room soft light 35mm"], "tint": "#c8913a"}';
 
 export let lastWhy = "";   // why the last read failed (for the API answer and the logs)
 export async function readVibe(ai, { lyrics, title, sound }) {
@@ -74,6 +75,7 @@ Answer in English (whatever the lyrics' language) with one JSON object and nothi
 summary: one plain sentence on what the song feels like. mood: 2 to 4 mood words. energy: exactly one of "calm", "steady", "lively", "intense". colours: 2 to 4 colour words. light: a few words on the light. places: 2 to 4 concrete, filmable settings. season: a season or "any". imagery: 3 to 6 concrete images taken from the lyrics. avoid: 2 to 4 things that would clash with the song.
 video: 6 different stock-video searches of 2 to 4 plain words each: things a camera can film that exist on free stock video sites, matching the mood, energy and light; vary them; no faces, no text, no famous places.
 photo: 4 different image searches of 3 to 6 words each for mood-board pictures, each a concrete scene plus a look (film photo, painting and so on).
+tint: one colour as a hex code (like #c8913a) for a soft colour grade over all the footage, taken from the song's colours and light: warm ambers for warm songs, cool blues for cold or night ones, never neon-bright.
 
 An example of the format only (for a different song; don't copy its content):
 ${EXAMPLE}`;
@@ -93,6 +95,7 @@ ${EXAMPLE}`;
         imagery: list(v.imagery, 6), avoid: list(v.avoid, 4),
         video: [...new Set(list(v.video || v.videos, 6, 40).map(q => q.toLowerCase()))],
         photo: [...new Set(list(v.photo || v.photos, 4, 60))],
+        tint: hex(v.tint),
       };
       if (!vibe.video.length && !vibe.mood.length) throw new Error("the answer had no searches or moods");
       cache.set(key, vibe); if (cache.size > 300) cache.delete(cache.keys().next().value);
@@ -113,7 +116,7 @@ export function vibeFrom(x) {
   const v = {
     summary: clean(x.summary).slice(0, 220), mood: list(x.mood, 4, 24), energy: ENERGY.includes(x.energy) ? x.energy : "",
     colours: list(x.colours, 4, 24), light: clean(x.light).slice(0, 60), places: list(x.places, 4), season: clean(x.season).slice(0, 20),
-    imagery: list(x.imagery, 6), avoid: list(x.avoid, 4), video: list(x.video, 6, 40), photo: list(x.photo, 4, 60),
+    imagery: list(x.imagery, 6), avoid: list(x.avoid, 4), video: list(x.video, 6, 40), photo: list(x.photo, 4, 60), tint: hex(x.tint),
   };
   return v.summary || v.mood.length ? v : null;
 }

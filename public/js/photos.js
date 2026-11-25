@@ -96,6 +96,7 @@ window.SLSPhotos = (() => {
   function paintIdeas(){
     const v = SLSVibe.cached(), list = v && v.photo.length ? v.photo : IDEAS;
     $("#phIdeas").innerHTML = list.map(q => `<button type="button" data-q="${esc(q)}">${esc(q)}</button>`).join("");
+    if(v && v.photo.length) SLSVibe.prefill($("#phPrompt"), v.photo[0]);
   }
   slsOn("vibe", paintIdeas); slsOn("step", paintIdeas);   // a project opened with its vibe already read
 
