@@ -42,6 +42,7 @@ import { captionRoute } from "./caption.js";
 import { authConfigured, userFrom, bearer } from "./auth.js";
 import { mediaRoute, mediaHealth } from "./media.js";
 import { photosRoute, photosHealth } from "./photos.js";
+import { vibeRoute } from "./vibe.js";
 import { publishRoute, publishPublicRoute, publishHealth } from "./publish.js";
 
 const MODEL = "@cf/openai/whisper-large-v3-turbo";
@@ -120,6 +121,8 @@ async function route(request, env, url) {
   if (media) return media;
   const photos = await photosRoute(request, env, url, path, method, { hasAI: hasAI(env), runModel, json });
   if (photos) return photos;
+  const vibe = await vibeRoute(request, env, path, method, { hasAI: hasAI(env), runModel, json });
+  if (vibe) return vibe;
   const publish = await publishRoute(request, env, url, path, method, { json, user: who });
   if (publish) return publish;
 

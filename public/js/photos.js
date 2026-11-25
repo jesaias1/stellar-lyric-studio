@@ -92,6 +92,13 @@ window.SLSPhotos = (() => {
     return (inside.length ? inside : groups).map(L => L.map(w => w.w).join(" ")).join("\n");
   }
 
+  /* ---------- ideas for this song ---------- */
+  function paintIdeas(){
+    const v = SLSVibe.cached(), list = v && v.photo.length ? v.photo : IDEAS;
+    $("#phIdeas").innerHTML = list.map(q => `<button type="button" data-q="${esc(q)}">${esc(q)}</button>`).join("");
+  }
+  slsOn("vibe", paintIdeas); slsOn("step", paintIdeas);   // a project opened with its vibe already read
+
   /* ---------- search ---------- */
   let busy = false;
   $("#phGo").onclick = () => mode === "boards" ? fromBoard() : grab();
@@ -104,7 +111,9 @@ window.SLSPhotos = (() => {
     const n = count(), go = $("#phGo"); busy = true; go.disabled = true; go.textContent = "Finding images…";
     msg(`Searching ${from === "free" ? "free photos" : from === "pinterest" ? "Pinterest" : "free photos and Pinterest"} and picking the ${n} that fit your song best…`);
     try {
-      const d = await api.api("/api/photos/pick", { method: "POST", body: { prompt, lyrics, count: n, aspect: aspectKey(), from, look, exclude: usedKeys() }, timeout: 120000 });
+      const d = await api.api("/api/photos/pick", { method: "POST", body: { prompt, lyrics, count: n, aspect: aspectKey(), from, look, exclude: usedKeys(),
+        vibe: SLSVibe.cached(), title: S.songName, sound: SLSVibe.cached() ? undefined : SLSVibe.sound() }, timeout: 120000 });
+      SLSVibe.keep(d.vibe);
       if(d.pinLeft != null){ pinLeft = d.pinLeft; paintMode(); }
       if(!d.picks.length){ msg(d.message || "Nothing found. Try other keywords."); return; }
       const toItem = photoItem(prompt);
@@ -176,7 +185,7 @@ window.SLSPhotos = (() => {
     setBusy(true); b.textContent = "Finding more…";
     try {
       const d = await api.api("/api/photos/pick", { method: "POST", timeout: 120000, body: { prompt: R.prompt, lyrics: R.lyrics, from: R.from, aspect: aspectKey(),
-        count: Math.max(6, R.target), queries: R.searched, page: R.page, next: R.next, look: R.look, exclude: [...usedKeys(), ...shown] } });
+        count: Math.max(6, R.target), queries: R.searched, page: R.page, next: R.next, look: R.look, exclude: [...usedKeys(), ...shown], vibe: SLSVibe.cached() } });
       if(!R) return;
       if(d.pinLeft != null) pinLeft = d.pinLeft;
       R.page = d.page || R.page + 1; R.next = d.next || {};
@@ -271,7 +280,7 @@ window.SLSPhotos = (() => {
     const n = count(); let order = b.items.map(it => it.k), ranked = false;
     if(b.items.length > n && api.hasPass() && b.items.some(it => it.title)){
       busy = true; $("#phGo").disabled = true; msg("Picking the images that fit your song best…");
-      try { const d = await api.api("/api/photos/rank", { method: "POST", body: { lyrics: sectionLyrics(), prompt: b.name, count: n, items: b.items.map(it => ({ id: it.k, text: it.title || it.name, shape: it.shape })) }, timeout: 60000 });
+      try { const d = await api.api("/api/photos/rank", { method: "POST", body: { lyrics: sectionLyrics(), prompt: b.name, vibe: SLSVibe.cached(), count: n, items: b.items.map(it => ({ id: it.k, text: it.title || it.name, shape: it.shape })) }, timeout: 60000 });
         if(d.ai && Array.isArray(d.order)){ order = d.order; ranked = true; } } catch {}
       finally { busy = false; $("#phGo").disabled = false; msg(""); }
     }

@@ -21,8 +21,8 @@
 - **Dozens of lyric templates.** Minimal, bold, layered, glow, cinematic, playful, editorial and trending looks,
   with your own text boxes and hooks on top.
 - **Any frame.** Vertical or horizontal, 9:16, 4:5, 1:1, 16:9, 5:4, or your own size in pixels.
-- **Backgrounds.** Free stock video, AI backgrounds written from the lyrics, an image grabber that finds one
-  photo per lyric line, and your own moodboards (drag the images into order).
+- **Backgrounds.** Free stock videos and photos picked to match how the song feels (no AI-made ones), AI
+  backgrounds written from the lyrics, and your own moodboards (drag the images into order).
 - **Best parts and TikTok sounds.** Finds the parts of a song that work best as a soundbite, and finds where a
   TikTok sound sits in the song by listening to it.
 - **Export in the browser.** MP4, MOV, WebM or MKV, 720p to 4K, rendered frame by frame on your own computer.
@@ -62,7 +62,8 @@
 | Lyric review | `public/js/lyrics.js` | Click a word to fix it, keep or correct the unsure ones. |
 | Lyric templates | `public/js/styles-extra.js`, `styles-more.js`, `styles-trend.js` | The lyric looks beyond the built-in ones. |
 | Best parts and TikTok sounds | `public/js/soundbites.js`, `soundmatch.js`, `ttsound.js`, `src/tiktok-sound.js` | Finds strong soundbites; matches a TikTok sound to its place in the song (saved per song in `song_sounds`). |
-| Footage | `public/js/footage.js`, `src/media.js` | Stock video (Pixabay, Pexels) and AI backgrounds (Higgsfield). |
+| Song vibe | `public/js/vibe.js`, `src/vibe.js` | Reads how the song feels (lyrics plus tempo, loudness and brightness measured from the audio) and steers the video and photo searches with it. Also keeps AI-made pictures and videos out. |
+| Footage | `public/js/footage.js`, `src/media.js` | Stock video (Pixabay, Pexels), also picked for the song and AI backgrounds (Higgsfield). |
 | Photos and moodboards | `public/js/photos.js`, `src/photos.js` | The image grabber (free photos and Pinterest, ranked against the lyrics) and moodboards kept in the browser. |
 | Safe zones | `public/js/safezones.js` | Shows where TikTok, Reels, Shorts, Stories and YouTube put their buttons. Never exported. |
 | Export | `public/js/export.js`, `public/vendor/` | Renders frame by frame and encodes in the browser (mediabunny, MPL-2.0). |

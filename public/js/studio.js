@@ -12,7 +12,7 @@ const store = {
   set(k,v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
 };
 /* the guided UI (js/app.js, js/lyrics.js) listens to these: "change" = the project changed, "pick" = a song file was chosen */
-const HOOKS = {change:[], pick:[], step:[]};
+const HOOKS = {change:[], pick:[], step:[], vibe:[]};   // "vibe" = the song's vibe was read (js/vibe.js)
 const slsOn = (k, f) => HOOKS[k].push(f);
 const slsEmit = (k, ...a) => { for(const f of HOOKS[k]){ try { f(...a); } catch(err){ console.error(err); } } };
 const ASPECTS = { "9:16":[720,1280], "4:5":[864,1080], "1:1":[1080,1080], "16:9":[1280,720], "5:4":[1080,864] };
@@ -818,6 +818,15 @@ function manageVideos(segs, order, si, t){
   if(nc && nc.kind === "video" && segs[nx].a - t < 1.2){ const v = vidFor(nc, nx); keep.add(v);
     if(v.duration){ const want = wantTime(v, 0, nx); if(!v.paused) v.pause(); if(Math.abs(v.currentTime - want) > 0.04 && !v.seeking) v.currentTime = want; } }
   for(const c of S.clips) if(c.kind === "video") for(const v of [c.el, c.el2]) if(v && !keep.has(v) && !v.paused) v.pause();
+  parkVideos(keep);
+}
+// The players in use sit, invisible, inside the preview. A player that isn't on the page, or is outside the part shown
+// in full screen, can be paused or stop getting new frames (phones especially), which froze the background in full screen.
+let vHold = null;
+function parkVideos(keep){
+  if(!vHold){ vHold = document.createElement("div"); vHold.className = "vid-hold"; vHold.setAttribute("aria-hidden", "true"); $(".stage").append(vHold); }
+  for(const v of keep) if(v.parentNode !== vHold) vHold.append(v);
+  for(const v of [...vHold.children]) if(!keep.has(v)) v.remove();
 }
 function pauseVideos(){ for(const c of S.clips) if(c.kind === "video") for(const v of [c.el, c.el2]) if(v) v.pause(); }
 let footC = null, cutC = null, lastSi = -1;

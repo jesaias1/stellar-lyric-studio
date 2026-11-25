@@ -10,6 +10,8 @@ window.SLSFootage = (() => {
     <div class="fx-tabs" role="tablist"><button data-fx="photos" aria-selected="true">Photos</button><button data-fx="stock" aria-selected="false">Free videos</button><button data-fx="ai" aria-selected="false">AI background</button></div>
     <div class="fx-body" data-fxp="photos"></div>
     <div class="fx-body" data-fxp="stock" hidden>
+      <div class="fx-vibe"><button class="btn small primary" type="button" id="stockMatch">Find videos for this song</button>
+        <div class="hint" id="stockVibe">SLS listens to the song, reads the lyrics and picks free videos that feel the same.</div></div>
       <form class="fx-search" id="stockForm" autocomplete="off"><input type="search" id="stockQ" placeholder="Search: snow, city at night, ocean…" aria-label="Search free videos"><button class="btn small primary">Search</button></form>
       <div class="chips fx-ideas" id="stockIdeas">${IDEAS.map(q => `<button type="button" data-q="${q}">${q}</button>`).join("")}</div>
       <div class="fx-msg hint" id="stockMsg"></div>
@@ -31,36 +33,79 @@ window.SLSFootage = (() => {
 
   let health = null;
   const getHealth = async () => { if(health) return health; try { health = await api.health(); } catch { health = {}; } return health; };
-  $$(".fx-tabs button").forEach(b => b.onclick = () => { $$(".fx-tabs button").forEach(x => x.setAttribute("aria-selected", String(x === b))); $$(".fx-body").forEach(p => p.hidden = p.dataset.fxp !== b.dataset.fx); if(b.dataset.fx === "ai") paintAI(); });
+  $$(".fx-tabs button").forEach(b => b.onclick = () => { $$(".fx-tabs button").forEach(x => x.setAttribute("aria-selected", String(x === b))); $$(".fx-body").forEach(p => p.hidden = p.dataset.fxp !== b.dataset.fx); if(b.dataset.fx === "ai") paintAI(); if(b.dataset.fx === "stock") paintVibe(true); });
   const orient = () => frameKind();   // portrait, square or landscape, from the frame (your own size too)
   const fmtDur = s => s ? `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}` : "";
   const errText = err => err && err.message ? err.message : "Something went wrong.";
 
   /* ---------- free stock videos ---------- */
-  let query = "", page = 1, busy = false;
+  // what "More results" continues: a typed search, or the videos found for the song
+  let query = "", page = 1, busy = false, match = null;
+  const NOTE = "SLS listens to the song, reads the lyrics and picks free videos that feel the same.";
+  const ideaChips = list => list.map(q => `<button type="button" data-q="${esc(q)}">${esc(q)}</button>`).join("");
+  function show(d, more, empty){
+    const grid = $("#stockGrid");
+    d.results.forEach(r => grid.append(tile(r)));
+    $("#stockMsg").textContent = d.results.length ? (d.errors.length ? d.errors.join(" · ") : "") : (more ? "No more results." : empty);
+    $("#stockMore").hidden = d.results.length < 10;
+    const on = d.sources || {};
+    const src = [on.pixabay && '<a href="https://pixabay.com" target="_blank" rel="noopener">Pixabay</a>', on.pexels && '<a href="https://www.pexels.com" target="_blank" rel="noopener">Pexels</a>'].filter(Boolean).join(" and ");
+    $("#stockCredit").innerHTML = src ? `Videos from ${src}. Free to use; each clip keeps its creator's credit. Videos made by AI are left out.` : "";
+  }
+  async function ready(){
+    const h = await getHealth();
+    if(h.stock && !h.stock.pixabay && !h.stock.pexels){ $("#stockMsg").textContent = "Stock video search isn't switched on yet. It needs a free Pixabay key (PIXABAY_KEY) in the site's settings."; return false; }
+    return await SLSApp.ensurePass();
+  }
   async function search(q, more){
     q = (q || "").trim(); if(!q || busy) return;
-    const h = await getHealth();
-    if(h.stock && !h.stock.pixabay && !h.stock.pexels){ $("#stockMsg").textContent = "Stock video search isn't switched on yet. It needs a free Pixabay key (PIXABAY_KEY) in the site's settings."; return; }
-    if(!(await SLSApp.ensurePass())) return;
-    if(!more){ query = q; page = 1; $("#stockGrid").textContent = ""; } else page++;
+    if(!(await ready())) return;
+    if(!more){ query = q; page = 1; match = null; $("#stockGrid").textContent = ""; $("#stockGrid").dataset.o = orient(); } else page++;
     busy = true; $("#stockMsg").textContent = more ? "Loading more…" : `Searching for "${q}"…`; $("#stockMore").hidden = true;
     try {
       const d = await api.api(`/api/stock/search?q=${encodeURIComponent(q)}&orientation=${orient()}&page=${page}`, { timeout: 30000 });
-      const grid = $("#stockGrid");
-      d.results.forEach(r => grid.append(tile(r)));
-      $("#stockMsg").textContent = d.results.length ? (d.errors.length ? d.errors.join(" · ") : "") : (more ? "No more results." : `Nothing found for "${q}". Try English words, or something simpler.`);
-      $("#stockMore").hidden = d.results.length < 10;
-      const src = [d.sources.pixabay && '<a href="https://pixabay.com" target="_blank" rel="noopener">Pixabay</a>', d.sources.pexels && '<a href="https://www.pexels.com" target="_blank" rel="noopener">Pexels</a>'].filter(Boolean).join(" and ");
-      $("#stockCredit").innerHTML = src ? `Videos from ${src}. Free to use; each clip keeps its creator's credit.` : "";
+      show(d, more, `Nothing found for "${q}". Try English words, or something simpler.`);
     } catch(err){ $("#stockMsg").textContent = errText(err); page = Math.max(1, page - (more ? 1 : 0)); }
     finally { busy = false; }
   }
+  // videos picked for the song: its vibe gives the searches, the backend ranks what comes back against it
+  async function findForSong(more){
+    if(busy) return;
+    if(!more && !SLSVibe.songLyrics().trim() && !SLSVibe.sound()){ $("#stockMsg").textContent = "Load a song first, then SLS can find videos that fit it."; return; }
+    if(!(await ready())) return;
+    const btn = $("#stockMatch"); busy = true; btn.disabled = true; $("#stockMore").hidden = true;
+    if(!more){ $("#stockGrid").textContent = ""; $("#stockGrid").dataset.o = orient(); }
+    try {
+      let vibe = SLSVibe.cached();
+      if(!vibe && !more){ $("#stockMsg").textContent = "Listening to the song and reading the lyrics…"; vibe = await SLSVibe.get(); paintVibe(); }
+      $("#stockMsg").textContent = more ? "Loading more…" : "Finding videos that feel like the song…";
+      const shown = [...$$("#stockGrid .fx-tile")].map(t => t.dataset.id);
+      const d = await api.api("/api/stock/match", { method: "POST", timeout: 90000, body: { lyrics: SLSVibe.songLyrics(), title: S.songName, vibe, sound: SLSVibe.sound(), orientation: orient(),
+        queries: more && match ? match.queries : undefined, page: more && match ? match.page : undefined, exclude: shown } });
+      SLSVibe.keep(d.vibe); paintVibe();
+      match = { queries: d.queries, page: d.page || 1 }; query = "";
+      show(d, more, d.message || "No videos found for this song. Try your own search above.");
+    } catch(err){ $("#stockMsg").textContent = errText(err); }
+    finally { busy = false; btn.disabled = false; }
+  }
+  // the vibe line, and search ideas made for this song in place of the general ones
+  function paintVibe(fetch){
+    const v = SLSVibe.cached();
+    if(v){
+      $("#stockVibe").textContent = `This song: ${SLSVibe.line(v)}`;
+      if(v.video.length) $("#stockIdeas").innerHTML = ideaChips(v.video);
+    } else {
+      $("#stockVibe").textContent = NOTE; $("#stockIdeas").innerHTML = ideaChips(IDEAS);
+      if(fetch && SLSVibe.songLyrics().trim()) SLSVibe.get().then(x => { if(x) paintVibe(); });
+    }
+  }
+  slsOn("vibe", () => paintVibe()); slsOn("step", () => paintVibe());
+  slsOn("change", () => { if(!SLSVibe.cached() && $("#stockVibe").textContent !== NOTE) paintVibe(); });
   function tile(r){
-    const b = document.createElement("button"); b.className = "fx-tile"; b.type = "button"; b.title = `${r.title || query} · ${r.author} on ${r.source}`;
+    const b = document.createElement("button"); b.className = "fx-tile"; b.type = "button"; b.dataset.id = r.id; b.title = `${r.title || query} · ${r.author} on ${r.source}`;
     b.innerHTML = `<img alt="" loading="lazy" src="${esc(r.thumb)}"><span class="fx-badge">${fmtDur(r.duration)}</span><span class="fx-src">${esc(r.source)}</span><span class="fx-bar"><i></i></span><span class="fx-done">Added ✓</span>`;
-    let v = null;
-    b.addEventListener("pointerenter", () => { if(!r.preview || b.classList.contains("loading")) return; if(!v){ v = document.createElement("video"); v.muted = true; v.loop = true; v.playsInline = true; v.preload = "auto"; v.src = r.preview; b.prepend(v); } v.play().catch(() => {}); b.classList.add("playing"); });
+    let v = null;   // the moving preview is for a mouse hovering; on a phone a tap just adds the clip
+    b.addEventListener("pointerenter", e => { if(e.pointerType !== "mouse" || !r.preview || b.classList.contains("loading")) return; if(!v){ v = document.createElement("video"); v.muted = true; v.loop = true; v.playsInline = true; v.preload = "auto"; v.src = r.preview; b.prepend(v); } v.play().catch(() => {}); b.classList.add("playing"); });
     b.addEventListener("pointerleave", () => { if(v){ v.pause(); } b.classList.remove("playing"); });
     b.onclick = async () => {
       if(b.classList.contains("loading")) return; if(v) v.pause();
@@ -76,7 +121,8 @@ window.SLSFootage = (() => {
   }
   $("#stockForm").onsubmit = e => { e.preventDefault(); search($("#stockQ").value); };
   $("#stockIdeas").onclick = e => { const b = e.target.closest("[data-q]"); if(!b) return; $("#stockQ").value = b.dataset.q; search(b.dataset.q); };
-  $("#stockMore").onclick = () => search(query, true);
+  $("#stockMore").onclick = () => match && !query ? findForSong(true) : search(query, true);
+  $("#stockMatch").onclick = () => findForSong(false);
 
   /* ---------- AI backgrounds ---------- */
   const keep = { get(k, d){ try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } }, set(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch {} } };

@@ -288,6 +288,8 @@ input[type=color]{width:34px;height:28px;border:1px solid var(--line-2);border-r
 .stage:fullscreen .stagebar{display:none}
 body.stage-full .stage{position:fixed;inset:0;z-index:950;background:var(--canvas)}
 body.stage-full .stage .stagebar{display:none}
+.vid-hold{position:fixed;left:0;top:0;width:2px;height:2px;overflow:hidden;opacity:.01;pointer-events:none}
+.vid-hold video{display:block;width:2px;height:2px}
 .size-px{width:64px;padding:4px 6px;text-align:right;font-variant-numeric:tabular-nums}
 @media (max-width: 760px){ .viewctl #vzOut,.viewctl #vzIn,.viewctl .vz-val{display:none} }
 

@@ -19,8 +19,12 @@
  *        some servers, so this can fail; the app then suggests saving the images and dropping them in.
  *
  * Every image file goes back to the browser as a signed /api/media link (see src/media.js).
+ * vibe: the song's vibe (src/vibe.js), which /api/photos/pick and /api/photos/rank use to write the searches
+ * and rank the results. No AI-made pictures: Pinterest is asked for "less AI", Pixabay marks its own, and every
+ * description is checked (aiMade).
  */
 import { mediaLink } from "./media.js";
+import { aiMade, readVibe, vibeFrom, vibeText } from "./vibe.js";
 
 const TEXT_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36";
@@ -70,7 +74,7 @@ async function pexels(env, q, orientation, page, per) {
     id: "pxp" + p.id, source: "Pexels", w: p.width, h: p.height, shape: shape(p.width, p.height),
     thumb: (p.src && (p.src.medium || p.src.small)) || "", file: p.src && (p.src.large2x || p.src.large || p.src.original),
     author: p.photographer || "Pexels", page: p.url, title: clean(p.alt),
-  })).filter(p => p.file) };
+  })).filter(p => p.file && !aiMade(p)) };
 }
 
 async function pixabay(env, q, orientation, page, per, look = "mix") {
@@ -80,7 +84,7 @@ async function pixabay(env, q, orientation, page, per, look = "mix") {
   const r = await fetch(`https://pixabay.com/api/?key=${encodeURIComponent(env.PIXABAY_KEY)}&q=${encodeURIComponent(q.slice(0, 100))}&image_type=${kind}&orientation=${o}&per_page=${per}&page=${page}&safesearch=true`);
   if (!r.ok) throw new Error(r.status === 429 ? "busy, try again in a minute" : `HTTP ${r.status}`);
   const d = await r.json();
-  return { items: (d.hits || []).map(h => ({
+  return { items: (d.hits || []).filter(h => !aiMade({ isAiGenerated: h.isAiGenerated, tags: h.tags })).map(h => ({
     id: "pbp" + h.id, source: "Pixabay", w: h.imageWidth, h: h.imageHeight, shape: shape(h.imageWidth, h.imageHeight),
     thumb: h.webformatURL || h.previewURL || "", file: h.largeImageURL || h.webformatURL,
     author: h.user || "Pixabay", page: h.pageURL, title: clean(h.tags),
@@ -88,7 +92,7 @@ async function pixabay(env, q, orientation, page, per, look = "mix") {
 }
 
 async function pinterest(env, q, next) {
-  const u = `https://serpapi.com/search.json?engine=pinterest&q=${encodeURIComponent(q)}&api_key=${encodeURIComponent(env.SERPAPI_KEY)}` + (next ? `&next_page_token=${encodeURIComponent(next)}` : "");
+  const u = `https://serpapi.com/search.json?engine=pinterest&less_ai=true&q=${encodeURIComponent(q)}&api_key=${encodeURIComponent(env.SERPAPI_KEY)}` + (next ? `&next_page_token=${encodeURIComponent(next)}` : "");
   const r = await fetch(u);
   const d = await r.json().catch(() => null);
   if (!r.ok || !d || d.error) {
@@ -101,7 +105,8 @@ async function pinterest(env, q, next) {
     thumb: p.thumbnail || p.original, file: p.original,
     author: (p.pinner && (p.pinner.name || p.pinner.username)) || "Pinterest", page: p.pin_link || p.link || (p.board && p.board.link) || "https://www.pinterest.com",
     title: clean([p.title, p.alt_text, p.description].filter(Boolean).join(" · ")).slice(0, 220),
-  }));
+    ai: aiMade({ title: [p.title, p.alt_text, p.description, p.board && p.board.name].filter(Boolean).join(" · ") }),
+  })).filter(p => !p.ai);
   return { items, next: (d.serpapi_pagination && d.serpapi_pagination.next_page_token) || d.next_page_token || null };
 }
 
@@ -173,7 +178,7 @@ function withMedium(q, look, k) {
   const pool = look === "art" ? LOOKS.art : look === "photo" ? LOOKS.photo : (k % 2 ? LOOKS.photo : LOOKS.art);
   return `${q} ${pool[(k * 3 + q.length) % pool.length]}`;
 }
-async function writeQueries(ai, lyrics, prompt, n, look = "mix") {
+async function writeQueries(ai, lyrics, prompt, n, look = "mix", vibe = null) {
   const base = clean(prompt);
   const fallback = () => {
     let qs;
@@ -190,11 +195,12 @@ async function writeQueries(ai, lyrics, prompt, n, look = "mix") {
   const medium = look === "art" ? "Every query names an art medium (for example oil painting, gouache, watercolor, vintage or storybook illustration, anime background art, linocut)."
     : look === "photo" ? "Every query names a photo style that isn't stock (for example 35mm film, analog, grainy, cinematic film still, candid, vintage photograph)."
     : "Mix the mediums: about half the queries name an art medium (oil painting, gouache, vintage or storybook illustration, anime background art, watercolor), the other half a photo style that isn't stock (35mm film, analog, cinematic film still, grainy, candid).";
+  const feel = vibeText(vibe);
   const sys = `You help pick images for a music lyric video on social media. Write exactly ${n} short image search queries for Pinterest-style searches (3 to 7 words each, in English, whatever language the lyrics are in). Aim for characterful, artistic, interesting images, the kind people collect on mood boards: not polished stock photos, not people posing, not glossy 3D or fantasy renders. Match the song's own mood and colours: bright, warm and playful for an upbeat song, soft for a gentle one, dark only when the song is dark. Each query = a concrete scene or subject + a medium or style.` +
     (base ? ` The creator asked for: "${base}". Every query must stay inside that request (same subject, style or category); use the lyrics only to steer the mood, places, season and colours.` : " Base them on the imagery, mood, setting and season of the lyrics.") +
     ` ${medium} Make the queries different from each other (different scenes, angles, mediums) so the results vary. No artist names, no song titles, no words like "lyrics", "quote", "wallpaper" or "stock". Answer with a JSON array of ${n} strings and nothing else.`;
   try {
-    const out = await ai({ messages: [{ role: "system", content: sys }, { role: "user", content: `Lyrics:\n${clean(lyrics) ? lyrics.slice(0, 4000) : "(no lyrics yet)"}` }], max_tokens: 240, temperature: 0.8 });
+    const out = await ai({ messages: [{ role: "system", content: sys + (feel ? " The song has been read already (below): follow its feel, energy, colours and light closely." : "") }, { role: "user", content: (feel ? `How the song feels:\n${feel}\n\n` : "") + `Lyrics:\n${clean(lyrics) ? lyrics.slice(0, 4000) : "(no lyrics yet)"}` }], max_tokens: 240, temperature: 0.8 });
     let qs = jsonArray(out).map(x => clean(x).replace(/["#]/g, "").slice(0, 70)).filter(Boolean);
     if (!qs.length) throw new Error("empty");
     qs = qs.map((q, k) => withMedium(q, look, k));
@@ -221,11 +227,12 @@ function baseScore(it, orientation, i) {
   return s - i * 0.02;   // earlier in the search results is a little better
 }
 
-async function rankByText(ai, lyrics, prompt, items, want) {
+async function rankByText(ai, lyrics, prompt, items, want, vibe = null) {
   if (!ai || items.length <= 1) return null;
   const lines = items.map((it, i) => `${i + 1}. [${it.shape}] ${clean(it.title || "(no description)").slice(0, 120)}`).join("\n");
   const sys = `You choose background photos for a music lyric video (lyrics are written over the photo). Below is a numbered list of photos, each with its orientation and description. Pick the ${want} that best fit the song's mood, imagery and the creator's request, best first. Prefer interesting, characterful, artistic images (paintings, illustration, film photography, real moments) over polished generic stock photos (posed people, business, perfect glossy landscapes) and over glossy AI or 3D renders. Match the song's own mood (bright and colourful for an upbeat song, dark only for a dark one). They also need to work behind text: not too busy, no text or quotes in the picture, no collages, no products, no infographics. Keep a visual mix (different scenes and mediums, not ${want} near-identical shots) while the whole set still feels like one mood. Answer with a JSON array of the chosen numbers only, best first.`;
-  const user = (clean(prompt) ? `Creator's request: ${clean(prompt)}\n\n` : "") + `Lyrics:\n${clean(lyrics) ? lyrics.slice(0, 3000) : "(none)"}\n\nPhotos:\n${lines}`;
+  const feel = vibeText(vibe);
+  const user = (clean(prompt) ? `Creator's request: ${clean(prompt)}\n\n` : "") + (feel ? `How the song feels (match this closely):\n${feel}\n\n` : "") + `Lyrics:\n${clean(lyrics) ? lyrics.slice(0, 3000) : "(none)"}\n\nPhotos:\n${lines}`;
   try {
     const out = await ai({ messages: [{ role: "system", content: sys }, { role: "user", content: user }], max_tokens: 400, temperature: 0.2 });
     const nums = jsonArray(out).map(n => parseInt(n, 10) - 1).filter(n => n >= 0 && n < items.length);
@@ -246,6 +253,7 @@ async function pickRoute(env, request, json, ai) {
   const look = ["mix", "art", "photo"].includes(b.look) ? b.look : "mix";
   const on = sources(env, from);
   if (!on.pexels && !on.pixabay && !on.pinterest) return json({ error: "no_photos", message: noSourceMessage(env, from) }, 503);
+  const vibe = vibeFrom(b.vibe) || (ai && !b.queries && clean(lyrics) ? await readVibe(ai, { lyrics, title: b.title, sound: b.sound }) : null);
   // images already used (in this video or an earlier one) or already shown: never offered again
   const exclude = new Set((Array.isArray(b.exclude) ? b.exclude : []).slice(0, 4000).map(x => String(x).replace(/\?.*$/, "")));
   // "find more": the same searches, further down the results
@@ -256,7 +264,7 @@ async function pickRoute(env, request, json, ai) {
 
   // more searches when more pictures are needed, so there is plenty to choose from
   const nq = count > 16 ? 4 : 3;
-  const { queries, ai: wrote } = again ? { queries: again, ai: false } : await writeQueries(ai, lyrics, prompt, nq, look);
+  const { queries, ai: wrote } = again ? { queries: again, ai: false } : await writeQueries(ai, lyrics, prompt, nq, look, vibe);
   const per = Math.max(12, Math.min(30, Math.ceil(count * 2.2 / queries.length)));
   const used = it => exclude.has(it.id) || exclude.has(String(it.page || "").replace(/\?.*$/, "")) || exclude.has(it.file.replace(/\?.*$/, ""));
   const seen = new Set(), pool = [], errors = new Set(), tokens = {};
@@ -286,13 +294,13 @@ async function pickRoute(env, request, json, ai) {
   const scored = pool.map((it, i) => ({ it, s: baseScore(it, orientation, i) })).sort((x, y) => y.s - x.s).map(x => x.it);
   const shortlist = scored.slice(0, Math.min(scored.length, Math.max(30, count * 2 + 8), 70));
   const want = Math.min(shortlist.length, count + Math.min(count, 12));
-  const order = await rankByText(ai, lyrics, prompt, shortlist, want);
+  const order = await rankByText(ai, lyrics, prompt, shortlist, want, vibe);
   let ranked = shortlist;
   if (order) { const chosen = order.map(n => shortlist[n]); ranked = [...chosen, ...shortlist.filter(it => !chosen.includes(it))]; }
   ranked = [...ranked, ...scored.slice(shortlist.length)];
 
   const picks = await signAll(env, ranked.slice(0, count)), spare = await signAll(env, ranked.slice(count, count + Math.max(12, count)));
-  return json({ queries, picks, spare, errors: [...errors], ai: !!order || wrote, sources: on, page: lastPage, next: tokens, skipped, pinLeft });
+  return json({ queries, picks, spare, vibe, errors: [...errors], ai: !!order || wrote, sources: on, page: lastPage, next: tokens, skipped, pinLeft });
 }
 
 async function rankRoute(request, json, ai) {
@@ -301,7 +309,7 @@ async function rankRoute(request, json, ai) {
   const list = items.map(x => ({ id: String(x.id), title: clean(x.text).slice(0, 200), shape: x.shape || "unknown" }));
   const useful = list.filter(x => x.title && !/^(img|dsc|pxl|image|photo|screenshot|whatsapp|signal)[\s_-]*[\d_-]+/i.test(x.title));
   if (!ai || useful.length < 2) return json({ order: list.map(x => x.id), ai: false });
-  const order = await rankByText(ai, String(b.lyrics || ""), String(b.prompt || ""), useful, Math.min(useful.length, count));
+  const order = await rankByText(ai, String(b.lyrics || ""), String(b.prompt || ""), useful, Math.min(useful.length, count), vibeFrom(b.vibe));
   if (!order) return json({ order: list.map(x => x.id), ai: false });
   const first = order.map(n => useful[n].id);
   return json({ order: [...first, ...list.map(x => x.id).filter(id => !first.includes(id))], ai: true });

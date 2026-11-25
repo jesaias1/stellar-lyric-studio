@@ -3,6 +3,12 @@
  *
  *   GET  /api/stock/search?q=&orientation=portrait|landscape|square&page=1
  *        Searches Pixabay (PIXABAY_KEY) and Pexels (PEXELS_KEY), whichever keys are set.
+ *   POST /api/stock/match  {lyrics, title, vibe?, sound?, orientation, page?, queries?, exclude?}
+ *                          -> {results, queries, vibe, errors, page, ai}
+ *        Videos picked for the song: the song's vibe (src/vibe.js) gives a few filmable searches, they run on
+ *        both sources, and an AI ranks what came back against the vibe and the lyrics. queries+page: "more".
+ *   Videos an AI made never come back: Pixabay marks them (isAiGenerated, an "ai generated" tag), and the
+ *   descriptions of all results are checked too (see aiMade in src/vibe.js).
  *   GET  /api/media?u=<url>&s=<signature>
  *        Streams a video, photo or song preview file to the browser. Only URLs this backend handed out (signed) are relayed, so it
  *        can't be used as an open proxy. Needed because most video hosts don't allow a web page to read their
@@ -14,6 +20,7 @@
  *
  * Higgsfield needs HF_KEY_ID and HF_KEY_SECRET (from https://console.higgsfield.ai, an API account with balance).
  */
+import { aiMade, readVibe, vibeFrom, vibeText } from "./vibe.js";
 
 const HF = "https://api.higgsfield.ai";
 const HF_MODEL = "kling-video/v2.6/pro/text-to-video";
@@ -27,6 +34,7 @@ export function mediaHealth(env) {
 
 export async function mediaRoute(request, env, url, path, method, { hasAI, runModel, json }) {
   if (path === "/api/stock/search" && method === "GET") return stockSearch(env, url, json);
+  if (path === "/api/stock/match" && method === "POST") return stockMatch(env, request, json, hasAI ? input => runModel(env, PROMPT_MODEL, input) : null);
   if (path === "/api/media" && method === "GET") return relay(env, url, request, json);
   if (path === "/api/bg/prompts" && method === "POST") return bgPrompts(env, request, json, hasAI, runModel);
   if (path === "/api/bg/estimate" && method === "POST") return bgEstimate(env, request, json);
@@ -62,32 +70,86 @@ async function relay(env, url, request, json) {
 /* ---------- stock video search ---------- */
 const shape = (w, h) => (h > w * 1.15 ? "portrait" : w > h * 1.15 ? "landscape" : "square");
 
+// one query on both sources, interleaved, best orientation match first; kept a day (unsigned links)
+async function searchBoth(env, q, orientation, page) {
+  const key = `${q.toLowerCase()}|${orientation}|${page}`, hit = cache.get(key);
+  if (hit && Date.now() - hit.at < 86400000) return hit.data;
+  const jobs = [];
+  if (env.PEXELS_KEY) jobs.push(pexels(env, q, orientation, page).catch(e => ({ error: "Pexels: " + e.message, results: [] })));
+  if (env.PIXABAY_KEY) jobs.push(pixabay(env, q, orientation, page).catch(e => ({ error: "Pixabay: " + e.message, results: [] })));
+  const parts = await Promise.all(jobs);
+  const lists = parts.map(p => p.results), results = [];
+  for (let i = 0; lists.some(l => i < l.length); i++) for (const l of lists) if (l[i]) results.push({ ...l[i], q });
+  results.sort((a, b) => (b.shape === orientation) - (a.shape === orientation));
+  const data = { results, errors: parts.map(p => p.error).filter(Boolean) };
+  if (results.length) { cache.set(key, { at: Date.now(), data }); if (cache.size > 500) cache.delete(cache.keys().next().value); }
+  return data;
+}
+const signed = (env, list) => Promise.all(list.map(async r => ({ ...r, file: await mediaLink(env, r.file) })));
+const sources = env => ({ pixabay: !!env.PIXABAY_KEY, pexels: !!env.PEXELS_KEY });
+
 async function stockSearch(env, url, json) {
   const q = (url.searchParams.get("q") || "").trim().slice(0, 100), orientation = url.searchParams.get("orientation") || "portrait";
   const page = Math.max(1, Math.min(20, +url.searchParams.get("page") || 1));
   if (!q) return json({ error: "bad_request", message: "Type something to search for." }, 400);
   if (!env.PIXABAY_KEY && !env.PEXELS_KEY) return json({ error: "no_stock", message: "No stock video service is connected yet." }, 503);
-  const key = `${q.toLowerCase()}|${orientation}|${page}`, hit = cache.get(key);
-  if (hit && Date.now() - hit.at < 86400000) return json(hit.data);
-  const jobs = [];
-  if (env.PEXELS_KEY) jobs.push(pexels(env, q, orientation, page).catch(e => ({ error: "Pexels: " + e.message, results: [] })));
-  if (env.PIXABAY_KEY) jobs.push(pixabay(env, q, orientation, page).catch(e => ({ error: "Pixabay: " + e.message, results: [] })));
-  const parts = await Promise.all(jobs);
-  // interleave the two sources, best orientation match first
-  const lists = parts.map(p => p.results), results = [];
-  for (let i = 0; lists.some(l => i < l.length); i++) for (const l of lists) if (l[i]) results.push(l[i]);
-  results.sort((a, b) => (b.shape === orientation) - (a.shape === orientation));
-  for (const r of results) r.file = await mediaLink(env, r.file);
-  const data = { results, errors: parts.map(p => p.error).filter(Boolean), sources: { pixabay: !!env.PIXABAY_KEY, pexels: !!env.PEXELS_KEY } };
-  if (results.length) { cache.set(key, { at: Date.now(), data }); if (cache.size > 500) cache.delete(cache.keys().next().value); }
-  return json(data);
+  const d = await searchBoth(env, q, orientation, page);
+  return json({ results: await signed(env, d.results), errors: d.errors, sources: sources(env) });
+}
+
+/* ---------- videos picked for the song ---------- */
+async function stockMatch(env, request, json, ai) {
+  const b = await body(request), orientation = ["portrait", "landscape", "square"].includes(b.orientation) ? b.orientation : "portrait";
+  if (!env.PIXABAY_KEY && !env.PEXELS_KEY) return json({ error: "no_stock", message: "No stock video service is connected yet." }, 503);
+  const lyrics = String(b.lyrics || "").slice(0, 5000);
+  let vibe = vibeFrom(b.vibe);
+  if (!vibe && ai) vibe = await readVibe(ai, { lyrics, title: b.title, sound: b.sound });
+  const again = Array.isArray(b.queries) && b.queries.length ? b.queries.map(q => String(q).trim().slice(0, 60)).filter(Boolean).slice(0, 6) : null;
+  const queries = again || (vibe && vibe.video.length ? vibe.video.slice(0, 5) : []);
+  if (!queries.length) return json({ error: "no_vibe", message: "The song couldn't be read yet. Add the lyrics first, or type a search." }, 400);
+  const page = again ? Math.max(1, Math.min(19, Math.round(+b.page || 1))) + 1 : 1;
+  const exclude = new Set((Array.isArray(b.exclude) ? b.exclude : []).slice(0, 2000).map(String));
+  const runs = await Promise.all(queries.map(q => searchBoth(env, q, orientation, page)));
+  const errors = [...new Set(runs.flatMap(r => r.errors))], seen = new Set(), pool = [];
+  for (let i = 0; runs.some(r => i < r.results.length); i++) for (const r of runs) {
+    const it = r.results[i]; if (!it || seen.has(it.id) || exclude.has(it.id)) continue;
+    seen.add(it.id); pool.push(it);
+  }
+  if (!pool.length) return json({ results: [], queries, vibe, errors, page, ai: false, message: "No new videos found for this song's searches. Try your own search above." });
+  // quick quality order first: the right shape, a usable length
+  const score = (it, i) => (it.shape === orientation ? 3 : it.shape === "square" ? 1 : 0) + (it.duration >= 6 && it.duration <= 60 ? 1 : 0) - i * 0.01;
+  const ordered = pool.map((it, i) => ({ it, s: score(it, i) })).sort((x, y) => y.s - x.s).map(x => x.it);
+  const shortlist = ordered.slice(0, 60);
+  const order = await rankVideos(ai, vibe, lyrics, shortlist, Math.min(30, shortlist.length));
+  let ranked = shortlist;
+  if (order) { const chosen = order.map(n => shortlist[n]); ranked = [...chosen, ...shortlist.filter(it => !chosen.includes(it))]; }
+  ranked = [...ranked, ...ordered.slice(shortlist.length)].slice(0, 36);
+  return json({ results: await signed(env, ranked), queries, vibe, errors, page, ai: !!order, sources: sources(env) });
+}
+
+async function rankVideos(ai, vibe, lyrics, items, want) {
+  if (!ai || items.length <= 1) return null;
+  const lines = items.map((it, i) => `${i + 1}. [${it.shape}, ${Math.round(it.duration || 0)} s] ${(it.title || it.q || "").slice(0, 110)}`).join("\n");
+  const sys = `You choose background videos for a music lyric video (lyrics are written over the video). Below is a numbered list of free stock videos with their shape, length and description. Pick the ${want} that best match how the song feels (its mood, energy, light and colours), best first. Slow, atmospheric footage suits slow songs; movement and energy suit lively ones. They must work behind text: no talking heads or posed people, no text, logos or screens in the shot, no business or corporate scenes, no glossy 3D or computer-made renders. Keep some variety while the whole set feels like one song. Answer with a JSON array of the chosen numbers only, best first.`;
+  const user = `The song:\n${vibeText(vibe) || "(not read)"}\n\nLyrics:\n${lyrics.trim() ? lyrics.slice(0, 2500) : "(none)"}\n\nVideos:\n${lines}`;
+  try {
+    const out = await ai({ messages: [{ role: "system", content: sys }, { role: "user", content: user }], max_tokens: 300, temperature: 0.2 });
+    const resp = out && (out.response ?? (out.result && out.result.response) ?? out);
+    const arr = Array.isArray(resp) ? resp : JSON.parse(String(typeof resp === "string" ? resp : JSON.stringify(resp)).replace(/^[^\[]*/, "").replace(/[^\]]*$/, ""));
+    const seen = new Set(), order = [];
+    for (const x of arr) { const n = parseInt(x, 10) - 1; if (n >= 0 && n < items.length && !seen.has(n)) { seen.add(n); order.push(n); } }
+    return order.length ? order : null;
+  } catch (err) {
+    console.error("video ranking failed:", String(err && err.message || err));
+    return null;
+  }
 }
 
 async function pixabay(env, q, orientation, page) {
   const u = `https://pixabay.com/api/videos/?key=${encodeURIComponent(env.PIXABAY_KEY)}&q=${encodeURIComponent(q)}&per_page=30&page=${page}&safesearch=true`;
   const r = await fetch(u); if (!r.ok) throw new Error(r.status === 429 ? "busy, try again in a minute" : `HTTP ${r.status}`);
   const d = await r.json();
-  return { results: (d.hits || []).map(h => {
+  return { results: (d.hits || []).filter(h => !aiMade({ isAiGenerated: h.isAiGenerated, tags: h.tags })).map(h => {
     const v = h.videos || {}, big = v.medium && v.medium.url ? v.medium : v.small && v.small.url ? v.small : v.large;
     const pick = big && big.size > 30e6 && v.small && v.small.url ? v.small : big;   // keep downloads reasonable
     if (!pick || !pick.url) return null;
@@ -98,6 +160,8 @@ async function pixabay(env, q, orientation, page) {
   }).filter(Boolean) };
 }
 
+// Pexels sends no description, but the page link has one: /video/waves-crashing-on-rocks-1234567/
+const pexelsTitle = u => { const m = String(u || "").match(/\/video\/([a-z0-9-]+?)-?\d*\/?$/i); return m && !/^\d+$/.test(m[1]) ? m[1].replace(/-/g, " ").trim().slice(0, 100) : ""; };
 async function pexels(env, q, orientation, page) {
   const u = `https://api.pexels.com/v1/videos/search?query=${encodeURIComponent(q)}&orientation=${orientation}&per_page=30&page=${page}&size=medium`;
   const r = await fetch(u, { headers: { authorization: env.PEXELS_KEY } }); if (!r.ok) throw new Error(r.status === 429 ? "busy, try again later" : `HTTP ${r.status}`);
@@ -109,8 +173,8 @@ async function pexels(env, q, orientation, page) {
     const pick = files.filter(f => long(f) <= 2000).sort((a, b) => long(b) - long(a))[0] || files.sort((a, b) => long(a) - long(b))[0];
     const prev = files.slice().sort((a, b) => long(a) - long(b))[0];
     return { id: "px" + v.id, source: "Pexels", w: pick.width, h: pick.height, shape: shape(pick.width, pick.height), duration: v.duration,
-      thumb: v.image || "", preview: prev.link, file: pick.link, author: (v.user && v.user.name) || "Pexels", page: v.url, title: "" };
-  }).filter(Boolean) };
+      thumb: v.image || "", preview: prev.link, file: pick.link, author: (v.user && v.user.name) || "Pexels", page: v.url, title: pexelsTitle(v.url) };
+  }).filter(r => r && !aiMade(r)) };
 }
 
 /* ---------- AI backgrounds ---------- */
