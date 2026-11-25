@@ -3,6 +3,7 @@
  *
  *   GET /api/catalog        -> {artists: [{id, name, group, picture}]}   group "ai": an AI-assisted artist
  *   GET /api/catalog/:id    -> {artist, songs: [{id, title, artist, album, year, cover, duration, preview, link}]}
+ *   GET /api/catalog/search?q=  -> {songs: [...]}   any song on Apple Music (for songs by artists outside the list)
  *
  * Uses the public iTunes Search API (no key). preview is a signed /api/media link to the AAC preview, so the
  * studio can read the audio (Apple's file host doesn't allow web pages to read it directly). The artist picture
@@ -33,6 +34,14 @@ const keep = (k, v) => { cache.set(k, { at: Date.now(), v }); if (cache.size > 2
 
 export async function catalogRoute(request, env, path, method, { json }) {
   if (method !== "GET" || !path.startsWith("/api/catalog")) return null;
+  if (path === "/api/catalog/search") {
+    const q = String(new URL(request.url).searchParams.get("q") || "").replace(/\s+/g, " ").trim().slice(0, 80);
+    if (q.length < 2) return json({ songs: [] });
+    let songs;
+    try { songs = await searchSongs(q); }
+    catch (err) { console.error("apple search failed:", String(err && err.message || err)); return json({ error: "upstream", message: "Apple Music didn't answer. Try again in a moment." }, 502); }
+    return json({ songs: await Promise.all(songs.map(async s => ({ ...s, preview: await mediaLink(env, s.preview) }))) });
+  }
   if (path === "/api/catalog") {
     const artists = await Promise.all(ARTISTS.map(async a => ({ id: a.id, name: a.name, group: a.group || "", picture: await picture(a) })));
     return json({ artists });
@@ -47,21 +56,40 @@ export async function catalogRoute(request, env, path, method, { json }) {
   return json({ artist: { id: a.id, name: a.name, picture: await picture(a) }, songs: out });
 }
 
+// one Apple Music track as the studio's song
+const songRow = t => ({ id: String(t.trackId), title: t.trackName, artist: t.artistName, album: t.collectionName || "", year: String(t.releaseDate || "").slice(0, 4),
+  cover: String(t.artworkUrl100 || "").replace(/\/\d+x\d+bb\./, "/600x600bb."), duration: Math.round((t.trackTimeMillis || 0) / 1000),
+  preview: t.previewUrl, link: t.trackViewUrl || "" });
+const playable = t => t.wrapperType === "track" && t.kind === "song" && t.previewUrl && /^https:\/\//.test(t.previewUrl);
+
+// any song on Apple Music, by title and/or artist
+async function searchSongs(q) {
+  const k = "q:" + q.toLowerCase(), hit = fresh(k, 1); if (hit) return hit;
+  const r = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&media=music&entity=song&country=${COUNTRY}&limit=30`, { headers: { "user-agent": "StellarLyricStudio/1.0" } });
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  const d = await r.json();
+  // the same song is often on a single and an album: keep one
+  const seen = new Set(), out = [];
+  for (const t of (d.results || []).filter(playable)) {
+    const key = String(t.artistName || "").toLowerCase() + "|" + String(t.trackName || "").toLowerCase().replace(/\s*[\(\[].*?[\)\]]\s*/g, " ").replace(/[^\p{L}\p{N}]+/gu, " ").trim() + "|" + Math.round((t.trackTimeMillis || 0) / 4000);
+    if (!seen.has(key)) { seen.add(key); out.push(songRow(t)); }
+  }
+  return keep(k, out.slice(0, 25));
+}
+
 async function songsOf(a) {
   const hit = fresh("songs:" + a.id); if (hit) return hit;
   const r = await fetch(`https://itunes.apple.com/lookup?id=${a.apple}&entity=song&country=${COUNTRY}&limit=200`, { headers: { "user-agent": "StellarLyricStudio/1.0" } });
   if (!r.ok) throw new Error("HTTP " + r.status);
   const d = await r.json();
   const seen = new Set(), songs = [];
-  const rows = (d.results || []).filter(t => t.wrapperType === "track" && t.kind === "song" && t.previewUrl && /^https:\/\//.test(t.previewUrl))
+  const rows = (d.results || []).filter(playable)
     .sort((x, y) => String(y.releaseDate || "").localeCompare(String(x.releaseDate || "")));
   for (const t of rows) {
     // the same song is often on a single and an album: keep the newest
     const key = String(t.trackName || "").toLowerCase().replace(/\s*[\(\[].*?[\)\]]\s*/g, " ").replace(/[^\p{L}\p{N}]+/gu, " ").trim() + "|" + Math.round((t.trackTimeMillis || 0) / 4000);
     if (seen.has(key)) continue; seen.add(key);
-    songs.push({ id: String(t.trackId), title: t.trackName, artist: t.artistName, album: t.collectionName || "", year: String(t.releaseDate || "").slice(0, 4),
-      cover: String(t.artworkUrl100 || "").replace(/\/\d+x\d+bb\./, "/600x600bb."), duration: Math.round((t.trackTimeMillis || 0) / 1000),
-      preview: t.previewUrl, link: t.trackViewUrl || "" });
+    songs.push(songRow(t));
   }
   return keep("songs:" + a.id, songs);
 }

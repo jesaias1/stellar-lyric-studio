@@ -422,6 +422,9 @@ body.auth-locked #splash{z-index:2100}
 .ar-play.on{color:var(--on-tape);background:var(--tape);border-color:var(--tape)}
 .ar-play{cursor:pointer}
 .ar-row .btn{flex:none}
+.ar-more{display:flex;justify-content:center;margin:22px 0 6px}
+.ar-find{display:inline-flex;align-items:center;gap:6px;background:none;border:0;padding:6px 8px;border-radius:8px;color:var(--muted);font:500 12.5px var(--ui);cursor:pointer}
+.ar-find:hover,.ar-find:focus-visible{color:var(--text);background:var(--raise)}
 .ar-state{display:grid;justify-items:center;gap:12px;padding:28px 12px;text-align:center;color:var(--muted)}
 .ar-state p{margin:0}
 .ar-none{text-align:center;color:var(--muted);font-size:13px;padding:24px 0}

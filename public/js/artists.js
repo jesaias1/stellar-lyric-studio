@@ -34,6 +34,7 @@
     body.innerHTML = artists.length
       ? [["", "Stellar Music artists"], ["ai", "AI-assisted artists"]].map(([g, label]) => { const list = artists.filter(a => (a.group || "") === g); return list.length ? `<div class="ar-group">${label}</div><div class="ar-grid">${list.map(a => `<button class="ar-card" type="button" data-id="${esc(a.id)}">${photo(a, "big")}<span class="ar-name">${esc(a.name)}</span></button>`).join("")}</div>` : ""; }).join("")
       : `<div class="ar-state"><p>No artists yet.</p></div>`;
+    body.insertAdjacentHTML("beforeend", `<div class="ar-more"><button class="ar-find" type="button" data-ar="find"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg>Another artist? Search Apple Music</button></div>`);
     const f = body.querySelector(".ar-card"); if(f && isOpen) f.focus({ preventScroll: true });
   }
 
@@ -58,16 +59,41 @@
       <ul class="ar-songs" id="arSongs"></ul><p class="ar-none" id="arNone" hidden>No songs match that.</p>`;
     paintSongs(""); const s = $("#arSearch"); if(s) s.oninput = () => paintSongs(s.value);
   }
+  /* ---------- level 2b: any song on Apple Music ---------- */
+  let searchTimer = 0, lastQ = "";
+  function showSearch(){
+    stopPreview(); openId = "search"; ++token; listing = [];
+    title.textContent = "Search Apple Music"; prev.hidden = false;
+    body.innerHTML = `<div class="ar-top">
+        <input class="ar-search" id="arFind" type="search" placeholder="Song or artist" aria-label="Search all of Apple Music" autocomplete="off" spellcheck="false" value="${esc(lastQ)}">
+        <p class="ar-note">Any song on Apple Music, as a 30-second preview. For the whole song in full quality, drop the song file instead.</p>
+      </div>
+      <ul class="ar-songs" id="arSongs"></ul><p class="ar-none" id="arNone" hidden></p>`;
+    const inp = $("#arFind");
+    inp.oninput = () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => findSongs(inp.value), 350); };
+    inp.onkeydown = e => { if(e.key === "Enter"){ e.preventDefault(); clearTimeout(searchTimer); findSongs(inp.value); } };
+    if(lastQ) findSongs(lastQ); else setTimeout(() => isOpen && inp.focus({ preventScroll: true }), 60);
+  }
+  async function findSongs(q){
+    q = q.trim(); lastQ = q; const my = ++token, none = $("#arNone");
+    if(q.length < 2){ listing = []; paintSongs(""); if(none) none.hidden = true; return; }
+    if(none){ none.hidden = false; none.textContent = "Searching…"; }
+    let d; try { d = await SLSBackend.api("/api/catalog/search?q=" + encodeURIComponent(q)); }
+    catch(err){ if(my !== token) return; listing = []; paintSongs(""); if(none){ none.hidden = false; none.textContent = (err && err.message) || "Apple Music didn't answer. Try again."; } return; }
+    if(my !== token || openId !== "search") return;
+    listing = d.songs || []; paintSongs("");
+    if(none){ none.hidden = listing.length > 0; none.textContent = `Nothing found for "${q}". Try the artist's name and the song title.`; }
+  }
   function paintSongs(q){
     const ul = $("#arSongs"); if(!ul) return;
     const t = q.trim().toLowerCase();
     const rows = (listing || []).filter(s => !t || (s.title + " " + s.album).toLowerCase().includes(t));
     ul.innerHTML = rows.map(s => `<li class="ar-row" data-id="${esc(s.id)}" tabindex="-1">
         <img class="ar-cover" src="${esc(s.cover)}" alt="" width="48" height="48" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.style.visibility='hidden'">
-        <span class="ar-info"><b>${esc(s.title)}</b><span>${esc([s.album, s.year].filter(Boolean).join(" · "))}</span><em class="ar-err" hidden></em></span>
+        <span class="ar-info"><b>${esc(s.title)}</b><span>${esc([openId === "search" ? s.artist : "", s.album, s.year].filter(Boolean).join(" · "))}</span><em class="ar-err" hidden></em></span>
         <button class="icon-btn ar-play${s.id === playingId ? " on" : ""}" type="button" data-ar="play" aria-label="Play preview of ${esc(s.title)}">${s.id === playingId ? PAUSE : PLAY}</button>
         <button class="btn small" type="button" data-ar="use">Use</button></li>`).join("");
-    const none = $("#arNone"); if(none) none.hidden = rows.length > 0;
+    const none = $("#arNone"); if(none && openId !== "search") none.hidden = rows.length > 0;
   }
   const PLAY = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
   const PAUSE = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg>';
@@ -133,7 +159,7 @@
     back.hidden = false; pane.removeAttribute("inert"); pane.setAttribute("aria-hidden", "false");
     requestAnimationFrame(() => requestAnimationFrame(() => { pane.classList.add("open"); back.classList.add("open"); }));
     document.addEventListener("keydown", onKey, true);
-    if(openId && (songsOf.get(openId) || artists)) showArtist(openId); else showArtists();
+    if(openId === "search") showSearch(); else if(openId && (songsOf.get(openId) || artists)) showArtist(openId); else showArtists();
     setTimeout(() => { if(isOpen && !pane.contains(document.activeElement)) $("#arClose").focus({ preventScroll: true }); }, 60);
   }
   function close(){
@@ -160,7 +186,8 @@
     if(t.id === "arBack") return showArtists();
     if(t.classList.contains("ar-card")) return showArtist(t.dataset.id);
     const k = t.dataset.ar;
-    if(k === "retry") return openId ? showArtist(openId) : showArtists();
+    if(k === "find") return showSearch();
+    if(k === "retry") return openId === "search" ? showSearch() : openId ? showArtist(openId) : showArtists();
     const row = t.closest(".ar-row"); if(!row) return;
     if(k === "play") return togglePlay(row.dataset.id);
     use(row.dataset.id);                                    // the Use button or the row itself
