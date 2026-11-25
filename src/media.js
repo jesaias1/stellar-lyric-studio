@@ -20,7 +20,7 @@
  *
  * Higgsfield needs HF_KEY_ID and HF_KEY_SECRET (from https://console.higgsfield.ai, an API account with balance).
  */
-import { aiMade, readVibe, vibeFrom, vibeText } from "./vibe.js";
+import { aiMade, readVibe, vibeFrom, vibeText, lyricSearches } from "./vibe.js";
 
 const HF = "https://api.higgsfield.ai";
 const HF_MODEL = "kling-video/v2.6/pro/text-to-video";
@@ -105,7 +105,8 @@ async function stockMatch(env, request, json, ai) {
   let vibe = vibeFrom(b.vibe);
   if (!vibe && ai) vibe = await readVibe(ai, { lyrics, title: b.title, sound: b.sound });
   const again = Array.isArray(b.queries) && b.queries.length ? b.queries.map(q => String(q).trim().slice(0, 60)).filter(Boolean).slice(0, 6) : null;
-  const queries = again || (vibe && vibe.video.length ? vibe.video.slice(0, 5) : []);
+  // the vibe's searches; without a vibe, the strongest words of the lyrics
+  const queries = again || (vibe && vibe.video.length ? vibe.video.slice(0, 5) : lyricSearches(lyrics));
   if (!queries.length) return json({ error: "no_vibe", message: "The song couldn't be read yet. Add the lyrics first, or type a search." }, 400);
   const page = again ? Math.max(1, Math.min(19, Math.round(+b.page || 1))) + 1 : 1;
   const exclude = new Set((Array.isArray(b.exclude) ? b.exclude : []).slice(0, 2000).map(String));

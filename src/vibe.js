@@ -25,7 +25,8 @@ export function aiMade(it) {
 
 /* ---------- the vibe ---------- */
 const clean = s => String(s || "").replace(/\s+/g, " ").trim();
-const list = (x, n, len = 40) => (Array.isArray(x) ? x : []).map(v => clean(v).replace(/["#]/g, "").slice(0, len)).filter(Boolean).slice(0, n);
+// a list the model wrote, as an array or as one comma-separated string
+const list = (x, n, len = 40) => (Array.isArray(x) ? x : typeof x === "string" ? x.split(/[,;\n]/) : []).map(v => clean(v).replace(/["#]/g, "").slice(0, len)).filter(Boolean).slice(0, n);
 const ENERGY = ["calm", "steady", "lively", "intense"];
 
 // the measured sound in words, for the model
@@ -40,51 +41,70 @@ function soundWords(s) {
   return out.join("; ");
 }
 
+// the model's answer as an object: already parsed (JSON mode), or text with a fence, a sentence, smart quotes or
+// trailing commas around it
 function fromModel(out) {
   const resp = out && (out.response ?? (out.result && out.result.response) ?? out);
   if (resp && typeof resp === "object" && !Array.isArray(resp)) return resp;
-  const text = String(resp || "");
-  return JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1));
+  let text = String(resp || "").replace(/```(?:json)?/gi, "");
+  const a = text.indexOf("{"), b = text.lastIndexOf("}");
+  if (a < 0 || b <= a) throw new Error("no JSON object in the answer: " + text.slice(0, 80));
+  text = text.slice(a, b + 1);
+  try { return JSON.parse(text); } catch {}
+  return JSON.parse(text.replace(/[“”]/g, '"').replace(/[‘’]/g, "'").replace(/,\s*([}\]])/g, "$1"));
 }
 
+// the shape asked for; Workers AI's JSON mode holds the model to it
+const strs = { type: "array", items: { type: "string" } };
+const SHAPE = { type: "object", properties: { summary: { type: "string" }, mood: strs, energy: { type: "string", enum: ENERGY }, colours: strs, light: { type: "string" },
+  places: strs, season: { type: "string" }, imagery: strs, avoid: strs, video: strs, photo: strs }, required: ["summary", "mood", "energy", "video", "photo"] };
+const EXAMPLE = '{"summary": "A slow, bittersweet song about learning to love your own flaws.", "mood": ["bittersweet", "hopeful", "tender"], "energy": "calm", "colours": ["amber", "gold", "soft grey"], "light": "soft golden hour", "places": ["quiet bedroom", "rainy street", "old stone wall"], "season": "autumn", "imagery": ["scars", "mirror", "rain"], "avoid": ["party crowds", "bright neon"], "video": ["rain on window", "candle flame dark", "dust in sunlight", "slow waves sunset", "curtains blowing", "city lights blur"], "photo": ["kintsugi bowl close up film photo", "rainy window golden light", "cracked stone wall gold painting", "empty room soft light 35mm"]}';
+
+export let lastWhy = "";   // why the last read failed (for the API answer and the logs)
 export async function readVibe(ai, { lyrics, title, sound }) {
   lyrics = String(lyrics || "").slice(0, 5000);
   const heard = soundWords(sound);
-  if (!ai || (!clean(lyrics) && !heard)) return null;
+  if (!ai || (!clean(lyrics) && !heard)) { lastWhy = "nothing to read"; return null; }
   const key = `${clean(lyrics).toLowerCase().slice(0, 600)}|${clean(title).toLowerCase()}|${heard}`;
   const hit = cache.get(key);
   if (hit) return hit;
-  const sys = `You read a song for the people making its lyric video, so they can find background footage and photos that feel like the song. You get the lyrics and a few things measured from the audio. Work out the song's real feel: read past single words (a song that mentions "fire" can be tender; "rain" can be joyful) and weigh the sound: a slow, soft, dark-sounding song is not a party song even with happy words, and a fast bright one is not gloomy. Answer with one JSON object and nothing else, in English whatever the lyrics' language:
-{"summary": one plain sentence on what the song feels like,
- "mood": 2 to 4 mood words,
- "energy": one of "calm", "steady", "lively", "intense",
- "colours": 2 to 4 colour words that fit,
- "light": a few words on the light (e.g. "soft golden hour", "neon at night", "grey daylight"),
- "places": 2 to 4 settings that fit (concrete, filmable),
- "season": a season or "any",
- "imagery": 3 to 6 concrete images taken from the lyrics themselves,
- "avoid": 2 to 4 things that would clash with this song,
- "video": 6 different stock-video searches of 2 to 4 plain words each, things a camera can film that exist on free stock sites (e.g. "rain on window", "city lights night", "waves at sunset", "candle flame dark"), matching the mood, energy and light; vary them; no people's faces, no text, no famous places,
- "photo": 4 different image searches of 3 to 6 words each for mood-board style pictures, each a concrete scene plus a look (film photo, painting, etc.)}`;
+  const sys = `You read a song for the people making its lyric video, so they can find background footage and photos that feel like the song. You get the lyrics and a few things measured from the audio. Work out the song's real feel: read past single words (a song that mentions "fire" can be tender; "rain" can be joyful) and weigh the sound: a slow, soft, dark-sounding song is not a party song even with happy words, and a fast bright one is not gloomy.
+
+Answer in English (whatever the lyrics' language) with one JSON object and nothing else. The fields:
+summary: one plain sentence on what the song feels like. mood: 2 to 4 mood words. energy: exactly one of "calm", "steady", "lively", "intense". colours: 2 to 4 colour words. light: a few words on the light. places: 2 to 4 concrete, filmable settings. season: a season or "any". imagery: 3 to 6 concrete images taken from the lyrics. avoid: 2 to 4 things that would clash with the song.
+video: 6 different stock-video searches of 2 to 4 plain words each: things a camera can film that exist on free stock video sites, matching the mood, energy and light; vary them; no faces, no text, no famous places.
+photo: 4 different image searches of 3 to 6 words each for mood-board pictures, each a concrete scene plus a look (film photo, painting and so on).
+
+An example of the format only (for a different song; don't copy its content):
+${EXAMPLE}`;
   const user = (clean(title) ? `Song title: ${clean(title).slice(0, 80)}\n` : "") + (heard ? `Measured from the audio: ${heard}\n` : "") + `\nLyrics:\n${clean(lyrics) ? lyrics : "(instrumental or no lyrics yet)"}`;
-  try {
-    const v = fromModel(await ai({ messages: [{ role: "system", content: sys }, { role: "user", content: user }], max_tokens: 700, temperature: 0.4 }));
-    const vibe = {
-      summary: clean(v.summary).slice(0, 220),
-      mood: list(v.mood, 4, 24), energy: ENERGY.includes(v.energy) ? v.energy : "steady",
-      colours: list(v.colours || v.colors, 4, 24), light: clean(v.light).slice(0, 60),
-      places: list(v.places, 4), season: clean(v.season).slice(0, 20) || "any",
-      imagery: list(v.imagery, 6), avoid: list(v.avoid, 4),
-      video: [...new Set(list(v.video, 6, 40).map(q => q.toLowerCase()))],
-      photo: [...new Set(list(v.photo, 4, 60))],
-    };
-    if (!vibe.video.length && !vibe.mood.length) return null;
-    cache.set(key, vibe); if (cache.size > 300) cache.delete(cache.keys().next().value);
-    return vibe;
-  } catch (err) {
-    console.error("vibe failed:", String(err && err.message || err));
-    return null;
+  const messages = [{ role: "system", content: sys }, { role: "user", content: user }];
+  const whys = [];
+  // JSON mode first; if the model or the account doesn't take it, the same question as plain text
+  for (const strict of [true, false]) {
+    try {
+      const out = await ai({ messages, max_tokens: 900, temperature: 0.4, ...(strict ? { response_format: { type: "json_schema", json_schema: SHAPE } } : {}) });
+      const v = fromModel(out);
+      const vibe = {
+        summary: clean(v.summary).slice(0, 220),
+        mood: list(v.mood, 4, 24), energy: ENERGY.includes(clean(v.energy).toLowerCase()) ? clean(v.energy).toLowerCase() : "steady",
+        colours: list(v.colours || v.colors, 4, 24), light: clean(v.light).slice(0, 60),
+        places: list(v.places, 4), season: clean(v.season).slice(0, 20) || "any",
+        imagery: list(v.imagery, 6), avoid: list(v.avoid, 4),
+        video: [...new Set(list(v.video || v.videos, 6, 40).map(q => q.toLowerCase()))],
+        photo: [...new Set(list(v.photo || v.photos, 4, 60))],
+      };
+      if (!vibe.video.length && !vibe.mood.length) throw new Error("the answer had no searches or moods");
+      cache.set(key, vibe); if (cache.size > 300) cache.delete(cache.keys().next().value);
+      lastWhy = "";
+      return vibe;
+    } catch (err) {
+      whys.push(`${strict ? "json mode" : "plain"}: ${String(err && err.message || err).slice(0, 160)}`);
+    }
   }
+  lastWhy = whys.join(" | ");
+  console.error("vibe failed:", lastWhy);
+  return null;
 }
 
 // a vibe the browser sent back, cleaned up (never trust its shape)
@@ -96,6 +116,14 @@ export function vibeFrom(x) {
     imagery: list(x.imagery, 6), avoid: list(x.avoid, 4), video: list(x.video, 6, 40), photo: list(x.photo, 4, 60),
   };
   return v.summary || v.mood.length ? v : null;
+}
+
+// searches from the lyrics' own words, for when the vibe couldn't be read
+const COMMON = new Set("that this with your have from what when they there their been were will just like know about would could into onto over under through around again still only dont cant wont youre feel never ever always every more love baby yeah gonna wanna gotta cause because nothing something everything someone tonight right left want need take make give come back down away even much ain't these those them then than here where".split(" "));
+export function lyricSearches(lyrics, n = 4) {
+  const words = clean(lyrics).toLowerCase().replace(/[^\p{L}\s']/gu, " ").split(/\s+/).filter(w => w.length >= 4 && !COMMON.has(w) && !COMMON.has(w.replace(/'/g, "")));
+  const count = new Map(); for (const w of words) count.set(w, (count.get(w) || 0) + 1);
+  return [...count.entries()].sort((a, b) => b[1] - a[1]).slice(0, n).map(([w]) => w);
 }
 
 // the vibe as a short paragraph for other prompts
@@ -115,5 +143,5 @@ export async function vibeRoute(request, env, path, method, { hasAI, runModel, j
   if (!hasAI) return json({ vibe: null, ai: false });
   const ai = input => runModel(env, TEXT_MODEL, input);
   const vibe = await readVibe(ai, { lyrics: b.lyrics, title: b.title, sound: b.sound });
-  return json({ vibe, ai: !!vibe });
+  return json(vibe ? { vibe, ai: true } : { vibe: null, ai: false, why: lastWhy });
 }
