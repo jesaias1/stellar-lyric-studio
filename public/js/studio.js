@@ -1723,7 +1723,20 @@ $("#ownSize").onsubmit = e => {
   framePref = w > h ? "h" : h > w ? "v" : framePref; ownOpen = false;
   setFrame(`${w}x${h}`); toast(`Frame: ${w}×${h} px. The video is exported at exactly this size.`);
 };
-$("#shuffleBtn").onclick = () => { S.P.cuts.seed = (S.P.cuts.seed * 7919 + 13) % 100000; resetSlots(); syncSegCard(); dirty(); };
+/* Shuffle: a new random order on every press, as often as you like. It always differs from the order on screen
+   (when there's more than one possible order), and clips kept "in the order added" (a photo slideshow) switch to
+   shuffled, or the press would do nothing. */
+$("#shuffleBtn").onclick = () => {
+  if(S.clips.filter(c => c.on).length < 2){ toast("Add another clip or photo to shuffle"); return; }
+  const before = segInfo().order.join(",");
+  if(S.P.cuts.order === "inorder"){ S.P.cuts.order = "shuffle"; toast("Clips now play in a random order"); }
+  resetSlots();
+  for(let k = 0; k < 40; k++){
+    S.P.cuts.seed = 1 + Math.floor(Math.random() * 999999);
+    if(segInfo().order.join(",") !== before) break;
+  }
+  syncCutUI(); syncSegCard(); dirty();
+};
 $("#segStart").oninput = e => { if(S.sel?.type !== "seg") return; const i = S.sel.i, v = +e.target.value; setSlot(i, {in: v}); const inf = segInfo(); if(!S.playing) S.t = inf.segs[i].a + 0.001;
   const clip = S.clips.find(c => c.id === inf.order[i]); $("#segStartVal").textContent = `${fmt(v)} of ${fmt(clip?.el?.duration||0)}`; };
 $("#segClip").onchange = e => { if(S.sel?.type === "seg"){ setSlot(S.sel.i, {c: e.target.value, in: null}); syncSegCard(); } };
