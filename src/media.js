@@ -85,6 +85,19 @@ async function searchBoth(env, q, orientation, page) {
   if (results.length) { cache.set(key, { at: Date.now(), data }); if (cache.size > 500) cache.delete(cache.keys().next().value); }
   return data;
 }
+/* Look-alikes apart: a creator often uploads several takes of one scene with the same tags (two water-wheel shots,
+   three of one shed). The first of each scene keeps its place; the other takes, and a creator's clips past
+   the first three, move to the end, so the top of the list shows different things. */
+const sceneKey = r => `${String(r.author || "").toLowerCase()}|${String(r.title || "").toLowerCase().split(/\s*,\s*/).filter(Boolean).sort().join(",")}`;
+export function spreadOut(list, perAuthor = 3) {
+  const scenes = new Set(), authors = new Map(), first = [], later = [];
+  for (const r of list) {
+    const scene = r.title ? sceneKey(r) : r.id, who = String(r.author || "").toLowerCase(), n = authors.get(who) || 0;
+    if (scenes.has(scene) || (who && n >= perAuthor)) { later.push(r); continue; }
+    scenes.add(scene); authors.set(who, n + 1); first.push(r);
+  }
+  return [...first, ...later];
+}
 const signed = (env, list) => Promise.all(list.map(async r => ({ ...r, file: await mediaLink(env, r.file) })));
 const sources = env => ({ pixabay: !!env.PIXABAY_KEY, pexels: !!env.PEXELS_KEY });
 
@@ -94,7 +107,7 @@ async function stockSearch(env, url, json) {
   if (!q) return json({ error: "bad_request", message: "Type something to search for." }, 400);
   if (!env.PIXABAY_KEY && !env.PEXELS_KEY) return json({ error: "no_stock", message: "No stock video service is connected yet." }, 503);
   const d = await searchBoth(env, q, orientation, page);
-  return json({ results: await signed(env, d.results), errors: d.errors, sources: sources(env) });
+  return json({ results: await signed(env, spreadOut(d.results)), errors: d.errors, sources: sources(env) });
 }
 
 /* ---------- videos picked for the song ---------- */
@@ -124,7 +137,7 @@ async function stockMatch(env, request, json, ai) {
   const order = await rankVideos(ai, vibe, lyrics, shortlist, Math.min(30, shortlist.length));
   let ranked = shortlist;
   if (order) { const chosen = order.map(n => shortlist[n]); ranked = [...chosen, ...shortlist.filter(it => !chosen.includes(it))]; }
-  ranked = [...ranked, ...ordered.slice(shortlist.length)].slice(0, 36);
+  ranked = spreadOut([...ranked, ...ordered.slice(shortlist.length)]).slice(0, 36);
   return json({ results: await signed(env, ranked), queries, vibe, errors, page, ai: !!order, sources: sources(env) });
 }
 
