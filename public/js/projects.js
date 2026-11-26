@@ -259,5 +259,7 @@ window.SLSProjects = (() => {
     else paint();
   })();
 
-  return { create, open, findSong, save, paint, get current(){ return cur && cur.id; } };
+  // the names of the projects in this browser, newest first (for suggestions, e.g. in the content plan)
+  async function names(){ try { return (await all()).filter(p => !p.owner || p.owner === me()).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).map(p => p.name).filter(Boolean); } catch { return []; } }
+  return { create, open, findSong, save, paint, names, get current(){ return cur && cur.id; } };
 })();

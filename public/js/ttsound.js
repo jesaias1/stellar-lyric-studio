@@ -53,7 +53,8 @@ window.SLSTikTokSound = (() => {
       <li><b>Find the sound with the most videos.</b> In TikTok, search the song and open its sounds: the number under a sound's name is how many videos use it. Take the biggest, ideally the artist's own.
         <a class="btn small" id="ttmSearch" target="_blank" rel="noopener">Search TikTok</a></li>
       <li><b>Give it to the studio</b>, one of two ways:
-        <form class="ttm-link" id="ttmForm" autocomplete="off"><input type="url" id="ttmUrl" inputmode="url" placeholder="Paste the sound's link (Share, then Copy link)" aria-label="TikTok sound or video link"><button class="btn primary" type="submit">Match</button></form>
+        <form class="ttm-link" id="ttmForm" autocomplete="off"><input type="url" id="ttmUrl" inputmode="url" placeholder="Paste a TikTok video link" aria-label="Link to a TikTok video that uses the sound"><button class="btn primary" type="submit">Match</button></form>
+        <span class="hint ttm-tip">Open the sound, tap any video that uses it, then Share and Copy link. Sound links (tiktok.com/music/…) can't be read: TikTok keeps those pages to itself.</span>
         <label class="btn ttm-file"><input type="file" id="ttmFile" accept="video/*,audio/*" hidden>Choose a video saved from TikTok</label>
         <span class="hint ttm-phone">On the phone: in TikTok tap Share, then Save video, and choose it here.</span></li>
     </ol>
@@ -111,7 +112,7 @@ window.SLSTikTokSound = (() => {
         <div class="row"><button class="btn small" type="button" id="ttmHear">▶ Hear it</button><button class="btn small primary" type="button" id="ttmDone">Done</button></div>`, "ok");
       $m("#ttmHear").onclick = () => SLSLyricsUI && SLSLyricsUI.hear ? SLSLyricsUI.hear(tt.a, tt.a + Math.min(60, tt.len)) : null;
       $m("#ttmDone").onclick = close;
-    } catch(err){ show(esc(err.message || "Something went wrong.") + (from === "link" ? " You can choose a saved TikTok video instead." : ""), "warn"); }
+    } catch(err){ const msg = err.message || "Something went wrong."; show(esc(msg) + (from === "link" && !/save|video link/i.test(msg) ? " You can choose a saved TikTok video instead." : ""), "warn"); }
     finally { busy = false; m.classList.remove("busy"); }
   }
   $m("#ttmForm").onsubmit = e => {

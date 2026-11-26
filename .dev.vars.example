@@ -10,6 +10,7 @@ SLS_PASSCODE=choose-a-long-passcode
 
 # Optional, local only: real footage and photo search instead of the samples.
 # PIXABAY_KEY=your-pixabay-key
+# CHARTMETRIC_REFRESH_TOKEN=your-chartmetric-refresh-token   (trending TikTok sounds)
 # PEXELS_KEY=your-pexels-key
 # SERPAPI_KEY=your-serpapi-key   (Pinterest in the image grabber)
 

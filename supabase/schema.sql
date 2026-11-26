@@ -176,3 +176,33 @@ alter table public.song_sounds add column if not exists clip_title text check (c
 alter table public.song_sounds add column if not exists clip_videos bigint check (clip_videos >= 0);
 alter table public.song_sounds add column if not exists clip_from text check (clip_from in ('link', 'video'));   -- link: clip_url is that snippet itself
 
+
+-- ---------- the content plan: videos the team plans to make, by day (shown in the calendar) ----------
+-- Everyone logged in sees and edits the whole plan: a video idea, which project it is, how far along it is, and the
+-- TikTok link once it's out. Run this part once in Supabase (SQL editor) to turn the plan on.
+create table if not exists public.content_plan (
+  id uuid primary key default gen_random_uuid(),
+  day date not null,
+  title text not null default '' check (char_length(title) <= 200),
+  project text not null default '' check (char_length(project) <= 200),
+  artist text not null default '' check (char_length(artist) <= 120),
+  status text not null default 'idea' check (status in ('idea', 'making', 'ready', 'posted')),
+  tiktok_url text check (tiktok_url is null or (char_length(tiktok_url) <= 500 and tiktok_url ~ '^https://([a-z]+\.)?tiktok\.com/')),
+  note text not null default '' check (char_length(note) <= 1000),
+  created_by uuid default auth.uid() references auth.users(id) on delete set null,
+  updated_by uuid default auth.uid() references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists content_plan_day on public.content_plan (day);
+alter table public.content_plan enable row level security;
+drop policy if exists "team reads the plan" on public.content_plan;
+drop policy if exists "team adds to the plan" on public.content_plan;
+drop policy if exists "team changes the plan" on public.content_plan;
+drop policy if exists "team removes from the plan" on public.content_plan;
+create policy "team reads the plan" on public.content_plan for select to authenticated using (true);
+create policy "team adds to the plan" on public.content_plan for insert to authenticated with check (true);
+create policy "team changes the plan" on public.content_plan for update to authenticated using (true) with check (true);
+create policy "team removes from the plan" on public.content_plan for delete to authenticated using (true);
+revoke all on public.content_plan from anon;
+grant select, insert, update, delete on public.content_plan to authenticated;

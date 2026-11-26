@@ -105,6 +105,7 @@ On Vercel, under Settings > Environment Variables (on Cloudflare: `npx wrangler 
 | `TOKEN_KEY` | Seals linked accounts and logins. Changing it logs everyone out of their accounts |
 | `CF_ACCOUNT_ID`, `CF_API_TOKEN` | The lyric AI (token with "Workers AI" access) |
 | `PIXABAY_KEY`, `PEXELS_KEY` | Stock video and free photos |
+| `CHARTMETRIC_REFRESH_TOKEN` | Trending TikTok sounds in the calendar (a Chartmetric API account) |
 | `SERPAPI_KEY` | Pinterest in the image grabber (about 3 searches per grab) |
 | `HF_KEY_ID`, `HF_KEY_SECRET` | AI background clips (Higgsfield) |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Posting to YouTube |

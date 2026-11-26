@@ -6,8 +6,9 @@
  *        vm.tiktok.com/...). audio is a signed /api/media link to the sound's audio file; videos is how many
  *        TikTok videos use the sound (what tells which version took off).
  *
- * TikTok has no API for this, so the page's own data (the JSON it ships for its app) is read. TikTok sometimes
- * answers servers with an empty page; then this says so and the studio asks for a saved video instead.
+ * TikTok has no API for this, so the page's own data (the JSON it ships for its app) is read. Video pages carry
+ * their sound; sound pages stopped doing so (Nov 2026), so for those this asks for a video link instead.
+ * TikTok sometimes answers servers with an empty page; then this says so and the studio asks for a saved video.
  */
 import { mediaLink } from "./media.js";
 
@@ -23,14 +24,18 @@ export async function tiktokSoundRoute(request, env, path, method, { json }) {
   if (!OK_HOST.test(url) || url.length > 500) return json({ error: "bad_link", message: "Paste a TikTok link: a sound (tiktok.com/music/…) or a video that uses it." }, 400);
   const hit = cache.get(url);
   if (hit && Date.now() - hit.at < 30 * 60e3) return json(hit.v);
-  let page;
+  let page, finalUrl = url;
   try {
     const r = await (env.fetch || fetch)(url, { redirect: "follow", headers: { "user-agent": UA, "accept-language": "en-US,en;q=0.9", accept: "text/html" } });
     if (!r.ok) throw new Error("HTTP " + r.status);
+    finalUrl = r.url || url;
     page = await r.text();
   } catch (err) { return json({ error: "tiktok_unreachable", message: "TikTok didn't answer. Save a video that uses the sound and choose it instead." }, 502); }
   const info = readPage(page);
-  if (!info || !info.playUrl) return json({ error: "tiktok_blocked", message: "TikTok didn't share that sound with the studio. Save a video that uses the sound (Share, then Save video) and choose it instead." }, 422);
+  // TikTok's sound pages (tiktok.com/music/...) no longer carry the sound: they load it later, in the browser, so a
+  // server reading the page finds nothing. Video pages still carry their sound, so ask for a video link instead.
+  if ((!info || !info.playUrl) && /tiktok\.com\/music\//i.test(finalUrl)) return json({ error: "tiktok_sound_page", message: "TikTok doesn't show its sound pages to other sites, so a sound link can't be read. Open a video that uses the sound, tap Share, then Copy link, and paste that link instead." }, 422);
+  if (!info || !info.playUrl) return json({ error: "tiktok_blocked", message: "TikTok didn't share that video's sound with the studio. Save the video (Share, then Save video) and choose it instead." }, 422);
   const v = { title: info.title || "", author: info.author || "", videos: info.videos ?? null, original: !!info.original, duration: info.duration || null,
     id: info.id || "", link: info.id ? `https://www.tiktok.com/music/${slug(info.title)}-${info.id}` : url, audio: await mediaLink(env, info.playUrl) };
   cache.set(url, { at: Date.now(), v }); if (cache.size > 200) cache.delete(cache.keys().next().value);

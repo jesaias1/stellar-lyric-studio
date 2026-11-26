@@ -1,13 +1,17 @@
 "use strict";
 /* The calendar: every post you planned or sent, by day. Opens as a full-screen page over the studio.
    Rows come from the `posts` table in the user's account (SLSAuth.rest); the studio server posts the due ones
-   and fills in the results. Here you can see, move, cancel and retry them. window.SLSCalendar = { open(dateISO?), close() } */
+   and fills in the results. Here you can see, move, cancel and retry them.
+   The content plan (table content_plan, shared by the team) sits on the same days: video ideas with their project,
+   how far along they are and the TikTok link once posted. "Trending sounds" (js/trends.js) opens in the same page.
+   window.SLSCalendar = { open(dateISO?), close() } */
 const clockOf = t => { t = Math.max(0, +t || 0); const m = Math.floor(t / 60); return m + ":" + String(Math.floor(t - m * 60)).padStart(2, "0"); };
 window.SLSCalendar = (() => {
   const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const PN = { youtube: "YouTube", instagram: "Instagram", tiktok: "TikTok" };
   const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"], MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
   const WEEK = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const PLAN = { idea: "Idea", making: "Making it", ready: "Ready to post", posted: "Posted" };
   const STATUS = { scheduled: "Scheduled", posting: "Posting now…", working: "Posting now…", posted: "Posted", failed: "Didn't post", cancelled: "Cancelled" };
   const p2 = n => String(n).padStart(2, "0");
   const dayKey = d => `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
@@ -44,6 +48,7 @@ window.SLSCalendar = (() => {
         <button class="btn small" type="button" data-cal="today">Today</button>
       </div>
       <select id="calFilter" aria-label="Show posts for"><option value="">All artists</option></select>
+      <button class="btn small cal-trend-btn" type="button" data-cal="trend" aria-pressed="false">Trending sounds</button>
       <button class="icon-btn cal-x" type="button" data-cal="close" aria-label="Close the calendar">✕</button>
     </header>
     <div class="cal-state" id="calState" role="status"></div>
@@ -58,6 +63,7 @@ window.SLSCalendar = (() => {
         <section class="cal-up cal-res" id="calRes" aria-label="What worked" hidden></section>
       </div>
     </div>
+    <section class="cal-trend" id="calTrend" aria-label="Trending sounds" hidden></section>
     <div class="cal-scrim" id="calScrim" hidden></div>
     <aside class="cal-detail" id="calDetail" role="dialog" aria-modal="false" aria-labelledby="calDetT" hidden></aside>`;
   document.body.append(root);
@@ -66,6 +72,7 @@ window.SLSCalendar = (() => {
   let results = [], resLoaded = false;
   let view = null, posts = [], upcoming = [], filter = "", selDay = "", openId = "", editing = false, busy = false;
   let isOpen = false, opener = null, loadTok = 0, timer = null, err = "", loading = false, loadedOnce = false;
+  let plans = [], planNext = [], planMissing = false, planEdit = null, trendOn = false;
   const today = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
   const gridStart = v => { const f = new Date(v.y, v.m, 1), dow = (f.getDay() + 6) % 7; return new Date(v.y, v.m, 1 - dow); };
   const weeksIn = v => Math.ceil((((new Date(v.y, v.m, 1).getDay() + 6) % 7) + new Date(v.y, v.m + 1, 0).getDate()) / 7);
@@ -83,8 +90,81 @@ window.SLSCalendar = (() => {
       if(tok !== loadTok) return;
       posts = Array.isArray(a) ? a : []; upcoming = Array.isArray(b) ? b : []; err = ""; loadedOnce = true;
     } catch(e){ if(tok !== loadTok) return; if(!quiet || !loadedOnce) err = (e && e.message) || "The calendar couldn't be loaded."; }
+    await loadPlan(from, to, tok);
     loading = false; paint();
   }
+  /* ---------- the content plan ---------- */
+  const missingTable = e => e && (e.code === "PGRST205" || e.code === "42P01" || e.status === 404);
+  async function loadPlan(from, to, tok){
+    try {
+      const [a, b] = await Promise.all([
+        SLSAuth.rest(`content_plan?select=*&day=gte.${dayKey(from)}&day=lt.${dayKey(to)}&order=day.asc,created_at.asc`),
+        SLSAuth.rest(`content_plan?select=*&day=gte.${dayKey(today())}&status=neq.posted&order=day.asc,created_at.asc&limit=8`)]);
+      if(tok !== loadTok) return;
+      plans = Array.isArray(a) ? a : []; planNext = Array.isArray(b) ? b : []; planMissing = false;
+    } catch(e){ if(tok !== loadTok) return; if(missingTable(e)){ planMissing = true; plans = []; planNext = []; } }
+  }
+  const artistOf = name => { const m = String(name || "").match(/^(.+?)\s+[-–]\s+/); return m ? m[1].trim().slice(0, 120) : ""; };
+  const tiktokOk = u => /^https:\/\/([a-z]+\.)?tiktok\.com\/\S+$/i.test(u || "");
+  const pDay = k => { const [y, m, d] = k.split("-").map(Number); return new Date(y, m - 1, d); };
+  const planChip = p => `<button class="cal-chip cal-plan pl-${esc(p.status)}${planEdit && planEdit.id === p.id ? " on" : ""}" type="button" data-plan="${esc(p.id)}" title="${esc(`${PLAN[p.status] || p.status}: ${p.title || p.project || "Video"}`)}"><i class="cal-pm" aria-hidden="true"></i><span class="cal-n">${esc(p.title || p.project || "Video")}</span></button>`;
+  const planRow = (p, withDate) => `<button class="cal-row cal-plan pl-${esc(p.status)}${planEdit && planEdit.id === p.id ? " on" : ""}" type="button" data-plan="${esc(p.id)}"><i class="cal-pm" aria-hidden="true"></i>
+      <span class="cal-rt"><b>${esc(p.title || p.project || "Video")}</b><span>${withDate ? esc(shortDay(pDay(p.day))) + " · " : ""}${esc(p.project && p.title ? p.project : (p.artist || ""))}</span></span><span class="cal-rs">${esc(PLAN[p.status] || p.status)}</span></button>`;
+  const planSetup = `<p class="cal-hint">To plan videos here, the content plan needs a one-time setup: in Supabase, open the SQL editor and run the <b>content plan</b> part of supabase/schema.sql.</p>`;
+  const planVisible = rows => filter ? rows.filter(p => (p.artist || artistOf(p.project)) === filter) : rows;
+  let projNames = [];
+  async function editPlan(p){
+    planEdit = p; openId = ""; editing = false;
+    if(!projNames.length && window.SLSProjects && SLSProjects.names) projNames = (await SLSProjects.names()).slice(0, 40);
+    paintPlanForm();
+  }
+  function paintPlanForm(){
+    const p = planEdit, box = $c("#calDetail"); if(!p){ return; }
+    box.dataset.id = ""; box.dataset.st = ""; box.dataset.at = "";
+    box.innerHTML = `
+      <div class="cal-dh"><button class="icon-btn cal-dback" type="button" data-act="plan-close" aria-label="Back to the calendar">‹</button><h3 id="calDetT">${p.id ? "Planned video" : "Plan a video"}</h3><button class="icon-btn" type="button" data-act="plan-close" aria-label="Close">✕</button></div>
+      <form class="cal-db cal-pform" id="calPlanForm" autocomplete="off">
+        <label class="cal-f"><span>The video</span><input id="cpTitle" maxlength="200" placeholder="e.g. Chorus with the ferris wheel clips" value="${esc(p.title || "")}"></label>
+        <label class="cal-f"><span>Project</span><input id="cpProject" maxlength="200" list="cpProjects" placeholder="Artist - Song" value="${esc(p.project || "")}"><datalist id="cpProjects">${projNames.map(n => `<option value="${esc(n)}"></option>`).join("")}</datalist></label>
+        <div class="cal-f2">
+          <label class="cal-f"><span>Day</span><input type="date" id="cpDay" required value="${esc(p.day || selDay || dayKey(today()))}"></label>
+          <label class="cal-f"><span>Status</span><select id="cpStatus">${Object.entries(PLAN).map(([k, l]) => `<option value="${k}"${k === (p.status || "idea") ? " selected" : ""}>${l}</option>`).join("")}</select></label>
+        </div>
+        <label class="cal-f"><span>TikTok link <em class="cal-muted">once it's posted</em></span><input type="url" id="cpLink" inputmode="url" maxlength="500" placeholder="https://www.tiktok.com/@…" value="${esc(p.tiktok_url || "")}"></label>
+        ${tiktokOk(p.tiktok_url) ? `<a class="btn small" href="${esc(p.tiktok_url)}" target="_blank" rel="noopener">Open on TikTok</a>` : ""}
+        <label class="cal-f"><span>Note</span><textarea id="cpNote" rows="3" maxlength="1000" placeholder="Hook, caption idea, who does what…">${esc(p.note || "")}</textarea></label>
+        <div class="cal-acts"><button class="btn small primary" type="submit">${p.id ? "Save" : "Add to the plan"}</button>${p.id ? `<button class="btn small ghost cal-danger" type="button" data-act="plan-del">Remove</button>` : ""}</div>
+        <div class="cal-msg" id="calMsg" role="status"></div>
+      </form>`;
+    const was = box.hidden; box.hidden = false; $c("#calScrim").hidden = false;
+    if(was){ requestAnimationFrame(() => box.classList.add("open")); } else box.classList.add("open");
+    setTimeout(() => { const f = $c("#cpTitle"); if(f && !p.id) f.focus({ preventScroll: true }); }, 40);
+    $c("#calPlanForm").onsubmit = e => { e.preventDefault(); savePlan(); };
+  }
+  async function savePlan(){
+    if(busy) return; const p = planEdit, msg = $c("#calMsg");
+    const title = $c("#cpTitle").value.trim(), project = $c("#cpProject").value.trim(), day = $c("#cpDay").value, link = $c("#cpLink").value.trim();
+    if(!title && !project){ msg.textContent = "Give the video a name or pick its project."; return; }
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(day)){ msg.textContent = "Pick a day."; return; }
+    if(link && !tiktokOk(link)){ msg.textContent = "The TikTok link should start with https://www.tiktok.com/"; return; }
+    const body = { title, project, artist: artistOf(project), day, status: $c("#cpStatus").value, tiktok_url: link || null, note: $c("#cpNote").value.trim(), updated_at: new Date().toISOString() };
+    busy = true;
+    try {
+      if(p.id) await SLSAuth.rest(`content_plan?id=eq.${encodeURIComponent(p.id)}`, { method: "PATCH", body, prefer: "return=minimal" });
+      else await SLSAuth.rest("content_plan", { method: "POST", body, prefer: "return=minimal" });
+      toast(p.id ? "Saved." : "Added to the plan."); selDay = day; planEdit = null; busy = false; closeDetail(true);
+      const d = pDay(day); if(d.getMonth() !== view.m || d.getFullYear() !== view.y) view = { y: d.getFullYear(), m: d.getMonth() };
+      await load(true);
+    } catch(e){ busy = false; if(missingTable(e)){ planMissing = true; msg.innerHTML = planSetup; } else msg.textContent = (e && e.message) || "That didn't save. Try again."; }
+  }
+  async function removePlan(btn){
+    const p = planEdit; if(!p || !p.id || busy) return;
+    if(!btn.dataset.sure){ btn.dataset.sure = "1"; btn.textContent = "Really remove?"; setTimeout(() => { if(btn.isConnected){ delete btn.dataset.sure; btn.textContent = "Remove"; } }, 3500); return; }
+    busy = true;
+    try { await SLSAuth.rest(`content_plan?id=eq.${encodeURIComponent(p.id)}`, { method: "DELETE", prefer: "return=minimal" }); toast("Removed from the plan."); planEdit = null; busy = false; closeDetail(true); await load(true); }
+    catch(e){ busy = false; const m = $c("#calMsg"); if(m) m.textContent = (e && e.message) || "That didn't work. Try again."; }
+  }
+
   /* ---------- what worked ----------
      Posts that went out and have results, from the last 90 days: per song, the versions side by side (which part of the
      song, which look, which frame shape), best first. The results come from the platforms (see src/schedule.js). */
@@ -132,7 +212,7 @@ window.SLSCalendar = (() => {
     if(SLSAuth.mode !== "accounts") s.innerHTML = "";
     else if(err) s.innerHTML = `<span>${esc(err)}</span> <button class="btn small" type="button" data-cal="retry">Try again</button>`;
     else if(loading && !loadedOnce) s.textContent = "Loading…";
-    else if(loadedOnce && !visible(posts).length) s.textContent = "Nothing planned this month";
+    else if(loadedOnce && !visible(posts).length && !planVisible(plans).length) s.textContent = "Nothing planned this month";
     else s.textContent = "";
     s.hidden = !s.textContent && !s.innerHTML;
     s.classList.toggle("bad", !!err);
@@ -143,24 +223,27 @@ window.SLSCalendar = (() => {
     if(login){ const s = $c("#calState"); s.hidden = false; s.classList.remove("bad"); s.textContent = "The calendar needs a login"; $c("#calMonth").textContent = ""; closeDetail(true); return; }
     $c("#calMonth").textContent = `${MONTHS[view.m]} ${view.y}`;
     // artist filter: everyone seen in the loaded posts
-    const names = [...new Set([...posts, ...upcoming].map(who).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    const names = [...new Set([...posts, ...upcoming].map(who).concat([...plans, ...planNext].map(p => p.artist || artistOf(p.project))).filter(Boolean))].sort((a, b) => a.localeCompare(b));
     if(filter && !names.includes(filter)) names.push(filter);
     const sel = $c("#calFilter"), want = `<option value="">All artists</option>` + names.map(n => `<option value="${esc(n)}"${n === filter ? " selected" : ""}>${esc(n)}</option>`).join("");
     if(sel.dataset.sig !== want){ sel.innerHTML = want; sel.dataset.sig = want; } sel.value = filter;
     paintState(); paintGrid(); paintSide(); paintResults();
     if(openId) paintDetail();
+    $c("#calBody").hidden = trendOn; $c("#calState").hidden = trendOn || $c("#calState").hidden; $c(".cal-head .cal-nav").hidden = trendOn; $c("#calFilter").hidden = trendOn; $c("#calTrend").hidden = !trendOn;
+    $c(".cal-trend-btn").setAttribute("aria-pressed", String(trendOn)); $c(".cal-trend-btn").textContent = trendOn ? "Back to the calendar" : "Trending sounds";
   }
   function paintGrid(){
     const start = gridStart(view), weeks = weeksIn(view), t0 = today(), byDay = new Map();
+    for(const p of planVisible(plans)){ (byDay.get(p.day) || byDay.set(p.day, []).get(p.day)).push({ plan: p }); }
     for(const r of visible(posts)){ const k = dayKey(new Date(r.publish_at)); (byDay.get(k) || byDay.set(k, []).get(k)).push(r); }
     let h = "";
     for(let i = 0; i < weeks * 7; i++){
       const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i), k = dayKey(d), rows = byDay.get(k) || [];
       const cls = ["cal-cell", d.getMonth() !== view.m && "out", +d === +t0 && "today", d < t0 && "past", k === selDay && "sel"].filter(Boolean).join(" ");
-      h += `<div class="${cls}" role="group" aria-label="${esc(shortDay(d))}, ${rows.length} post${rows.length === 1 ? "" : "s"}">
+      h += `<div class="${cls}" role="group" aria-label="${esc(shortDay(d))}, ${rows.length} item${rows.length === 1 ? "" : "s"}">
         <button class="cal-dn" type="button" data-day="${k}"${+d === +t0 ? ` aria-current="date"` : ""}>${d.getDate()}</button>
-        <div class="cal-chips">${rows.slice(0, 3).map(chip).join("")}${rows.length > 3 ? `<button class="cal-more" type="button" data-day="${k}">+${rows.length - 3} more</button>` : ""}</div>
-        ${rows.length ? `<button class="cal-dots" type="button" data-day="${k}" aria-label="Show the ${rows.length} post${rows.length === 1 ? "" : "s"} on ${esc(shortDay(d))}">${rows.slice(0, 4).map(r => `<i class="cal-pl p-${esc(r.platform)} st-${esc(r.status)}"></i>`).join("")}${rows.length > 4 ? `<em>+${rows.length - 4}</em>` : ""}</button>` : ""}
+        <div class="cal-chips">${rows.slice(0, 3).map(r => r.plan ? planChip(r.plan) : chip(r)).join("")}${rows.length > 3 ? `<button class="cal-more" type="button" data-day="${k}">+${rows.length - 3} more</button>` : ""}</div>
+        ${rows.length ? `<button class="cal-dots" type="button" data-day="${k}" aria-label="Show the ${rows.length} item${rows.length === 1 ? "" : "s"} on ${esc(shortDay(d))}">${rows.slice(0, 4).map(r => r.plan ? `<i class="cal-pl p-plan pl-${esc(r.plan.status)}"></i>` : `<i class="cal-pl p-${esc(r.platform)} st-${esc(r.status)}"></i>`).join("")}${rows.length > 4 ? `<em>+${rows.length - 4}</em>` : ""}</button>` : ""}
       </div>`;
     }
     $c("#calGrid").innerHTML = h; $c("#calGrid").style.setProperty("--weeks", weeks);
@@ -171,13 +254,19 @@ window.SLSCalendar = (() => {
   function paintSide(){
     const dayBox = $c("#calDay");
     if(selDay){
-      const [y, m, dd] = selDay.split("-").map(Number), d = new Date(y, m - 1, dd), rows = visible(posts).filter(r => dayKey(new Date(r.publish_at)) === selDay);
+      const [y, m, dd] = selDay.split("-").map(Number), d = new Date(y, m - 1, dd), rows = visible(posts).filter(r => dayKey(new Date(r.publish_at)) === selDay), pl = planVisible(plans).filter(p => p.day === selDay);
       dayBox.hidden = false;
-      dayBox.innerHTML = `<h3>${esc(shortDay(d))}</h3>` + (rows.length ? `<div class="cal-list">${rows.map(r => row(r)).join("")}</div>`
-        : `<p class="cal-hint">${d >= today() ? "Nothing planned for this day. Open a project and choose Schedule when posting to add a post here." : "Nothing was posted on this day."}</p>`);
+      dayBox.innerHTML = `<div class="cal-dayh"><h3>${esc(shortDay(d))}</h3>${planMissing ? "" : `<button class="btn small" type="button" data-act="plan-new">＋ Plan a video</button>`}</div>`
+        + (pl.length ? `<div class="cal-list">${pl.map(p => planRow(p)).join("")}</div>` : "")
+        + (rows.length ? `<div class="cal-list">${rows.map(r => row(r)).join("")}</div>`
+        : pl.length ? "" : `<p class="cal-hint">${d >= today() ? "Nothing planned for this day yet. Plan a video here, or open a project and choose Schedule when posting." : "Nothing was posted on this day."}</p>`)
+        + (planMissing ? planSetup : "");
     } else { dayBox.hidden = true; dayBox.innerHTML = ""; }
     const up = visible(upcoming);
-    $c("#calUp").innerHTML = `<h3>Coming up</h3>` + (up.length ? `<div class="cal-list">${up.map(r => row(r, true)).join("")}</div>` : `<p class="cal-hint">No scheduled posts yet.</p>`);
+    const pn = planVisible(planNext);
+    $c("#calUp").innerHTML = `<h3>Coming up</h3>` + (up.length ? `<div class="cal-list">${up.map(r => row(r, true)).join("")}</div>` : `<p class="cal-hint">No scheduled posts yet.</p>`)
+      + `<div class="cal-dayh cal-planh"><h3>Planned videos</h3>${planMissing ? "" : `<button class="btn small ghost" type="button" data-act="plan-new">＋ Plan</button>`}</div>`
+      + (planMissing ? planSetup : pn.length ? `<div class="cal-list">${pn.map(p => planRow(p, true)).join("")}</div>` : `<p class="cal-hint">No videos planned yet. Pick a day and plan one: what it is, which project, and how far along it is.</p>`);
   }
 
   /* ---------- details ---------- */
@@ -221,7 +310,7 @@ window.SLSCalendar = (() => {
   }
   function openDetail(id){ openId = id; editing = false; paint(); }
   function closeDetail(quiet){
-    const box = $c("#calDetail"); const had = openId; openId = ""; editing = false;
+    const box = $c("#calDetail"); const had = openId; openId = ""; editing = false; planEdit = null;
     box.classList.remove("open"); box.hidden = true; $c("#calScrim").hidden = true; box.innerHTML = "";
     if(had && !quiet){ paintGrid(); paintSide(); const b = root.querySelector(`[data-id="${CSS.escape(had)}"]`); if(b) b.focus({ preventScroll: true }); }
   }
@@ -247,7 +336,11 @@ window.SLSCalendar = (() => {
   root.addEventListener("click", async e => {
     const t = e.target, a = t.closest("[data-act]");
     if(a){
-      const r = known(openId), k = a.dataset.act; if(k === "closed"){ closeDetail(); return; } if(!r || busy) return;
+      const k = a.dataset.act;
+      if(k === "plan-new"){ editPlan({ day: selDay || dayKey(today()), status: "idea" }); return; }
+      if(k === "plan-close"){ closeDetail(); return; }
+      if(k === "plan-del"){ removePlan(a); return; }
+      const r = known(openId); if(k === "closed"){ closeDetail(); return; } if(!r || busy) return;
       if(k === "edit"){ editing = true; $c("#calDetail").dataset.st = ""; paintDetail(); const i = $c("#calAt"); i && i.focus(); }
       else if(k === "keep"){ editing = false; $c("#calDetail").dataset.st = ""; paintDetail(); }
       else if(k === "save"){
@@ -271,7 +364,10 @@ window.SLSCalendar = (() => {
       if(k === "close") close(); else if(k === "prev") go(-1); else if(k === "next") go(1);
       else if(k === "today"){ const n = new Date(); view = { y: n.getFullYear(), m: n.getMonth() }; selDay = dayKey(n); load(); paint(); }
       else if(k === "retry") load();
+      else if(k === "trend"){ trendOn = !trendOn; closeDetail(true); paint(); if(trendOn && window.SLSTrends) SLSTrends.paint($c("#calTrend")); }
       return; }
+    const planEl = t.closest("[data-plan]");
+    if(planEl){ const p = [...plans, ...planNext].find(x => x.id === planEl.dataset.plan); if(p){ selDay = p.day; paintGrid(); paintSide(); editPlan({ ...p }); } return; }
     const chipEl = t.closest("[data-id]");
     if(chipEl){ const r = known(chipEl.dataset.id); if(r){ const d = new Date(r.publish_at); selDay = dayKey(d); } openDetail(chipEl.dataset.id); return; }
     const dayEl = t.closest("[data-day]");
@@ -283,7 +379,7 @@ window.SLSCalendar = (() => {
 
   /* ---------- open / close ---------- */
   function onKey(e){
-    if(e.key === "Escape"){ e.preventDefault(); e.stopImmediatePropagation(); if(openId) closeDetail(); else close(); return; }
+    if(e.key === "Escape"){ e.preventDefault(); e.stopImmediatePropagation(); if(openId || planEdit) closeDetail(); else if(trendOn){ trendOn = false; paint(); } else close(); return; }
     if(e.key !== "Tab") return;
     const f = [...root.querySelectorAll("button,select,input,a[href]")].filter(x => !x.disabled && x.offsetParent !== null && !x.closest("[hidden]"));
     if(!f.length) return; const a = f[0], z = f[f.length - 1];
@@ -294,7 +390,7 @@ window.SLSCalendar = (() => {
   function open(dateISO){
     const d = dateISO ? new Date(dateISO) : new Date(), ok = !isNaN(d), base = ok ? d : new Date();
     opener = document.activeElement; view = { y: base.getFullYear(), m: base.getMonth() }; selDay = ok && dateISO ? dayKey(base) : "";
-    if(!isOpen){ posts = []; upcoming = []; err = ""; loadedOnce = false; filter = ""; }
+    if(!isOpen){ posts = []; upcoming = []; plans = []; planNext = []; err = ""; loadedOnce = false; filter = ""; trendOn = false; }
     closeDetail(true); isOpen = true; root.hidden = false; document.body.classList.add("cal-open");
     document.addEventListener("keydown", onKey, true);
     clearInterval(timer); timer = setInterval(() => { if(isOpen && !document.hidden && !busy) load(true); }, 60000);

@@ -51,17 +51,63 @@ window.SLSSafe = (() => {
   };
   ICON.heart.label = "1.2M"; ICON.comment.label = "4,812"; ICON.share.label = "Share"; ICON.bookmark.label = "88K";
 
+  // the open song, for the caption: "Artist - Title" (the studio's project names)
+  function songBits(){
+    let n = String(S.songName || "").replace(/\.[a-z0-9]{2,4}$/i, "").replace(/\s*\((preview|lyrics?)\)\s*$/i, "").trim();
+    if(!n || n === "Demo track") return { artist: "artist", title: "your song" };
+    const m = n.match(/^(.+?)\s+[-–]\s+(.+)$/); return m ? { artist: m[1].trim(), title: m[2].trim() } : { artist: "artist", title: n };
+  }
+  const fit = (c, t, maxW) => { if(c.measureText(t).width <= maxW) return t; while(t.length > 1 && c.measureText(t + "…").width > maxW) t = t.slice(0, -1); return t + "…"; };
+  /* TikTok, drawn like the app: a soft shadow at the top and the bottom (no hard strips), the top bar with LIVE,
+     Following | For You and search, the side buttons, and a caption with the song's own name and sound */
+  function drawTikTok(c, w, h, u, p){
+    let g = c.createLinearGradient(0, 0, 0, h * 0.2); g.addColorStop(0, "rgba(0,0,0,.45)"); g.addColorStop(1, "rgba(0,0,0,0)"); c.fillStyle = g; c.fillRect(0, 0, w, h * 0.2);
+    g = c.createLinearGradient(0, h * 0.58, 0, h * 0.93); g.addColorStop(0, "rgba(0,0,0,0)"); g.addColorStop(0.55, "rgba(0,0,0,.28)"); g.addColorStop(1, "rgba(0,0,0,.62)"); c.fillStyle = g; c.fillRect(0, h * 0.58, w, h * 0.35);
+    c.save(); c.shadowColor = "rgba(0,0,0,.45)"; c.shadowBlur = 3;
+    // top bar
+    const ty = h * 0.052; c.textBaseline = "middle";
+    c.font = `600 ${3.9 * u}px system-ui, sans-serif`; c.textAlign = "center";
+    const fy = c.measureText("For You").width, fo = c.measureText("Following").width, gap = 5 * u, x0 = w / 2 - (fo + gap + fy) / 2;
+    c.fillStyle = "rgba(255,255,255,.66)"; c.textAlign = "left"; c.fillText("Following", x0, ty);
+    c.fillStyle = "#fff"; c.font = `700 ${3.9 * u}px system-ui, sans-serif`; c.fillText("For You", x0 + fo + gap, ty);
+    c.fillRect(x0 + fo + gap + fy / 2 - 3.2 * u, ty + 3.3 * u, 6.4 * u, 0.55 * u);
+    // LIVE, left; search, right
+    c.lineWidth = Math.max(1, 0.35 * u); c.strokeStyle = "rgba(255,255,255,.92)"; c.font = `800 ${2.5 * u}px system-ui, sans-serif`; c.textAlign = "center";
+    const lw = 8.4 * u, lh = 4 * u, lx = 4.5 * u; c.beginPath(); c.roundRect ? c.roundRect(lx, ty - lh / 2, lw, lh, 1.1 * u) : c.rect(lx, ty - lh / 2, lw, lh); c.stroke(); c.fillStyle = "#fff"; c.fillText("LIVE", lx + lw / 2, ty + 0.1 * u);
+    const sx = w - 7 * u; c.lineWidth = Math.max(1.2, 0.55 * u); c.beginPath(); c.arc(sx - 0.6 * u, ty - 0.6 * u, 1.9 * u, 0, Math.PI * 2); c.stroke(); c.beginPath(); c.moveTo(sx + 0.8 * u, ty + 0.8 * u); c.lineTo(sx + 2.3 * u, ty + 2.3 * u); c.stroke();
+    c.restore();
+    // side buttons
+    const rail = p.bars.find(b => b.rail); if(rail){ const [x, y, bw, bh] = [rail.r[0] * w, rail.r[1] * h, rail.r[2] * w, rail.r[3] * h], n = rail.rail.length, step = bh / n, r = Math.min(bw * 0.28, step * 0.28);
+      rail.rail.forEach((ic, i) => { const cx = x + bw / 2, cy0 = y + step * (i + 0.42); c.save(); c.fillStyle = "rgba(255,255,255,.95)"; c.strokeStyle = c.fillStyle; c.shadowColor = "rgba(0,0,0,.5)"; c.shadowBlur = 4; (ICON[ic] || ICON.more)(c, cx, cy0, r); c.restore();
+        if(ICON[ic] && ICON[ic].label){ c.font = `600 ${2.6 * u}px system-ui, sans-serif`; c.textAlign = "center"; c.textBaseline = "top"; c.fillStyle = "rgba(255,255,255,.9)"; c.fillText(ICON[ic].label, cx, cy0 + r * 1.2); } }); }
+    // caption: the account, a caption and the sound, like a real post of this song
+    const sb = songBits(), handle = "@" + (sb.artist.toLowerCase().normalize("NFKD").replace(/[^\w.]+/g, "") || "artist"), cx0 = 4 * u, maxW = w * 0.8 - cx0;
+    c.save(); c.shadowColor = "rgba(0,0,0,.5)"; c.shadowBlur = 3; c.textAlign = "left"; c.textBaseline = "alphabetic"; c.fillStyle = "#fff";
+    const cy1 = h * 0.815;
+    c.font = `700 ${3.7 * u}px system-ui, sans-serif`; c.fillText(fit(c, handle, maxW), cx0, cy1);
+    c.font = `400 ${3.3 * u}px system-ui, sans-serif`; c.fillText(fit(c, `${sb.title} 🎶 #lyrics #fyp`, maxW - 9 * u), cx0, cy1 + 5 * u);
+    c.fillStyle = "rgba(255,255,255,.8)"; c.font = `600 ${3.3 * u}px system-ui, sans-serif`; c.fillText("more", cx0 + Math.min(c.measureText(fit(c, `${sb.title} 🎶 #lyrics #fyp`, maxW - 9 * u)).width, maxW - 9 * u) + 1.6 * u, cy1 + 5 * u);
+    c.fillStyle = "#fff"; c.font = `500 ${3.2 * u}px system-ui, sans-serif`; c.fillText(fit(c, `♫  ${sb.title} · ${sb.artist === "artist" ? "original sound" : sb.artist}`, maxW), cx0, cy1 + 10.4 * u);
+    c.restore();
+    // bottom bar
+    const nav = p.bars.find(b => b.nav); if(nav){ const ny = nav.r[1] * h, nh = nav.r[3] * h; c.fillStyle = "#000"; c.fillRect(0, ny, w, nh);
+      ["Home", "Friends", "", "Inbox", "Profile"].forEach((l, i) => { const bx = w * (i + 0.5) / 5, by = ny + nh / 2;
+        if(i === 2){ c.fillStyle = "#fff"; c.beginPath(); c.roundRect ? c.roundRect(bx - 4.4 * u, by - 2.6 * u, 8.8 * u, 5.2 * u, 1.4 * u) : c.rect(bx - 4.4 * u, by - 2.6 * u, 8.8 * u, 5.2 * u); c.fill(); c.fillStyle = "#000"; c.font = `700 ${4.2 * u}px system-ui, sans-serif`; c.textAlign = "center"; c.textBaseline = "middle"; c.fillText("+", bx, by + 0.2 * u); }
+        else { c.fillStyle = i === 0 ? "#fff" : "rgba(255,255,255,.62)"; c.font = `${i === 0 ? 700 : 500} ${2.5 * u}px system-ui, sans-serif`; c.textAlign = "center"; c.textBaseline = "middle"; c.fillText(l, bx, by); } }); }
+  }
+
   let last = "";
   function draw(){
     const w = stage.clientWidth, h = stage.clientHeight, k = Math.min(2, window.devicePixelRatio || 1);
-    const key = [mode, w, h, S.P.aspect, S.P.style.x, S.P.style.y, S.P.style.size, document.documentElement.dataset.theme].join("|");
+    const key = [mode, w, h, S.P.aspect, S.P.style.x, S.P.style.y, S.P.style.size, document.documentElement.dataset.theme, S.songName].join("|");
     if(key === last) return; last = key;
     ov.style.width = w + "px"; ov.style.height = h + "px"; ov.width = Math.round(w * k); ov.height = Math.round(h * k);
     const c = ov.getContext("2d"); c.setTransform(k, 0, 0, k, 0, 0); c.clearRect(0, 0, w, h);
     const p = P[mode]; warn.hidden = true;
     if(!p || !p.aspects.includes(aspectKey(S.P.aspect, true))) return;
     const R = ([x, y, ww, hh]) => [x * w, y * h, ww * w, hh * h], u = Math.min(w, h) / 100;
-    for(const b of p.bars){
+    if(mode === "tiktok") drawTikTok(c, w, h, u, p);
+    else for(const b of p.bars){
       const [x, y, bw, bh] = R(b.r);
       // dim the strip the interface covers
       const g = y < h / 2 ? c.createLinearGradient(0, y, 0, y + bh) : c.createLinearGradient(0, y + bh, 0, y);

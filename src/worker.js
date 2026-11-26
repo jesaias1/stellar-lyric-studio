@@ -37,6 +37,7 @@ import { hooksRoute } from "./hooks.js";
 import { loginRoute } from "./login.js";
 import { catalogRoute } from "./catalog.js";
 import { tiktokSoundRoute } from "./tiktok-sound.js";
+import { trendsRoute } from "./trends.js";
 import { cronRoute } from "./schedule.js";
 import { captionRoute } from "./caption.js";
 import { authConfigured, userFrom, bearer } from "./auth.js";
@@ -113,6 +114,8 @@ async function route(request, env, url) {
   if (catalog) return catalog;
   const ttSound = await tiktokSoundRoute(request, env, path, method, { json });
   if (ttSound) return ttSound;
+  const trends = await trendsRoute(request, env, url, path, method, { json });
+  if (trends) return trends;
   const caption = await captionRoute(request, env, path, method, { hasAI: hasAI(env), runModel, json });
   if (caption) return caption;
   const hooks = await hooksRoute(request, env, path, method, { hasAI: hasAI(env), runModel, json });
