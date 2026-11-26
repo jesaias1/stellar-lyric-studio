@@ -41,8 +41,8 @@ button{cursor:pointer}
 .file{position:relative;overflow:hidden}
 .file input{position:absolute;inset:0;opacity:0;cursor:pointer}
 
-/* main 3 columns */
-.main{display:grid;grid-template-columns:clamp(220px,22vw,300px) minmax(0,1fr) clamp(220px,22vw,296px);min-height:0}
+/* main: the editing menu on the left, the preview beside it */
+.main{display:grid;grid-template-columns:clamp(320px,27vw,400px) minmax(0,1fr);min-height:0}
 .side{border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0;background:var(--panel)}
 .rack{border-left:1px solid var(--line);border-right:0}
 .tabs{display:flex;gap:2px;padding:8px 10px 0;border-bottom:1px solid var(--line)}
@@ -488,7 +488,7 @@ body.pn-drag[data-pn-dir="col"]{cursor:col-resize}
 body.pn-drag[data-pn-dir="row"]{cursor:row-resize}
 body.pn-drag canvas,body.pn-drag .viewport{pointer-events:none}
 @media (min-width:761px){
-  html.pn-on body[data-step="design"] .main{grid-template-columns:var(--left-w,clamp(220px,22vw,300px)) minmax(0,1fr) var(--right-w,clamp(220px,22vw,296px))}
+  html.pn-on body[data-step="design"] .main{grid-template-columns:var(--left-w,clamp(320px,27vw,400px)) minmax(0,1fr)}
   html.pn-tl body[data-step="design"][data-tl="open"] .timeline{height:var(--tl-h);overflow-y:auto;overflow-x:hidden;align-content:start}
 }
 
@@ -883,3 +883,47 @@ body.cal-open .toast{z-index:1600}
 .cut-order .seg{flex:1 1 auto}
 .fx-bar{height:4px;margin-top:6px}
 .fx-bar i{display:block;height:100%;width:0;background:var(--tape,#2f5bff);border-radius:2px;transition:width .2s}
+
+/* the artist page: Apple Music search as a real search bar at the top */
+.ar-findbar{display:flex;align-items:center;gap:9px;margin:0 0 16px;padding:10px 12px;border:1px solid var(--line-2);border-radius:10px;background:var(--ink);color:var(--muted);cursor:text}
+.ar-findbar:hover,.ar-findbar:focus-within{border-color:var(--muted)}
+.ar-findbar input{flex:1;min-width:0;border:0!important;background:none!important;padding:0!important;font:inherit;font-size:14px;color:var(--text);outline:none;box-shadow:none!important}
+.ar-findbar input::placeholder{color:var(--muted);opacity:.85}
+
+/* feedback (src/feedback.js): the red button on the landing page, and the form */
+.fb-btn{display:inline-flex;align-items:center;gap:8px;margin-top:18px;padding:9px 18px;border:0;border-radius:999px;background:#e5252d;color:#fff;font:600 14px/1 var(--ui,inherit);cursor:pointer;box-shadow:0 6px 22px rgba(229,37,45,.35);transition:transform .12s,background .15s}
+.fb-btn:hover,.fb-btn:focus-visible{background:#ff3540;transform:translateY(-1px)}
+.fb-modal .dialog{max-width:560px}
+.fb-modal h2{margin:0 0 4px}
+.fb-intro{margin:0 0 16px;color:var(--muted);font-size:14px;line-height:1.45}
+.fb-q{display:grid;gap:8px;margin:0 0 16px;border:0;padding:0}
+.fb-q legend,.fb-q > span{font-weight:600;font-size:14px;padding:0;margin-bottom:2px}
+.fb-scale{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px}
+.fb-scale button{padding:9px 0;border:1px solid var(--line-2);border-radius:9px;background:var(--raise);color:var(--text);font-weight:600;font-size:14px;cursor:pointer}
+.fb-scale button[aria-pressed="true"]{background:#e5252d;border-color:#e5252d;color:#fff}
+.fb-ends{display:flex;justify-content:space-between;gap:12px;font-size:12px;color:var(--muted)}
+.fb-q textarea{width:100%;box-sizing:border-box;min-height:58px;resize:vertical}
+.fb-opt{font-weight:400;color:var(--muted);font-size:12.5px}
+.fb-acts{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:4px}
+.fb-acts .btn.primary{background:#e5252d;border-color:#e5252d}
+.fb-msg{font-size:13px;color:var(--muted)}
+.fb-msg.bad{color:#ff6b6b}
+.fb-done{text-align:center;padding:18px 0 6px}
+.fb-done b{display:block;font-size:20px;margin-bottom:6px}
+/* after an export: the same invitation, in red, under the finished video */
+.fb-after{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px;padding:12px 14px;border-radius:12px;background:rgba(229,37,45,.12);border:1px solid rgba(229,37,45,.55)}
+.fb-after span{font-size:13.5px;line-height:1.35}
+.fb-after .btn{background:#e5252d;border-color:#e5252d;color:#fff;flex:none}
+
+/* the editing menu (26 Nov, Ana's CapCut layout): one panel on the left with icon tabs, labels underneath:
+   Lyrics, Clips, Transitions, Effects, Templates, Text. The right-hand column is gone; the preview gets its room. */
+.main > .side{container-type:inline-size}
+.tabs.ctabs{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:0;padding:6px 4px 0}
+.tabs .ctab{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:8px 2px 8px;min-width:0;font-size:11px;font-weight:600;line-height:1.1;border-radius:8px 8px 0 0}
+.ctab svg{flex:none;opacity:.8}
+.ctab span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ctab[aria-selected="true"] svg{opacity:1}
+.ctab:hover{color:var(--text)}
+@container (max-width:372px){ .tabs .ctab{font-size:10px;letter-spacing:-.01em;padding-inline:0} }
+.pane-part{display:flex;flex-direction:column;gap:14px}
+.pane-part + .pane-part{margin-top:4px;padding-top:14px;border-top:1px solid var(--line)}

@@ -1,15 +1,15 @@
-/* Resizable editor panels (desktop only): left sidebar | stage | right rack, and stage | timeline.
+/* Resizable editor panels (desktop only): left menu | stage (and a right rack, if the page has one), and stage | timeline.
    Sizes live in CSS vars --left-w, --right-w, --tl-h on <html>; unset means the stylesheet default. */
 (function(){
   const KEY = "sls-panels", ROOT = document.documentElement, B = document.body;
   const MQ = window.matchMedia("(max-width:1050px) and (pointer:coarse), (max-width:760px)");
-  const MIN_SIDE = 220, MIN_STAGE_W = 280, MIN_STAGE_H = 220, MIN_TL = 140, STEP = 16;
+  const MIN_SIDE = 320, MIN_STAGE_W = 280, MIN_STAGE_H = 220, MIN_TL = 140, STEP = 16;
   const $ = s => document.querySelector(s);
   const main = $(".main"), side = $(".main > .side:not(.rack)"), rack = $(".main > .rack"), tline = $(".timeline");
-  if(!main || !side || !rack || !tline) return;
+  if(!main || !side || !tline) return;
   let saved = {}; try { saved = JSON.parse(localStorage.getItem(KEY)) || {}; } catch(e){}
   const val = {}; // user-chosen sizes (px), only the keys that were set
-  for(const k of ["l","r","t"]) if(Number.isFinite(saved[k])) val[k] = saved[k];
+  for(const k of rack ? ["l","r","t"] : ["l","t"]) if(Number.isFinite(saved[k])) val[k] = saved[k];
   const persist = () => { try { localStorage.setItem(KEY, JSON.stringify(val)); } catch(e){} };
   const active = () => !MQ.matches && B.dataset.step === "design" && !B.classList.contains("stage-full");
   const tlOpen = () => B.dataset.tl === "open";
@@ -19,13 +19,13 @@
 
   const W = () => main.getBoundingClientRect().width;
   const bounds = {
-    l: () => [MIN_SIDE, Math.max(MIN_SIDE, Math.min(innerWidth * .45, W() - rack.getBoundingClientRect().width - MIN_STAGE_W))],
+    l: () => [MIN_SIDE, Math.max(MIN_SIDE, Math.min(innerWidth * .45, W() - (rack ? rack.getBoundingClientRect().width : 0) - MIN_STAGE_W))],
     r: () => [MIN_SIDE, Math.max(MIN_SIDE, Math.min(innerWidth * .45, W() - side.getBoundingClientRect().width - MIN_STAGE_W))],
     t: () => { const room = tline.getBoundingClientRect().height + main.getBoundingClientRect().height - MIN_STAGE_H;
       const cs = getComputedStyle(tline), nat = [...tline.children].reduce((n, c) => n + c.getBoundingClientRect().height, 0) + parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom) + parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth);
       return [MIN_TL, Math.max(MIN_TL, Math.min(innerHeight * .7, room, Math.ceil(nat)))]; }
   };
-  const cur = { l: () => side.getBoundingClientRect().width, r: () => rack.getBoundingClientRect().width, t: () => tline.getBoundingClientRect().height };
+  const cur = { l: () => side.getBoundingClientRect().width, r: () => rack ? rack.getBoundingClientRect().width : 0, t: () => tline.getBoundingClientRect().height };
   const prop = { l: "--left-w", r: "--right-w", t: "--tl-h" };
   const clampTo = (k, v) => { const [a, b] = bounds[k](); return Math.round(Math.min(b, Math.max(a, v))); };
   function apply(k, v){ // v null = default
@@ -43,11 +43,11 @@
   }
   function place(){
     const on = active();
-    hL.hidden = hR.hidden = !on; hT.hidden = !(on && tlOpen());
+    hL.hidden = !on; hR.hidden = !(on && rack); hT.hidden = !(on && tlOpen());
     if(!on) return;
-    const m = main.getBoundingClientRect(), l = side.getBoundingClientRect(), r = rack.getBoundingClientRect(), t = tline.getBoundingClientRect();
+    const m = main.getBoundingClientRect(), l = side.getBoundingClientRect(), r = rack ? rack.getBoundingClientRect() : null, t = tline.getBoundingClientRect();
     const v = (h, x) => { h.style.left = x - 4 + "px"; h.style.top = m.top + "px"; h.style.height = m.height + "px"; };
-    v(hL, l.right); v(hR, r.left);
+    v(hL, l.right); if(r) v(hR, r.left);
     if(!hT.hidden){ hT.style.top = t.top - 4 + "px"; hT.style.left = "0px"; hT.style.width = innerWidth + "px"; }
     for(const [h, k] of [[hL,"l"],[hR,"r"],[hT,"t"]]){ if(h.hidden) continue; const [a, b] = bounds[k](); h.setAttribute("aria-valuemin", Math.round(a)); h.setAttribute("aria-valuemax", Math.round(b)); h.setAttribute("aria-valuenow", Math.round(cur[k]())); }
   }

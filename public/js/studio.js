@@ -64,7 +64,7 @@ function defaultProject(){
     bpm:96, offset:0, lyrics:"", words:[],
     style:{preset:"stack", size:1, x:0.5, y:0.5, scrim:0.25, color:"#ffffff", case:"auto", fonts:{}, his:{}, vars:{}},
     hook:{on:false, text:"New single out now", dur:3, start:0, look:"pill", font:"sans", size:1, x:0.5, y:0.09, color:"#ffffff", bg:"#0a090e", anim:"none"},
-    cuts:{every:2, seed:7, mode:"beat", count:8, transition:"none"}, aspect:"9:16",
+    cuts:{every:2, seed:7, mode:"beat", count:8, transition:"none", motion:"still"}, aspect:"9:16",
     tTracks:[{}], aux:[], mainVol:1, mainMute:false
   };
 }
@@ -747,10 +747,10 @@ function transitionInto(i){
 /* How a photo or video sits in the frame. Per cut (slot.fx) or for all clips (cuts.fx):
    fit "fill" (crop to fill the frame) or "fit" (show the whole picture on a blurred copy of itself),
    z zoom (1 = as it fits, up to 3), x / y position (-1 to 1: from one edge of the picture to the other).
-   Photos also move (cuts.motion "zoom": the slow zoom and pan; "still": no movement at all). */
+   Photos can also move (cuts.motion "zoom": the slow zoom and pan, "zoomin", "zoomout"; "still", the default: no movement). */
 const FX0 = { fit: "fill", z: 1, x: 0, y: 0 };
 const fxOf = i => ({ ...FX0, ...(S.P.cuts.fx || {}), ...(slotOf(i).fx || {}) });
-const motionOf = i => slotOf(i).mo || S.P.cuts.motion || "zoom";
+const motionOf = i => slotOf(i).mo || S.P.cuts.motion || "still";
 let _blurC = null;
 /* Big photos stay sharp: a single drawImage that shrinks a picture a lot skips pixels and the video shimmers or looks
    soft. stepDown halves a picture step by step to the size wanted; sharpSrc keeps one such smaller copy per photo,
@@ -1333,7 +1333,7 @@ function moveLimits(ws){
 }
 function selectWord(i, add){ const w = S.P.words[i]; if(!w) return; if(add && selWords()){ const st = selWords(); st.has(w) ? st.delete(w) : st.add(w); if(!st.size) return selectNone(); } else S.sel = {type:"words", set:new Set([w])}; tlDirty = true; showTab("lyrics"); syncWordCard(); }
 function selectAllWords(){ if(!S.P.words.length) return; S.sel = {type:"words", set:new Set(S.P.words)}; tlDirty = true; showTab("lyrics"); syncWordCard(); }
-function selectSeg(i){ S.sel = {type:"seg", i}; tlDirty = true; if(!sheetOpen) showTab("cuts"); syncSegCard(); }
+function selectSeg(i){ S.sel = {type:"seg", i}; tlDirty = true; if(!sheetOpen){ showTab("clips"); const c = $("#segCard"); if(c) setTimeout(() => c.scrollIntoView({ block: "nearest" }), 30); } syncSegCard(); }
 function selectNone(){ setTimeout(syncTextEditor, 0); S.sel = null; tlDirty = true; syncWordCard(); syncSegCard(); }
 function syncWordCard(){
   const st = selWords(); [...(st||[])].forEach(w => { if(!S.P.words.includes(w)) st.delete(w); });
@@ -1411,7 +1411,7 @@ function syncCutUI(){ const m = S.P.cuts.mode;
   $$("#cutOrder button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === (S.P.cuts.order || "shuffle"))));
   $$("#cutTrans button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === (S.P.cuts.transition || "none"))));
   const fxA = {...FX0, ...(S.P.cuts.fx || {})};
-  $$("#cutMotion button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === (S.P.cuts.motion || "zoom"))));
+  $$("#cutMotion button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === (S.P.cuts.motion || "still"))));
   $$("#cutFit button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === fxA.fit)));
   if(document.activeElement !== $("#cutZoom")){ $("#cutZoom").value = Math.round(fxA.z * 100); $("#cutZoomVal").textContent = Math.round(fxA.z * 100) + "%"; }
   $("#xfField").hidden = (S.P.cuts.transition || "none") === "none" && !(S.P.cuts.slots || []).some(sl => sl && sl.tr && sl.tr !== "none"); $("#xfDur").value = S.P.cuts.xf ?? 0.35; $("#xfDurVal").textContent = (+(S.P.cuts.xf ?? 0.35)).toFixed(2) + "s";
@@ -1467,6 +1467,8 @@ function syncUndoUI(){ const u = $("#undoBtn"), r = $("#redoBtn"); if(u) u.disab
 function applyProject(p, keepSong){
   const base = defaultProject();
   S.P = {...base, ...p, style:{...base.style, ...(p.style||{})}, hook:{...base.hook, ...(p.hook||{})}, cuts:{...base.cuts, ...(p.cuts||{})}, section:{...base.section, ...(p.section||{})}};
+  // photos stand still unless you pick a movement (since 26 Nov); projects saved before that keep the slow zoom they had
+  if(p.cuts && !p.cuts.motion) S.P.cuts.motion = "zoom";
   S.P.words = (p.words || []).map(w => { const o = {w:String(w.w), l:+w.l||0, t:+w.t||0, d:+w.d||0.3}; if(w.u) o.u = 1; if(w.g) o.g = 1; if(w.alt) o.alt = String(w.alt); return o; });
   if(S.audio){ const dur = S.audio.duration; S.P.section.b = Math.min(S.P.section.b, dur); S.P.section.a = clamp(S.P.section.a, 0, Math.max(0, S.P.section.b - 1)); }
   if(!aspectOK(S.P.aspect)) S.P.aspect = "9:16";
@@ -1504,7 +1506,8 @@ const SHEETS = {
   style: ["Templates", () => [$('[data-rpane="looks"]')]],
   font: ["Lyric text", () => [$('[data-rpane="type"]')]],
   clips: ["Clips", () => [$('[data-pane="clips"]')]],
-  cuts: ["Cuts", () => [$('[data-pane="cuts"]'), $('[data-pane="framing"]')]],
+  cuts: ["Transitions", () => [$('[data-pane="cuts"]')]],
+  effects: ["Effects", () => [$('[data-pane="framing"]')]],
   hook: ["Hook", () => [$("#hookSeg").closest(".card")]],
   text: ["Text boxes", () => [$("#textCard")]],
   audio: ["Audio", () => [$("#vocalMode"), $(".tlbar")]],
@@ -1538,22 +1541,22 @@ $("#msheetPlay").onclick = () => $("#playBtn").click();   // the sheet covers th
     if(moved > 70){ if(sh.classList.contains("tall")) sh.classList.remove("tall"); else closeSheet(); } else if(moved < -40) sh.classList.add("tall"); });
   addEventListener("pointercancel", () => { y0 = null; sh.style.transform = ""; }); }
 window.matchMedia("(max-width:700px) and (pointer:coarse)").addEventListener("change", ev => { if(!ev.matches) closeSheet(); sizeTimeline(); fitStage(); });
-function showTab(name){ document.body.dataset.mtab = name; $$(".tabs [data-tab]").forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === name)));
-  if(name === "style"){ renderPresetThumbs(); return; } $$("[data-pane]").forEach(p => p.hidden = p.dataset.pane !== name);
+/* the editing menu (left, CapCut style): Lyrics, Clips, Transitions (data-pane "cuts"), Effects ("framing"),
+   Templates ("looks"), Text ("text": how the lyrics look, then the hook and text boxes) */
+function showTab(name){ if(name === "style") name = "looks";
+  document.body.dataset.mtab = name; $$(".tabs [data-tab]").forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === name)));
+  $$(".side > [data-pane]").forEach(p => p.hidden = p.dataset.pane !== name);
+  if(name === "looks") renderPresetThumbs();
   if(name === "clips" || name === "cuts") openTimelineOnce(); }
 // the clip timings are edited on the timeline, so it opens (once per visit) when you go to Clips
 let tlOpenedForClips = false;
 function openTimelineOnce(){ if(tlOpenedForClips || isPhone()) return; tlOpenedForClips = true; if(document.body.dataset.tl !== "open" && $("#tlToggle")) $("#tlToggle").click(); }
-/* the right-hand panel: Templates (the looks), Text (font, size, colour, position), Text boxes (hook and your own text) */
+/* what used to be the right-hand panel lives in the menu now: Templates, and Text (with the text boxes under it) */
 function showRTab(name){
-  if(!$(`[data-rpane="${name}"]`)) name = "looks";
-  $$(".rtabs [data-rtab]").forEach(b => b.setAttribute("aria-selected", String(b.dataset.rtab === name)));
-  $$("[data-rpane]").forEach(p => p.hidden = p.dataset.rpane !== name);
-  if(name === "looks") renderPresetThumbs();
-  try { localStorage.setItem("sls-rtab", name); } catch {}
+  if(isPhone()) return;
+  showTab(name === "looks" ? "looks" : "text");
+  if(name === "titles"){ const t = $('[data-rpane="titles"]'); if(t) setTimeout(() => t.scrollIntoView({ block: "start", behavior: "smooth" }), 30); }
 }
-$$(".rtabs [data-rtab]").forEach(b => b.onclick = () => showRTab(b.dataset.rtab));
-try { const t = localStorage.getItem("sls-rtab"); if(t) setTimeout(() => showRTab(t), 0); } catch {}
 
 const bindStyle = (id, key, num) => $(id).addEventListener("input", e => { S.P.style[key] = num ? +e.target.value : e.target.value; saveDraft(); });
 bindStyle("#sTrans", "trans");
@@ -2151,7 +2154,7 @@ const BUILTINS = [
       lyrics: d.lines.map(l => l.text).join("\n"), words: d.lines.flatMap(l => l.words.map(w => ({...w}))),
       style:{preset:"line", size:1, x:0.5, y:0.5, scrim:0.08, color:"#f3ecb0", case:"as", fonts:{}, his:{}, vars:{}},
       hook:{on:true, text:d.title[0], start:d.title[1], dur:Math.max(0.5, d.len - d.title[1]), look:"caption", font:"sans", size:3.4, x:0.5, y:0.5, color:"#f3ecb0", bg:"#000000", anim:"fade"},
-      cuts:{mode:"manual", points:[2.37, 14.41, 17.4, 23.2], every:2, seed:7, count:8, transition:"none"}, aspect:"16:9" }; } }
+      cuts:{mode:"manual", points:[2.37, 14.41, 17.4, 23.2], every:2, seed:7, count:8, transition:"none", motion:"still"}, aspect:"16:9" }; } }
 ];
 let pendingBuiltin = null;
 function shiftProject(p, dt){ p.section = {a:+(p.section.a+dt).toFixed(3), b:+(p.section.b+dt).toFixed(3)}; p.offset = +(p.offset+dt).toFixed(3); p.words.forEach(w => w.t = +(w.t+dt).toFixed(3)); if(p.cuts.points) p.cuts.points = p.cuts.points.map(x => +(x+dt).toFixed(3)); return p; }

@@ -31,10 +31,12 @@
       catch(err){ if(my !== token) return; body.innerHTML = fail((err && err.message) || "Apple Music didn't answer. Try again.", true); return; }
       if(my !== token) return;
     }
-    body.innerHTML = artists.length
+    const bar = `<label class="ar-findbar"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg><input type="search" id="arTop" placeholder="Search Apple Music: any song or artist" aria-label="Search Apple Music" autocomplete="off" spellcheck="false"></label>`;
+    body.innerHTML = bar + (artists.length
       ? [["", "Stellar Music catalog"], ["ai", "AI-assisted artists"]].map(([g, label]) => { const list = artists.filter(a => (a.group || "") === g); return list.length ? `<div class="ar-group">${label}</div><div class="ar-grid">${list.map(a => `<button class="ar-card" type="button" data-id="${esc(a.id)}">${photo(a, "big")}<span class="ar-name">${esc(a.name)}</span></button>`).join("")}</div>` : ""; }).join("")
-      : `<div class="ar-state"><p>No artists yet.</p></div>`;
-    body.insertAdjacentHTML("beforeend", `<div class="ar-more"><button class="ar-find" type="button" data-ar="find"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg>Another artist? Search Apple Music</button></div>`);
+      : `<div class="ar-state"><p>No artists yet.</p></div>`);
+    // clicking (or tabbing into) the bar opens the Apple Music search, ready to type
+    const top = $("#arTop"); if(top){ top.onfocus = () => { lastQ = ""; showSearch(); }; }
     const f = body.querySelector(".ar-card"); if(f && isOpen) f.focus({ preventScroll: true });
   }
 
@@ -72,7 +74,8 @@
     const inp = $("#arFind");
     inp.oninput = () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => findSongs(inp.value), 350); };
     inp.onkeydown = e => { if(e.key === "Enter"){ e.preventDefault(); clearTimeout(searchTimer); findSongs(inp.value); } };
-    if(lastQ) findSongs(lastQ); else setTimeout(() => isOpen && inp.focus({ preventScroll: true }), 60);
+    if(lastQ) findSongs(lastQ);
+    setTimeout(() => { if(!isOpen) return; inp.focus({ preventScroll: true }); const n = inp.value.length; try { inp.setSelectionRange(n, n); } catch {} }, 40);
   }
   async function findSongs(q){
     q = q.trim(); lastQ = q; const my = ++token, none = $("#arNone");

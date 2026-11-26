@@ -27,6 +27,7 @@
  *   POST   /api/photos/rank       ranks a moodboard's images against the song   }
  *   POST   /api/moodboard/pinterest  a public Pinterest board's latest pins     }
  *   POST   /api/pinterest/...     your own Pinterest: connect, your boards, a board's pins } see src/pinterest.js
+ *   POST   /api/feedback          the feedback form, into the Google Sheet                } see src/feedback.js
  *   POST   /api/publish/...       link YouTube, Instagram, TikTok accounts and post to them } see src/publish.js
  *   GET    /api/oauth/:platform   where a login comes back (no passcode, signed state)    }
  *
@@ -39,6 +40,7 @@ import { loginRoute } from "./login.js";
 import { catalogRoute } from "./catalog.js";
 import { tiktokSoundRoute } from "./tiktok-sound.js";
 import { tiktokVideoRoute } from "./tiktok-video.js";
+import { feedbackRoute, feedbackReady } from "./feedback.js";
 import { trendsRoute } from "./trends.js";
 import { cronRoute } from "./schedule.js";
 import { captionRoute } from "./caption.js";
@@ -74,7 +76,7 @@ async function route(request, env, url) {
     // the login settings are public on purpose: the browser needs them to show the login, and the key is the
     // publishable one (all data is protected by Supabase's row-level security)
     const auth = authConfigured(env) ? { url: String(env.SUPABASE_URL).replace(/\/+$/, ""), key: env.SUPABASE_KEY } : null;
-    return json({ ok: true, ai: hasAI(env), locked: !!(auth || env.SLS_PASSCODE), auth, templates: !!env.TEMPLATES, ...mediaHealth(env), ...photosHealth(env), ...publishHealth(env) });
+    return json({ ok: true, ai: hasAI(env), locked: !!(auth || env.SLS_PASSCODE), auth, templates: !!env.TEMPLATES, ...mediaHealth(env), ...photosHealth(env), ...publishHealth(env), feedback: feedbackReady(env) });
   }
 
   // Logins coming back from YouTube, Instagram and TikTok, and the video Instagram fetches: these come from
@@ -121,6 +123,8 @@ async function route(request, env, url) {
   if (ttSound) return ttSound;
   const ttVideo = await tiktokVideoRoute(request, env, url, path, method, { json });   // a TikTok video as a background clip
   if (ttVideo) return ttVideo;
+  const fb = await feedbackRoute(request, env, path, method, { json });   // the demo round's feedback, into Ana's Sheet
+  if (fb) return fb;
   const trends = await trendsRoute(request, env, url, path, method, { json });
   if (trends) return trends;
   const caption = await captionRoute(request, env, path, method, { hasAI: hasAI(env), runModel, json });

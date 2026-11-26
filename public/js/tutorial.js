@@ -33,7 +33,7 @@
     if(opener && opener.focus) opener.focus({ preventScroll: true });
   }
 
-  $t("#tutBtn").onclick = open;
+  const btn = $t("#tutBtn"); if(btn) btn.onclick = open;
   const nav = $t("#navTutorial"); if(nav) nav.onclick = e => { e.preventDefault(); open(); };
   document.addEventListener("click", e => { const b = e.target.closest && e.target.closest("[data-tut-open]"); if(b){ e.preventDefault(); open(); } });
   $t("#tutClose").onclick = close;

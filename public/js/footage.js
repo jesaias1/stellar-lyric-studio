@@ -40,6 +40,9 @@ window.SLSFootage = (() => {
 
   let health = null;
   const getHealth = async () => { if(health) return health; try { health = await api.health(); } catch { health = {}; } return health; };
+  // AI backgrounds (Higgsfield) stay hidden until the site has its API key; everything behind the tab stays in place
+  const aiTab = panel.querySelector('.fx-tabs [data-fx="ai"]'); aiTab.hidden = true;
+  getHealth().then(h => { aiTab.hidden = h.bg !== true; });
   $$(".fx-tabs button").forEach(b => b.onclick = () => { $$(".fx-tabs button").forEach(x => x.setAttribute("aria-selected", String(x === b))); $$(".fx-body").forEach(p => p.hidden = p.dataset.fxp !== b.dataset.fx); if(b.dataset.fx === "ai") paintAI(); if(b.dataset.fx === "stock") paintVibe(true); });
   const orient = () => frameKind();   // portrait, square or landscape, from the frame (your own size too)
   const fmtDur = s => s ? `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}` : "";
@@ -47,18 +50,23 @@ window.SLSFootage = (() => {
 
   /* ---------- TikTok videos ---------- */
   const TT_LINK = /https:\/\/((www|m|vm|vt)\.)?tiktok\.com\/[^\s"'<>]+/i;
+  // TikTok keeps its 1080p mostly as H.265: asked for only when this browser can both play it and decode it for the export
+  const hevcOK = (async () => { try {
+    if(!document.createElement("video").canPlayType('video/mp4; codecs="hvc1.1.6.L123.B0"')) return false;
+    return !!(window.VideoDecoder && (await VideoDecoder.isConfigSupported({ codec: "hvc1.1.6.L123.B0", codedWidth: 1080, codedHeight: 1920 })).supported);
+  } catch { return false; } })();
   $("#ttvForm").onsubmit = async e => {
     e.preventDefault(); const m = TT_LINK.exec($("#ttvUrl").value || ""), msg = $("#ttvMsg"), bar = $("#ttvBar"), go = e.target.querySelector("button");
     if(!m){ msg.textContent = "Paste a link to a TikTok video (in TikTok: Share, then Copy link)."; return; }
     if(go.disabled || !(await SLSApp.ensurePass())) return;
     go.disabled = true; msg.textContent = "Getting the video…"; bar.hidden = false; bar.firstElementChild.style.width = "4%";
     try {
-      const d = await api.api("/api/tiktok/video", { method: "POST", body: { url: m[0] }, timeout: 45000 });
+      const d = await api.api("/api/tiktok/video", { method: "POST", body: { url: m[0], hevc: await hevcOK }, timeout: 45000 });
       const blob = await api.blob(d.file, { onProgress: p => bar.firstElementChild.style.width = (4 + p * 96).toFixed(0) + "%" });
       const who = d.author ? "@" + d.author : "TikTok";
       const ids = await addFootage([new File([blob], "tiktok.mp4", { type: "video/mp4" })], [{ name: who, kind: "video", credit: `${who} on TikTok`, src: { kind: "tiktok", page: d.link, author: d.author, title: d.title } }], { quiet: true });
       if(!ids.length) throw new Error("The video couldn't be read. Try another one.");
-      msg.textContent = `Added ${who}. It plays muted; tap the speaker on the clip to hear it.`; $("#ttvUrl").value = "";
+      msg.textContent = `Added ${who}${d.w && d.h ? ` (${d.w}×${d.h})` : ""}. It plays muted; tap the speaker on the clip to hear it.`; $("#ttvUrl").value = "";
     } catch(err){ msg.textContent = errText(err); }
     finally { go.disabled = false; bar.hidden = true; }
   };

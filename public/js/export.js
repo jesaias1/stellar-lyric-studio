@@ -61,6 +61,7 @@ window.SLSExport = (() => {
       <div class="hint" id="exNote"></div>
       <div class="ex-files" id="exFiles" hidden></div>
       <div class="row"><button class="btn primary" id="exSave">Save video</button><button class="btn" id="exAgain">Export another version</button><button class="btn ghost" id="exDone2">Close</button></div>
+      <div class="fb-after" id="exFb" hidden><span><b>How did it go?</b> Two minutes of feedback helps the team a lot.</span><button class="btn small" type="button" data-fb-open="export">Give feedback</button></div>
     </div>
   </div>`;
 
@@ -265,6 +266,7 @@ window.SLSExport = (() => {
     if(ok){
       const url = URL.createObjectURL(result.blob), v = $("#exVideo"); if(v.dataset.url) URL.revokeObjectURL(v.dataset.url); v.dataset.url = url; v.src = url;
       $("#exRun").hidden = true; $("#exDone").hidden = false;
+      dispatchEvent(new Event("sls-exported"));   // js/feedback.js asks how it went
       const secs = ((performance.now() - t0) / 1000).toFixed(0);
       $("#exNote").textContent = `${(result.blob.size / 1048576).toFixed(1)} MB ${result.f.label} · ${result.w}×${result.h} · ${result.fps} fps · made in ${secs} s.` + (result.f.id === "mov" || result.f.id === "mkv" ? " The preview may not play in the browser; the file opens in editing apps." : "")
         + (err && !err.cancelled ? " One of the extra versions failed: " + ((err && err.message) || "unknown error") + "." : err && err.cancelled && extras.length < vers.length ? " Stopped before all the extra versions were made." : "");
@@ -300,7 +302,7 @@ window.SLSExport = (() => {
     rec.ondataavailable = e => { if(e.data.size) chunks.push(e.data); };
     rec.onstop = () => { vstream.getTracks().forEach(t => t.stop()); const blob = new Blob(chunks, { type: mime.split(";")[0] });
       result = { blob, f: { label: exExt.toUpperCase(), ext: exExt, id: exExt }, w: stage.width, h: stage.height, fps: 30 };
-      const v = $("#exVideo"); v.src = URL.createObjectURL(blob); $("#exRun").hidden = true; $("#exDone").hidden = false; $("#exNote").textContent = `${(blob.size / 1048576).toFixed(1)} MB ${exExt.toUpperCase()}, recorded in real time.`; };
+      const v = $("#exVideo"); v.src = URL.createObjectURL(blob); $("#exRun").hidden = true; $("#exDone").hidden = false; dispatchEvent(new Event("sls-exported")); $("#exNote").textContent = `${(blob.size / 1048576).toFixed(1)} MB ${exExt.toUpperCase()}, recorded in real time.`; };
     S.t = S.P.section.a; S.exporting = { rec }; S.review = false; renderFrame(S.t); rec.start(250); play({ dest });
   }
   /* the last finished export, for posting it (js/publish.js) */

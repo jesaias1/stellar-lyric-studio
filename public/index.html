@@ -3,7 +3,7 @@
 <!-- the editor can switch between light and dark (js/app.js); the blue start screen looks the same in both -->
 <head>
 <meta charset="utf-8">
-<meta name="sls-build" content="202611261657">
+<meta name="sls-build" content="202611261718">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Stellar Lyric Studio</title>
 <meta name="description" content="Turn a song into a lyric video for social media. Upload the track and the lyrics write and time themselves.">
@@ -68,7 +68,7 @@
     <div class="home-copy">
       <h1>Your song in. Lyric video out.</h1>
       <p>Drop a track and SLS times every word to the music. Check the lyrics, pick a look, and export a video ready for Instagram, TikTok and Shorts.</p>
-      <button class="tut-btn" id="tutBtn" type="button" aria-haspopup="dialog"><span class="tut-play" aria-hidden="true"><svg viewBox="0 0 12 12" width="10" height="10"><path d="M3 1.6v8.8L10.2 6z" fill="currentColor"/></svg></span>Watch how it works<i>1 min</i></button>
+      <button class="fb-btn" id="fbBtn" type="button" aria-haspopup="dialog"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg>Feedback</button>
     </div>
 
     <!-- state 1: waiting for a song (and, if you have them, the lyrics) -->
@@ -231,12 +231,13 @@
 
     <!-- LEFT: lyrics / clips / templates -->
     <aside class="side">
-      <div class="tabs" role="tablist">
-        <button class="tab" role="tab" aria-selected="true" data-tab="lyrics">Lyrics</button>
-        <button class="tab" role="tab" aria-selected="false" data-tab="clips">Clips</button>
-        <button class="tab" role="tab" aria-selected="false" data-tab="cuts">Cuts</button>
-        <button class="tab" role="tab" aria-selected="false" data-tab="framing">Framing</button>
-        <button class="tab mobile-only" role="tab" aria-selected="false" data-tab="style">Look</button>
+      <div class="tabs ctabs" role="tablist" aria-label="Edit">
+        <button class="tab ctab" role="tab" aria-selected="true" data-tab="lyrics"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h10M4 18h13"/></svg><span>Lyrics</span></button>
+        <button class="tab ctab" role="tab" aria-selected="false" data-tab="clips"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m10 9 5 3-5 3z"/></svg><span>Clips</span></button>
+        <button class="tab ctab" role="tab" aria-selected="false" data-tab="cuts"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="7" height="12" rx="1.5"/><rect x="14" y="6" width="7" height="12" rx="1.5"/><path d="M10 12h4"/></svg><span>Transitions</span></button>
+        <button class="tab ctab" role="tab" aria-selected="false" data-tab="framing"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 1.8 4.7L18.5 9l-4.7 1.8L12 15.5l-1.8-4.7L5.5 9l4.7-1.3z"/><path d="M18 15l.8 2.2L21 18l-2.2.8L18 21l-.8-2.2L15 18l2.2-.8z"/></svg><span>Effects</span></button>
+        <button class="tab ctab" role="tab" aria-selected="false" data-tab="looks"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/></svg><span>Templates</span></button>
+        <button class="tab ctab" role="tab" aria-selected="false" data-tab="text"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 6V4h14v2"/><path d="M12 4v16"/><path d="M9 20h6"/></svg><span>Text</span></button>
       </div>
 
       <section class="pane" data-pane="lyrics">
@@ -301,6 +302,35 @@
 
       <!-- Clips: what's in the video, and where more comes from (js/footage.js fills #fxSlot) -->
       <section class="pane" data-pane="clips" hidden>
+        <div class="card" id="segCard" hidden>
+          <div class="label" id="segLabel">Cut</div>
+          <select id="segClip" aria-label="Clip for this cut"></select>
+          <div class="field" id="segVid" hidden>
+            <span class="row" style="justify-content:space-between"><span class="label">Part of the video</span><span class="hint" id="segStartVal"></span></span>
+            <input type="range" id="segStart" min="0" max="10" step="0.05">
+          </div>
+          <div class="field">
+            <span class="row" style="justify-content:space-between"><span class="label">Speed</span><span class="hint" id="segSpeedVal">1×</span></span>
+            <input type="range" id="segSpeed" min="0.25" max="4" step="0.05" aria-label="Clip speed">
+            <div class="seg" id="segSpeedP"><button data-v="0.5">0.5×</button><button data-v="1">1×</button><button data-v="1.5">1.5×</button><button data-v="2">2×</button><button data-v="3">3×</button></div>
+          </div>
+          <div class="field">
+            <span class="label">Timing</span>
+            <div class="row seg-time" style="gap:6px;flex-wrap:nowrap"><span class="hint">Length</span><button class="btn small ghost" id="segShorter" title="0.1 s shorter" aria-label="Shorter">−</button><input type="number" id="segLen" min="0.2" step="0.1" style="width:76px" aria-label="Length of this clip in seconds"><span class="hint">s</span><button class="btn small ghost" id="segLonger" title="0.1 s longer" aria-label="Longer">+</button></div>
+            <div class="row" style="gap:6px"><button class="btn small" id="segSplit">Split at playhead</button><button class="btn small ghost" id="segMerge">Join with next</button></div>
+          </div>
+          <label class="srow"><span>Transition in</span><select id="segTr"><option value="">Same as all</option><option value="none">None</option><option value="crossfade">Crossfade</option><option value="slide">Slide</option><option value="push">Push</option><option value="zoom">Zoom</option><option value="wipe">Wipe</option><option value="blur">Blur</option><option value="spin">Spin</option><option value="flash">Flash</option><option value="dip">Dip to black</option></select></label>
+          <label class="srow" id="segMoRow"><span>Photo moves</span><select id="segMo"><option value="">Same as all</option><option value="still">Still</option><option value="zoom">Slow zoom and pan</option><option value="zoomin">Zoom in</option><option value="zoomout">Zoom out</option></select></label>
+          <div class="field">
+            <span class="row" style="justify-content:space-between"><span class="label">Framing</span><button class="btn small ghost" id="segFxReset">Reset</button></span>
+            <div class="seg" id="segFit"><button data-v="fill">Fill the frame</button><button data-v="fit">Whole picture</button></div>
+            <label class="srow" title="Bigger crops in closer; smaller shows more around it"><span>Size</span><span class="row" style="gap:8px;flex:1;flex-wrap:nowrap"><input type="range" id="segZoom" min="50" max="300" step="1"><span class="hint" id="segZoomVal" style="min-width:42px;text-align:right">100%</span></span></label>
+            <div class="grid2"><label class="field"><span class="hint">Left / right</span><input type="range" id="segX" min="-1" max="1" step="0.01"></label>
+              <label class="field"><span class="hint">Up / down</span><input type="range" id="segY" min="-1" max="1" step="0.01"></label></div>
+            <button class="btn small ghost" id="segFxAll">Use this framing for every cut</button>
+          </div>
+          <div class="row"><button class="btn small ghost" id="cutRemove">Delete this clip</button></div>
+        </div>
         <div class="row" style="justify-content:space-between">
           <span class="label">Your clips</span>
           <label class="btn small file">+ Add files<input id="clipFiles" type="file" accept="image/*,video/*" multiple></label>
@@ -338,91 +368,26 @@
           <div class="seg seg-wrap" id="cutTrans"><button data-v="none">None</button><button data-v="mix" title="A different transition at every cut">Mix</button><button data-v="crossfade">Crossfade</button><button data-v="slide">Slide</button><button data-v="push">Push</button><button data-v="zoom">Zoom</button><button data-v="wipe">Wipe</button><button data-v="blur">Blur</button><button data-v="spin">Spin</button><button data-v="flash">Flash</button><button data-v="dip">Dip</button></div>
           <label class="field" id="xfField" hidden><span class="row" style="justify-content:space-between"><span class="hint">Transition length</span><span class="hint" id="xfDurVal">0.35s</span></span><input type="range" id="xfDur" min="0.05" max="2" step="0.05"></label>
         </div>
-        <div class="card" id="segCard" hidden>
-          <div class="label" id="segLabel">Cut</div>
-          <select id="segClip" aria-label="Clip for this cut"></select>
-          <div class="field" id="segVid" hidden>
-            <span class="row" style="justify-content:space-between"><span class="label">Part of the video</span><span class="hint" id="segStartVal"></span></span>
-            <input type="range" id="segStart" min="0" max="10" step="0.05">
-          </div>
-          <div class="field">
-            <span class="row" style="justify-content:space-between"><span class="label">Speed</span><span class="hint" id="segSpeedVal">1×</span></span>
-            <input type="range" id="segSpeed" min="0.25" max="4" step="0.05" aria-label="Clip speed">
-            <div class="seg" id="segSpeedP"><button data-v="0.5">0.5×</button><button data-v="1">1×</button><button data-v="1.5">1.5×</button><button data-v="2">2×</button><button data-v="3">3×</button></div>
-          </div>
-          <div class="field">
-            <span class="label">Timing</span>
-            <div class="row seg-time" style="gap:6px;flex-wrap:nowrap"><span class="hint">Length</span><button class="btn small ghost" id="segShorter" title="0.1 s shorter" aria-label="Shorter">−</button><input type="number" id="segLen" min="0.2" step="0.1" style="width:76px" aria-label="Length of this clip in seconds"><span class="hint">s</span><button class="btn small ghost" id="segLonger" title="0.1 s longer" aria-label="Longer">+</button></div>
-            <div class="row" style="gap:6px"><button class="btn small" id="segSplit">Split at playhead</button><button class="btn small ghost" id="segMerge">Join with next</button></div>
-          </div>
-          <label class="srow"><span>Transition in</span><select id="segTr"><option value="">Same as all</option><option value="none">None</option><option value="crossfade">Crossfade</option><option value="slide">Slide</option><option value="push">Push</option><option value="zoom">Zoom</option><option value="wipe">Wipe</option><option value="blur">Blur</option><option value="spin">Spin</option><option value="flash">Flash</option><option value="dip">Dip to black</option></select></label>
-          <label class="srow" id="segMoRow"><span>Movement</span><select id="segMo"><option value="">Same as all</option><option value="zoom">Slow zoom and pan</option><option value="zoomin">Zoom in</option><option value="zoomout">Zoom out</option><option value="still">Still</option></select></label>
-          <div class="field">
-            <span class="row" style="justify-content:space-between"><span class="label">Framing</span><button class="btn small ghost" id="segFxReset">Reset</button></span>
-            <div class="seg" id="segFit"><button data-v="fill">Fill the frame</button><button data-v="fit">Whole picture</button></div>
-            <label class="srow"><span>Zoom</span><span class="row" style="gap:8px;flex:1;flex-wrap:nowrap"><input type="range" id="segZoom" min="50" max="300" step="1"><span class="hint" id="segZoomVal" style="min-width:42px;text-align:right">100%</span></span></label>
-            <div class="grid2"><label class="field"><span class="hint">Left / right</span><input type="range" id="segX" min="-1" max="1" step="0.01"></label>
-              <label class="field"><span class="hint">Up / down</span><input type="range" id="segY" min="-1" max="1" step="0.01"></label></div>
-            <button class="btn small ghost" id="segFxAll">Use this framing for every cut</button>
-          </div>
-          <div class="row"><button class="btn small ghost" id="cutRemove">Delete this clip</button></div>
-        </div>
       </section>
 
-      <!-- Framing: how photos move and how every clip fills the frame -->
+      <!-- Effects: how photos move and how every clip fills the frame -->
       <section class="pane" data-pane="framing" hidden>
         <div class="field">
           <span class="label">Photos move</span>
-          <div class="seg seg-wrap" id="cutMotion"><button data-v="zoom">Slow zoom and pan</button><button data-v="zoomin">Zoom in</button><button data-v="zoomout">Zoom out</button><button data-v="still">Still</button></div>
+          <div class="seg seg-wrap" id="cutMotion"><button data-v="still">Still</button><button data-v="zoom">Slow zoom and pan</button><button data-v="zoomin">Zoom in</button><button data-v="zoomout">Zoom out</button></div>
+          <p class="hint">Off by default. Pick a movement to give your photos a gentle camera move. Videos always play as they are.</p>
         </div>
         <div class="field">
           <span class="label">Framing</span>
           <div class="seg" id="cutFit"><button data-v="fill">Fill the frame</button><button data-v="fit">Whole picture</button></div>
-          <label class="srow"><span>Zoom</span><span class="row" style="gap:8px;flex:1;flex-wrap:nowrap"><input type="range" id="cutZoom" min="50" max="300" step="1"><span class="hint" id="cutZoomVal" style="min-width:42px;text-align:right">100%</span></span></label>
+          <label class="srow"><span>Size</span><span class="row" style="gap:8px;flex:1;flex-wrap:nowrap"><input type="range" id="cutZoom" min="50" max="300" step="1"><span class="hint" id="cutZoomVal" style="min-width:42px;text-align:right">100%</span></span></label>
+          <p class="hint">Size makes every clip bigger (cropped in closer) or smaller (more of the picture shows). 100% is as it fits.</p>
         </div>
       </section>
 
-    </aside>
 
-    <!-- CENTER: stage -->
-    <main class="stage">
-      <div class="stagebar">
-        <span class="label">Frame</span>
-        <div class="seg seg-words" id="orient" role="group" aria-label="Vertical or horizontal"><button data-v="v" type="button">Vertical</button><button data-v="h" type="button">Horizontal</button></div>
-        <div class="seg" id="aspect" role="group" aria-label="Frame shape"><button data-v="tall" type="button">9:16</button><button data-v="mid" type="button">4:5</button><button data-v="sq" type="button">1:1</button><button data-v="own" type="button" class="seg-word">Custom</button></div>
-        <form class="own-size" id="ownSize" hidden autocomplete="off" novalidate><input type="number" id="ownW" inputmode="numeric" min="240" max="4096" step="2" placeholder="Width" aria-label="Width in pixels">
-          <span aria-hidden="true">×</span><input type="number" id="ownH" inputmode="numeric" min="240" max="4096" step="2" placeholder="Height" aria-label="Height in pixels"><span class="hint">px</span>
-          <button class="btn small" type="submit">Use</button><span class="own-err" id="ownErr" role="alert"></span></form>
-        <span class="label">Length</span>
-        <div class="seg" id="secLen"><button data-v="10">10s</button><button data-v="15">15s</button><button data-v="20">20s</button><button data-v="30">30s</button></div>
-        <label class="row hint" style="gap:6px">or <input type="number" id="secLenIn" min="2" max="60" step="0.5" style="width:74px;padding:5px 8px" aria-label="Soundbite length in seconds"> s</label>
-        <div class="bites-wrap"><button class="btn small" id="bitesBtn" type="button" hidden aria-haspopup="dialog">Best parts</button>
-          <div class="bites-pop" id="bitesPop" hidden><div class="bites-head"><div class="bites-hrow"><b>Best parts for TikTok &amp; Reels</b><button class="btn small tt-match" type="button">Match the TikTok sound</button></div><span class="hint">Choose one to put it in your video.</span></div><div class="bites-row" id="bitesPopRow"></div></div></div>
-        <span class="hint" id="stageHint" style="margin-left:auto"></span>
-      </div>
-      <div class="viewport"><canvas id="stage" width="720" height="1280"></canvas></div>
-      <div class="transport">
-        <button class="btn small ghost" id="toStart" title="Back to section start">⏮</button>
-        <button class="play" id="playBtn" aria-label="Play"><svg viewBox="0 0 16 16" fill="currentColor" id="playIcon"><path d="M4 2.5v11l9-5.5z"/></svg></button>
-        <input type="range" class="rv-seek" id="rvSeek" min="0" max="100" step="0.05" value="0" aria-label="Position in the song">
-        <div class="tc" id="tc"><b>0:00.0</b> / 0:15.0</div>
-        <div class="viewctl" role="group" aria-label="Preview size">
-          <button class="btn small ghost" id="vzOut" type="button" title="Zoom out (−)" aria-label="Zoom out">−</button>
-          <button class="btn small ghost vz-val" id="vzVal" type="button" title="Back to fit (0)">Fit</button>
-          <button class="btn small ghost" id="vzIn" type="button" title="Zoom in (+)" aria-label="Zoom in">+</button>
-          <button class="btn small ghost" id="vFull" type="button" title="Full screen (F)" aria-label="Full screen"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></svg></button>
-        </div>
-      </div>
-    </main>
-
-    <!-- RIGHT: templates / text / titles -->
-    <aside class="side rack">
-      <div class="rtabs" role="tablist" aria-label="Look">
-        <button class="rtab" role="tab" data-rtab="looks" aria-selected="true">Templates</button>
-        <button class="rtab" role="tab" data-rtab="type" aria-selected="false">Text</button>
-        <button class="rtab" role="tab" data-rtab="titles" aria-selected="false">Text boxes</button>
-      </div>
-      <section class="pane" data-rpane="looks">
+      <!-- Templates -->
+      <section class="pane" data-pane="looks" data-rpane="looks" hidden>
         <div class="shead">
           <div class="shead-l">
             <span class="label">Lyric template</span>
@@ -442,7 +407,9 @@
           <button id="tplDownload" hidden></button><input id="tplOpen" type="file" accept=".json,application/json" hidden>
         </div>
       </section>
-      <section class="pane" data-rpane="type" hidden>
+      <!-- Text: how the lyrics look, then the hook and your own text boxes under it -->
+      <div class="pane" data-pane="text" hidden>
+        <section class="pane-part" data-rpane="type">
         <div class="card lyr-show">
           <div class="label">Lyrics on screen</div>
           <div class="seg seg-wrap" id="sShow" role="group" aria-label="How the lyrics appear"><button type="button" data-v="words">Word by word</button><button type="button" data-v="line">Full line</button></div>
@@ -470,7 +437,7 @@
           <label class="field"><span class="label">Darken footage behind the text</span><input type="range" id="sScrim" min="0" max="0.75" step="0.01"></label>
         </div>
       </section>
-      <section class="pane" data-rpane="titles" hidden>
+        <section class="pane-part" data-rpane="titles">
         <div class="card">
           <div class="row" style="justify-content:space-between"><span class="label">Hook text</span>
             <div class="seg" id="hookSeg"><button data-v="off">Off</button><button data-v="on">On</button></div></div>
@@ -517,7 +484,40 @@
           </div>
         </div>
       </section>
+      </div>
     </aside>
+
+    <!-- CENTER: stage -->
+    <main class="stage">
+      <div class="stagebar">
+        <span class="label">Frame</span>
+        <div class="seg seg-words" id="orient" role="group" aria-label="Vertical or horizontal"><button data-v="v" type="button">Vertical</button><button data-v="h" type="button">Horizontal</button></div>
+        <div class="seg" id="aspect" role="group" aria-label="Frame shape"><button data-v="tall" type="button">9:16</button><button data-v="mid" type="button">4:5</button><button data-v="sq" type="button">1:1</button><button data-v="own" type="button" class="seg-word">Custom</button></div>
+        <form class="own-size" id="ownSize" hidden autocomplete="off" novalidate><input type="number" id="ownW" inputmode="numeric" min="240" max="4096" step="2" placeholder="Width" aria-label="Width in pixels">
+          <span aria-hidden="true">×</span><input type="number" id="ownH" inputmode="numeric" min="240" max="4096" step="2" placeholder="Height" aria-label="Height in pixels"><span class="hint">px</span>
+          <button class="btn small" type="submit">Use</button><span class="own-err" id="ownErr" role="alert"></span></form>
+        <span class="label">Length</span>
+        <div class="seg" id="secLen"><button data-v="10">10s</button><button data-v="15">15s</button><button data-v="20">20s</button><button data-v="30">30s</button></div>
+        <label class="row hint" style="gap:6px">or <input type="number" id="secLenIn" min="2" max="60" step="0.5" style="width:74px;padding:5px 8px" aria-label="Soundbite length in seconds"> s</label>
+        <div class="bites-wrap"><button class="btn small" id="bitesBtn" type="button" hidden aria-haspopup="dialog">Best parts</button>
+          <div class="bites-pop" id="bitesPop" hidden><div class="bites-head"><div class="bites-hrow"><b>Best parts for TikTok &amp; Reels</b><button class="btn small tt-match" type="button">Match the TikTok sound</button></div><span class="hint">Choose one to put it in your video.</span></div><div class="bites-row" id="bitesPopRow"></div></div></div>
+        <span class="hint" id="stageHint" style="margin-left:auto"></span>
+      </div>
+      <div class="viewport"><canvas id="stage" width="720" height="1280"></canvas></div>
+      <div class="transport">
+        <button class="btn small ghost" id="toStart" title="Back to section start">⏮</button>
+        <button class="play" id="playBtn" aria-label="Play"><svg viewBox="0 0 16 16" fill="currentColor" id="playIcon"><path d="M4 2.5v11l9-5.5z"/></svg></button>
+        <input type="range" class="rv-seek" id="rvSeek" min="0" max="100" step="0.05" value="0" aria-label="Position in the song">
+        <div class="tc" id="tc"><b>0:00.0</b> / 0:15.0</div>
+        <div class="viewctl" role="group" aria-label="Preview size">
+          <button class="btn small ghost" id="vzOut" type="button" title="Zoom out (−)" aria-label="Zoom out">−</button>
+          <button class="btn small ghost vz-val" id="vzVal" type="button" title="Back to fit (0)">Fit</button>
+          <button class="btn small ghost" id="vzIn" type="button" title="Zoom in (+)" aria-label="Zoom in">+</button>
+          <button class="btn small ghost" id="vFull" type="button" title="Full screen (F)" aria-label="Full screen"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></svg></button>
+        </div>
+      </div>
+    </main>
+
   </div>
 
   <!-- TIMELINE -->
@@ -565,7 +565,7 @@
       <div class="tlscroll" id="tlScroll"><canvas id="tl"></canvas></div>
     </div>
   </section>
-  <nav class="mtools" id="mtools" aria-label="Tools"><button data-sheet="lyrics"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h10M4 18h13"/></svg><span>Lyrics</span></button><button data-sheet="style"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/></svg><span>Templates</span></button><button data-sheet="clips"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m10 9 5 3-5 3z"/></svg><span>Clips</span></button><button data-sheet="cuts"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="7" r="2.6"/><circle cx="6" cy="17" r="2.6"/><path d="M8.2 8.4 20 17M8.2 15.6 20 7"/></svg><span>Cuts</span></button><button data-sheet="text"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 6V4h14v2"/><path d="M12 4v16"/><path d="M9 20h6"/></svg><span>Text</span></button><button data-sheet="hook"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="8" rx="4"/></svg><span>Hook</span></button><button data-sheet="audio"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg><span>Audio</span></button><button data-sheet="format"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="3" width="10" height="18" rx="2"/></svg><span>Format</span></button><button data-sheet="font"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19 9 5l5 14M6 14h6M15 19h5M17.5 12v7"/></svg><span>Font</span></button></nav>
+  <nav class="mtools" id="mtools" aria-label="Tools"><button data-sheet="lyrics"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h10M4 18h13"/></svg><span>Lyrics</span></button><button data-sheet="clips"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m10 9 5 3-5 3z"/></svg><span>Clips</span></button><button data-sheet="cuts"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="7" height="12" rx="1.5"/><rect x="14" y="6" width="7" height="12" rx="1.5"/><path d="M10 12h4"/></svg><span>Transitions</span></button><button data-sheet="effects"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 1.8 4.7L18.5 9l-4.7 1.8L12 15.5l-1.8-4.7L5.5 9l4.7-1.3z"/><path d="M18 15l.8 2.2L21 18l-2.2.8L18 21l-.8-2.2L15 18l2.2-.8z"/></svg><span>Effects</span></button><button data-sheet="style"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/></svg><span>Templates</span></button><button data-sheet="font"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19 9 5l5 14M6 14h6M15 19h5M17.5 12v7"/></svg><span>Font</span></button><button data-sheet="text"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 6V4h14v2"/><path d="M12 4v16"/><path d="M9 20h6"/></svg><span>Text</span></button><button data-sheet="hook"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="8" rx="4"/></svg><span>Hook</span></button><button data-sheet="audio"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg><span>Audio</span></button><button data-sheet="format"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="3" width="10" height="18" rx="2"/></svg><span>Format</span></button></nav>
   <div class="msheet" id="msheet" hidden><button class="msheet-grab" id="msheetGrab" type="button" aria-label="Make the panel bigger or smaller"></button><div class="msheet-h"><b id="msheetTitle"></b><span class="msheet-r"><button class="play msheet-play" id="msheetPlay" type="button" aria-label="Play"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 2.5v11l9-5.5z"/></svg></button><button class="btn small" id="msheetDone">Done</button></span></div><div class="msheet-b" id="msheetBody"></div></div>
 </div>
 
@@ -625,5 +625,6 @@
 <script src="js/ttsound.js"></script>
 <script src="js/projects.js"></script>
 <script src="js/tutorial.js"></script>
+<script src="js/feedback.js"></script>
 </body>
 </html>
