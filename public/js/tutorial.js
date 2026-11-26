@@ -5,13 +5,19 @@
   const $t = s => document.querySelector(s);
   const box = $t("#tutModal"), video = $t("#tutVideo");
   if(!box || !video) return;
-  const SRC = "media/tutorial.mp4?v=2", POSTER = "media/tutorial-poster.jpg?v=2";
+  // a wide video for computers, a tall one (made for phones) on phones and narrow upright screens
+  const WIDE = { src: "media/tutorial.mp4?v=4", poster: "media/tutorial-poster.jpg?v=4", w: 1280, h: 720 };
+  const TALL = { src: "media/tutorial-phone.mp4?v=1", poster: "media/tutorial-phone-poster.jpg?v=1", w: 720, h: 1280 };
+  const PHONE = matchMedia("(max-width: 640px), (orientation: portrait) and (max-width: 900px)");
+  const frame = box.querySelector(".tut-box");
   let opener = null;
 
   function open(){
     if(!box.hidden) return;
     opener = document.activeElement;
-    if(!video.getAttribute("src")){ video.poster = POSTER; video.src = SRC; }
+    const v = PHONE.matches ? TALL : WIDE;
+    if(video.getAttribute("src") !== v.src){ video.poster = v.poster; video.src = v.src; video.width = v.w; video.height = v.h; }
+    if(frame) frame.classList.toggle("tall", v === TALL);
     box.hidden = false;
     document.documentElement.classList.add("tut-on");
     try { video.currentTime = 0; } catch {}

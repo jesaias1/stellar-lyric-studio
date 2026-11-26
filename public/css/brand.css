@@ -168,11 +168,13 @@ textarea:focus,input:focus,select:focus{box-shadow:none!important;border-color:v
    strokes end, tapered, behind the letters. Every part of it lies inside this sweep (it starts at 121.6 degrees) */
 .lg-orbit{-webkit-mask:conic-gradient(from 120deg at 50% 52%,#000 var(--sweep),transparent calc(var(--sweep) + .5deg));mask:conic-gradient(from 120deg at 50% 52%,#000 var(--sweep),transparent calc(var(--sweep) + .5deg));animation:lg-orbit 1.15s linear .55s both}
 @keyframes lg-orbit{from{--sweep:0deg}to{--sweep:332deg}}
-/* the star grows from its own centre the moment the line reaches it, and never rotates, so it stays on the line */
-.lg-star{opacity:0;transform-origin:81.62% 13.82%;animation:lg-star .5s cubic-bezier(.2,1.5,.4,1) 1.55s forwards,lg-twinkle 2.6s ease-in-out 2.2s infinite}
+/* the star grows from its own centre the moment the line reaches it, and never rotates, so it stays on the line.
+   img/logo-star-on.webp is the original star moved down onto the oval (its middle on the line), with the oval
+   widening smoothly into its left arm as in the original logo */
+.lg-star{opacity:0;transform-origin:81.51% 13.64%;animation:lg-star .5s cubic-bezier(.2,1.5,.4,1) 1.55s forwards,lg-twinkle 2.6s ease-in-out 2.2s infinite}
 @keyframes lg-star{0%{opacity:0;transform:scale(0)}35%{opacity:1}100%{opacity:1;transform:scale(1)}}
 @keyframes lg-twinkle{50%{transform:scale(1.07)}}
-.lg-flare{left:81.62%;top:13.82%;animation:lg-flare .8s ease-out 1.55s forwards}
+.lg-flare{left:81.51%;top:13.64%;animation:lg-flare .8s ease-out 1.55s forwards}
 .splash.quick .lg-letters{animation-duration:.4s;animation-delay:0s}
 .splash.quick .lg-orbit{animation-duration:.6s;animation-delay:.1s}
 .splash.quick .lg-star,.splash.quick .lg-flare{animation-delay:.62s,1.3s}
@@ -213,6 +215,9 @@ textarea:focus,input:focus,select:focus{box-shadow:none!important;border-color:v
 .tut[hidden]{display:none}
 .tut-box{position:relative;width:min(1280px,100%,(100dvh - 2 * clamp(12px,4vw,56px)) * 16 / 9);animation:tut-in .28s cubic-bezier(.2,.8,.2,1)}
 .tut-box video{display:block;width:100%;height:auto;aspect-ratio:16/9;border-radius:14px;background:#0010da;box-shadow:0 24px 80px rgba(0,0,0,.55)}
+/* the phone version: tall, as high as the screen allows with room for the close button above it */
+.tut-box.tall{width:min(560px,100%,(100dvh - 2 * clamp(12px,4vw,56px) - 56px) * 9 / 16)}
+.tut-box.tall video{aspect-ratio:9/16}
 .tut-x{position:absolute;top:-46px;right:0;width:38px;height:38px;display:grid;place-items:center;border:0;border-radius:50%;background:rgba(255,255,255,.14);color:#fff;cursor:pointer}
 .tut-x:hover,.tut-x:focus-visible{background:#fff;color:#0010da}
 html.tut-on{overflow:hidden}
