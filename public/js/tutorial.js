@@ -5,7 +5,7 @@
   const $t = s => document.querySelector(s);
   const box = $t("#tutModal"), video = $t("#tutVideo");
   if(!box || !video) return;
-  const SRC = "media/tutorial.mp4?v=1", POSTER = "media/tutorial-poster.jpg?v=1";
+  const SRC = "media/tutorial.mp4?v=2", POSTER = "media/tutorial-poster.jpg?v=2";
   let opener = null;
 
   function open(){
