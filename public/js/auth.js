@@ -163,7 +163,7 @@ window.SLSAuth = (() => {
   gate.className = "auth-gate"; gate.id = "authGate"; gate.hidden = true;
   gate.innerHTML = `
     <div class="auth-card" role="dialog" aria-modal="true" aria-labelledby="authTitle">
-      <div class="auth-brand"><img class="logo-sls" src="img/logo-sls.webp" alt="SLS" width="185" height="144" draggable="false"><span class="brand-sub">Stellar Lyric Studio</span></div>
+      <div class="auth-brand"><img class="logo-sls" src="img/logo-sls.webp" alt="Stellar Lyric Studio" width="185" height="144" draggable="false"></div>
       <form id="authForm" autocomplete="on" novalidate>
         <h2 id="authTitle">Log in</h2>
         <p class="auth-why" id="authWhy"></p>

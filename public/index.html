@@ -3,7 +3,7 @@
 <!-- the editor can switch between light and dark (js/app.js); the blue start screen looks the same in both -->
 <head>
 <meta charset="utf-8">
-<meta name="sls-build" content="202611261609">
+<meta name="sls-build" content="202611261635">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Stellar Lyric Studio</title>
 <meta name="description" content="Turn a song into a lyric video for social media. Upload the track and the lyrics write and time themselves.">
@@ -50,14 +50,13 @@
       <img class="lg lg-star" src="img/logo-star-on.webp" alt="" draggable="false">
       <i class="lg-flare"></i>
     </div>
-    <div class="splash-name">Stellar Lyric Studio</div>
   </div>
 </div>
 
 <!-- ============ start screen: drop a song ============ -->
 <section class="home" id="home" aria-label="Start">
   <div class="home-bar">
-    <div class="brand"><img class="logo-sls" src="img/logo-sls.webp" alt="SLS" width="185" height="144" draggable="false"><span class="brand-sub">Stellar Lyric Studio</span></div>
+    <div class="brand"><img class="logo-sls" src="img/logo-sls.webp" alt="Stellar Lyric Studio" width="185" height="144" draggable="false"></div>
     <nav class="home-nav" aria-label="Start screen"><a href="#projects" id="navProjects">projects</a><a href="#" id="navArtists">artist songs</a><a href="#" id="navCalendar">calendar</a><a href="#tutorial" id="navTutorial">tutorial</a></nav>
     <div class="home-bar-r">
       <button class="btn ghost small" id="homeBack" hidden>Back to my project</button>
@@ -168,7 +167,7 @@
 
 <div class="app">
   <header class="top">
-    <button class="brand" id="brandBtn" title="Start screen"><img class="logo-sls" src="img/logo-sls.webp" alt="SLS" width="185" height="144" draggable="false"><span class="brand-sub">Stellar Lyric Studio</span></button>
+    <button class="brand" id="brandBtn" title="Start screen"><img class="logo-sls" src="img/logo-sls.webp" alt="Stellar Lyric Studio" width="185" height="144" draggable="false"></button>
     <nav class="steps" id="steps" aria-label="Steps">
       <button data-go="song"><i>01</i><span>song</span></button>
       <button data-go="lyrics"><i>02</i><span>lyrics</span></button>
@@ -235,6 +234,8 @@
       <div class="tabs" role="tablist">
         <button class="tab" role="tab" aria-selected="true" data-tab="lyrics">Lyrics</button>
         <button class="tab" role="tab" aria-selected="false" data-tab="clips">Clips</button>
+        <button class="tab" role="tab" aria-selected="false" data-tab="cuts">Cuts</button>
+        <button class="tab" role="tab" aria-selected="false" data-tab="framing">Framing</button>
         <button class="tab mobile-only" role="tab" aria-selected="false" data-tab="style">Look</button>
       </div>
 
@@ -298,49 +299,26 @@
         </div>
       </section>
 
+      <!-- Clips: what's in the video, and where more comes from (js/footage.js fills #fxSlot) -->
       <section class="pane" data-pane="clips" hidden>
         <div class="row" style="justify-content:space-between">
-          <span class="label">Footage pool</span>
-          <label class="btn small file">+ Photos or videos<input id="clipFiles" type="file" accept="image/*,video/*" multiple></label>
+          <span class="label">Your clips</span>
+          <label class="btn small file">+ Add files<input id="clipFiles" type="file" accept="image/*,video/*" multiple></label>
         </div>
         <div class="clips" id="clipGrid"></div>
-        <div class="hint">Tap a tile to include or leave it out of the shuffle. Imported clips stay in this browser session.</div>
+        <div class="label fx-add">Add more</div>
+        <div id="fxSlot"></div>
+      </section>
+
+      <!-- Cuts: when the picture changes, in what order, how it changes; and one cut on its own -->
+      <section class="pane" data-pane="cuts" hidden>
         <div class="field">
           <span class="label">How cuts are chosen</span>
           <div class="seg seg-wrap" id="cutMode"><button data-v="lines">Each lyric line</button><button data-v="beat">On the beat</button><button data-v="feel" title="The pace follows the song: calm songs get longer shots and soft crossfades, lively ones cut on the beat">Follow the song</button><button data-v="count">I pick how many</button><button data-v="manual">Custom</button></div>
-          <span class="hint" id="cutFeelHint" hidden></span>
-          <div class="seg" id="cutOrder"><button data-v="shuffle">Shuffle</button><button data-v="inorder">In the order added</button></div>
-          <span class="hint">Drag any cut on the timeline to move it. Moving one switches to Custom.</span>
         </div>
         <div class="field" id="cutCountField" hidden>
           <span class="row" style="justify-content:space-between"><span class="label">Number of clips</span><span class="hint" id="cutCountVal">8</span></span>
           <input type="range" id="cutCount" min="1" max="40" step="1">
-          <span class="hint">Cuts are spread evenly and nudged onto the nearest beat.</span>
-        </div>
-        <div class="field">
-          <span class="label">Transition between clips</span>
-          <div class="seg seg-wrap" id="cutTrans"><button data-v="none">None</button><button data-v="mix" title="A different transition at every cut">Mix</button><button data-v="crossfade">Crossfade</button><button data-v="slide">Slide</button><button data-v="push">Push</button><button data-v="zoom">Zoom</button><button data-v="wipe">Wipe</button><button data-v="blur">Blur</button><button data-v="spin">Spin</button><button data-v="flash">Flash</button><button data-v="dip">Dip</button></div>
-          <span class="hint">None is a clean, instant cut. Pick a cut on the timeline to give it its own transition.</span>
-          <label class="field" id="xfField" hidden><span class="row" style="justify-content:space-between"><span class="hint">Transition length</span><span class="hint" id="xfDurVal">0.35s</span></span><input type="range" id="xfDur" min="0.05" max="2" step="0.05"></label>
-        </div>
-        <div class="field" id="tintField">
-          <span class="row" style="justify-content:space-between"><span class="label">Song colour</span><button class="link-btn" id="tintOff" type="button" hidden>Remove</button></span>
-          <button class="btn small" id="tintOn" type="button">Use the song's colour</button>
-          <div class="row tint-row" id="tintCtl" hidden><input type="color" id="tintColor" aria-label="Song colour"><input type="range" id="tintAmt" min="5" max="100" step="1" aria-label="How strong the colour is"><span class="hint" id="tintVal">35%</span></div>
-          <span class="hint">A soft colour from the song over all the footage, so clips from different places look like one video.</span>
-        </div>
-        <div class="field">
-          <span class="label">Photos move</span>
-          <div class="seg seg-wrap" id="cutMotion"><button data-v="zoom">Slow zoom and pan</button><button data-v="zoomin">Zoom in</button><button data-v="zoomout">Zoom out</button><button data-v="still">Still</button></div>
-        </div>
-        <div class="field">
-          <span class="label">Framing</span>
-          <div class="seg" id="cutFit"><button data-v="fill">Fill the frame</button><button data-v="fit">Whole picture</button></div>
-          <label class="srow"><span>Zoom</span><span class="row" style="gap:8px;flex:1;flex-wrap:nowrap"><input type="range" id="cutZoom" min="50" max="300" step="1"><span class="hint" id="cutZoomVal" style="min-width:42px;text-align:right">100%</span></span></label>
-          <span class="hint">For every photo and video. Pick a cut on the timeline to frame just that one.</span>
-        </div>
-        <div class="field" id="cutManualField" hidden>
-          <div class="row"><button class="btn small" id="cutAdd">Add cut at playhead</button><button class="btn small ghost" id="cutReset">Back to beat cuts</button></div>
         </div>
         <div class="field" id="cutEveryField">
           <span class="label">Cut every</span>
@@ -348,14 +326,24 @@
             <button data-v="1">1 beat</button><button data-v="2">2</button><button data-v="4">1 bar</button><button data-v="8">2 bars</button>
           </div>
         </div>
-        <button class="btn" id="shuffleBtn">Shuffle clips</button>
+        <div class="field" id="cutManualField" hidden>
+          <div class="row"><button class="btn small" id="cutAdd">Add cut at playhead</button><button class="btn small ghost" id="cutReset">Back to beat cuts</button></div>
+        </div>
+        <div class="field">
+          <span class="label">Order</span>
+          <div class="row cut-order"><div class="seg" id="cutOrder"><button data-v="shuffle">Shuffle</button><button data-v="inorder">In the order added</button></div><button class="btn small" id="shuffleBtn" type="button">Shuffle clips</button></div>
+        </div>
+        <div class="field">
+          <span class="label">Transition between clips</span>
+          <div class="seg seg-wrap" id="cutTrans"><button data-v="none">None</button><button data-v="mix" title="A different transition at every cut">Mix</button><button data-v="crossfade">Crossfade</button><button data-v="slide">Slide</button><button data-v="push">Push</button><button data-v="zoom">Zoom</button><button data-v="wipe">Wipe</button><button data-v="blur">Blur</button><button data-v="spin">Spin</button><button data-v="flash">Flash</button><button data-v="dip">Dip</button></div>
+          <label class="field" id="xfField" hidden><span class="row" style="justify-content:space-between"><span class="hint">Transition length</span><span class="hint" id="xfDurVal">0.35s</span></span><input type="range" id="xfDur" min="0.05" max="2" step="0.05"></label>
+        </div>
         <div class="card" id="segCard" hidden>
           <div class="label" id="segLabel">Cut</div>
           <select id="segClip" aria-label="Clip for this cut"></select>
           <div class="field" id="segVid" hidden>
             <span class="row" style="justify-content:space-between"><span class="label">Part of the video</span><span class="hint" id="segStartVal"></span></span>
             <input type="range" id="segStart" min="0" max="10" step="0.05">
-            <span class="hint">Slide to choose where in this video the cut starts. The preview jumps to the cut so you can see it.</span>
           </div>
           <div class="field">
             <span class="row" style="justify-content:space-between"><span class="label">Speed</span><span class="hint" id="segSpeedVal">1×</span></span>
@@ -378,7 +366,19 @@
             <button class="btn small ghost" id="segFxAll">Use this framing for every cut</button>
           </div>
           <div class="row"><button class="btn small ghost" id="cutRemove">Delete this clip</button></div>
-          <div class="hint">On the timeline: drag a clip's edge to change when it changes (it sticks to lyric lines and beats; hold Alt to move freely), drag a clip to swap it with another, double-click to try the next clip, or drag a photo from the pool onto a clip to replace it.</div>
+        </div>
+      </section>
+
+      <!-- Framing: how photos move and how every clip fills the frame -->
+      <section class="pane" data-pane="framing" hidden>
+        <div class="field">
+          <span class="label">Photos move</span>
+          <div class="seg seg-wrap" id="cutMotion"><button data-v="zoom">Slow zoom and pan</button><button data-v="zoomin">Zoom in</button><button data-v="zoomout">Zoom out</button><button data-v="still">Still</button></div>
+        </div>
+        <div class="field">
+          <span class="label">Framing</span>
+          <div class="seg" id="cutFit"><button data-v="fill">Fill the frame</button><button data-v="fit">Whole picture</button></div>
+          <label class="srow"><span>Zoom</span><span class="row" style="gap:8px;flex:1;flex-wrap:nowrap"><input type="range" id="cutZoom" min="50" max="300" step="1"><span class="hint" id="cutZoomVal" style="min-width:42px;text-align:right">100%</span></span></label>
         </div>
       </section>
 
@@ -565,7 +565,7 @@
       <div class="tlscroll" id="tlScroll"><canvas id="tl"></canvas></div>
     </div>
   </section>
-  <nav class="mtools" id="mtools" aria-label="Tools"><button data-sheet="lyrics"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h10M4 18h13"/></svg><span>Lyrics</span></button><button data-sheet="style"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/></svg><span>Templates</span></button><button data-sheet="clips"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m10 9 5 3-5 3z"/></svg><span>Clips</span></button><button data-sheet="text"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 6V4h14v2"/><path d="M12 4v16"/><path d="M9 20h6"/></svg><span>Text</span></button><button data-sheet="hook"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="8" rx="4"/></svg><span>Hook</span></button><button data-sheet="audio"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg><span>Audio</span></button><button data-sheet="format"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="3" width="10" height="18" rx="2"/></svg><span>Format</span></button><button data-sheet="font"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19 9 5l5 14M6 14h6M15 19h5M17.5 12v7"/></svg><span>Font</span></button></nav>
+  <nav class="mtools" id="mtools" aria-label="Tools"><button data-sheet="lyrics"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h10M4 18h13"/></svg><span>Lyrics</span></button><button data-sheet="style"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/></svg><span>Templates</span></button><button data-sheet="clips"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m10 9 5 3-5 3z"/></svg><span>Clips</span></button><button data-sheet="cuts"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="7" r="2.6"/><circle cx="6" cy="17" r="2.6"/><path d="M8.2 8.4 20 17M8.2 15.6 20 7"/></svg><span>Cuts</span></button><button data-sheet="text"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 6V4h14v2"/><path d="M12 4v16"/><path d="M9 20h6"/></svg><span>Text</span></button><button data-sheet="hook"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="8" rx="4"/></svg><span>Hook</span></button><button data-sheet="audio"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg><span>Audio</span></button><button data-sheet="format"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="3" width="10" height="18" rx="2"/></svg><span>Format</span></button><button data-sheet="font"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19 9 5l5 14M6 14h6M15 19h5M17.5 12v7"/></svg><span>Font</span></button></nav>
   <div class="msheet" id="msheet" hidden><button class="msheet-grab" id="msheetGrab" type="button" aria-label="Make the panel bigger or smaller"></button><div class="msheet-h"><b id="msheetTitle"></b><span class="msheet-r"><button class="play msheet-play" id="msheetPlay" type="button" aria-label="Play"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 2.5v11l9-5.5z"/></svg></button><button class="btn small" id="msheetDone">Done</button></span></div><div class="msheet-b" id="msheetBody"></div></div>
 </div>
 

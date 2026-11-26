@@ -1,17 +1,19 @@
 "use strict";
 /* Footage without files on your computer: photos picked for the song (js/photos.js fills that tab), free stock
-   video search (Pixabay, Pexels) and AI-generated background clips written from the lyrics (Higgsfield). Both add clips to the same footage pool as imported files.
+   video search (Pixabay, Pexels), TikTok videos from a link (src/tiktok-video.js; they play muted until you tap the
+   speaker on the clip) and AI-generated background clips written from the lyrics (Higgsfield). All of them add
+   clips to the same pool as imported files.
    The backend side is src/media.js. Loaded after app.js. */
 window.SLSFootage = (() => {
   const api = window.SLSBackend, pane = $('[data-pane="clips"]');
   const IDEAS = ["night city", "snow falling", "ocean waves", "neon lights", "forest fog", "sunset clouds", "rain window", "candle light", "stars sky", "road trip"];
   const panel = document.createElement("div"); panel.className = "fx-wrap";
   panel.innerHTML = `
-    <div class="fx-tabs" role="tablist"><button data-fx="photos" aria-selected="true">Photos</button><button data-fx="stock" aria-selected="false">Free videos</button><button data-fx="ai" aria-selected="false">AI background</button></div>
+    <div class="fx-tabs" role="tablist"><button data-fx="photos" aria-selected="true">Photos</button><button data-fx="stock" aria-selected="false">Videos</button><button data-fx="tiktok" aria-selected="false">TikTok</button><button data-fx="ai" aria-selected="false">AI</button></div>
     <div class="fx-body" data-fxp="photos"></div>
     <div class="fx-body" data-fxp="stock" hidden>
       <div class="fx-vibe"><button class="btn small primary" type="button" id="stockMatch">Find videos for this song</button>
-        <div class="hint" id="stockVibe">SLS listens to the song, reads the lyrics and picks free videos that feel the same.</div></div>
+        <div class="hint" id="stockVibe"></div></div>
       <form class="fx-search" id="stockForm" autocomplete="off"><input type="search" id="stockQ" placeholder="Search: snow, city at night, ocean…" aria-label="Search free videos"><button class="btn small primary">Search</button></form>
       <div class="chips fx-ideas" id="stockIdeas">${IDEAS.map(q => `<button type="button" data-q="${q}">${q}</button>`).join("")}</div>
       <div class="fx-msg hint" id="stockMsg"></div>
@@ -19,8 +21,13 @@ window.SLSFootage = (() => {
       <div class="row"><button class="btn small ghost" id="stockMore" hidden>More results</button></div>
       <div class="hint fx-credit" id="stockCredit"></div>
     </div>
+    <div class="fx-body" data-fxp="tiktok" hidden>
+      <form class="fx-search" id="ttvForm" autocomplete="off"><input type="url" id="ttvUrl" inputmode="url" placeholder="Paste a TikTok video link" aria-label="TikTok video link"><button class="btn small primary">Add</button></form>
+      <div class="fx-msg hint" id="ttvMsg"></div>
+      <div class="bar fx-bar" id="ttvBar" hidden><i></i></div>
+    </div>
     <div class="fx-body" data-fxp="ai" hidden>
-      <div class="fx-msg hint" id="aiMsg">SLS reads your lyrics, writes a scene for each part of the song, and Higgsfield turns each scene into a background clip.</div>
+      <div class="fx-msg hint" id="aiMsg"></div>
       <label class="field"><span class="hint">Mood or setting (optional)</span><input type="text" id="aiMood" placeholder="e.g. warm Christmas night, snow, candlelight"></label>
       <div class="fx-opts"><span class="hint">Clips</span><div class="seg" id="aiCount"><button data-v="1">1</button><button data-v="2">2</button><button data-v="3">3</button><button data-v="4">4</button></div>
         <span class="hint">Length</span><div class="seg" id="aiLen"><button data-v="5">5 s</button><button data-v="10">10 s</button></div></div>
@@ -29,7 +36,7 @@ window.SLSFootage = (() => {
       <div class="fx-go" id="aiGoRow" hidden><button class="btn primary small" id="aiGo">Generate</button><span class="hint" id="aiCost"></span></div>
       <div class="fx-jobs" id="aiJobs"></div>
     </div>`;
-  pane.querySelector("#clipGrid").nextElementSibling.after(panel);   // under the footage pool
+  ($("#fxSlot") || pane).append(panel);   // under "Add more", below your clips
 
   let health = null;
   const getHealth = async () => { if(health) return health; try { health = await api.health(); } catch { health = {}; } return health; };
@@ -38,10 +45,28 @@ window.SLSFootage = (() => {
   const fmtDur = s => s ? `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}` : "";
   const errText = err => err && err.message ? err.message : "Something went wrong.";
 
+  /* ---------- TikTok videos ---------- */
+  const TT_LINK = /https:\/\/((www|m|vm|vt)\.)?tiktok\.com\/[^\s"'<>]+/i;
+  $("#ttvForm").onsubmit = async e => {
+    e.preventDefault(); const m = TT_LINK.exec($("#ttvUrl").value || ""), msg = $("#ttvMsg"), bar = $("#ttvBar"), go = e.target.querySelector("button");
+    if(!m){ msg.textContent = "Paste a link to a TikTok video (in TikTok: Share, then Copy link)."; return; }
+    if(go.disabled || !(await SLSApp.ensurePass())) return;
+    go.disabled = true; msg.textContent = "Getting the video…"; bar.hidden = false; bar.firstElementChild.style.width = "4%";
+    try {
+      const d = await api.api("/api/tiktok/video", { method: "POST", body: { url: m[0] }, timeout: 45000 });
+      const blob = await api.blob(d.file, { onProgress: p => bar.firstElementChild.style.width = (4 + p * 96).toFixed(0) + "%" });
+      const who = d.author ? "@" + d.author : "TikTok";
+      const ids = await addFootage([new File([blob], "tiktok.mp4", { type: "video/mp4" })], [{ name: who, kind: "video", credit: `${who} on TikTok`, src: { kind: "tiktok", page: d.link, author: d.author, title: d.title } }], { quiet: true });
+      if(!ids.length) throw new Error("The video couldn't be read. Try another one.");
+      msg.textContent = `Added ${who}. It plays muted; tap the speaker on the clip to hear it.`; $("#ttvUrl").value = "";
+    } catch(err){ msg.textContent = errText(err); }
+    finally { go.disabled = false; bar.hidden = true; }
+  };
+
   /* ---------- free stock videos ---------- */
   // what "More results" continues: a typed search, or the videos found for the song
   let query = "", page = 1, busy = false, match = null;
-  const NOTE = "SLS listens to the song, reads the lyrics and picks free videos that feel the same.";
+  const NOTE = "";
   const ideaChips = list => list.map(q => `<button type="button" data-q="${esc(q)}">${esc(q)}</button>`).join("");
   function show(d, more, empty){
     const grid = $("#stockGrid");
@@ -50,7 +75,7 @@ window.SLSFootage = (() => {
     $("#stockMore").hidden = d.results.length < 10;
     const on = d.sources || {};
     const src = [on.pixabay && '<a href="https://pixabay.com" target="_blank" rel="noopener">Pixabay</a>', on.pexels && '<a href="https://www.pexels.com" target="_blank" rel="noopener">Pexels</a>'].filter(Boolean).join(" and ");
-    $("#stockCredit").innerHTML = src ? `Videos from ${src}. Free to use; each clip keeps its creator's credit. Videos made by AI are left out.` : "";
+    $("#stockCredit").innerHTML = src ? `From ${src}` : "";
   }
   async function ready(){
     const h = await getHealth();

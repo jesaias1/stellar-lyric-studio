@@ -59,7 +59,7 @@ window.SLSProjects = (() => {
         const step = SLSApp.step === "song" ? (rec.step || SLSApp.lastStep || "lyrics") : SLSApp.step;
         Object.assign(rec, { name: rec.name || S.songName, songName: S.songName, updatedAt: Date.now(), step, P, style: styleDef(S.P.style.preset).name, aspect: S.P.aspect,
           words: S.P.words.length, duration: S.audio ? +S.audio.duration.toFixed(1) : 0,
-          clips: user.filter(c => c.bk).map(c => ({ bk: c.bk, name: c.name, kind: c.kind, credit: c.credit || null, src: c.src || null, on: c.on })),
+          clips: user.filter(c => c.bk).map(c => ({ bk: c.bk, name: c.name, kind: c.kind, credit: c.credit || null, src: c.src || null, on: c.on, sound: !!c.sound })),
           gens: Object.fromEntries(S.clips.filter(c => c.kind === "gen").map(c => [c.name, c.on])), thumb: thumb() || rec.thumb || "" });
         rec.owner = rec.owner || me();
         await put("projects", rec);
@@ -101,7 +101,7 @@ window.SLSProjects = (() => {
       for(const rc of rec.clips || []){
         const blob = await get("blobs", rc.bk).catch(() => null); if(!blob) continue;
         const [nid] = await addFootage([blob], [{ name: rc.name, kind: rc.kind, credit: rc.credit, src: rc.src }], { quiet: true });
-        const c = S.clips.find(x => x.id === nid); if(c){ c.bk = rc.bk; c.on = rc.on !== false; map["bk:" + rc.bk] = nid; }
+        const c = S.clips.find(x => x.id === nid); if(c){ c.bk = rc.bk; c.on = rc.on !== false; c.sound = !!rc.sound; map["bk:" + rc.bk] = nid; }
       }
       S.clips.forEach(c => { if(c.kind === "gen" && rec.gens && c.name in rec.gens) c.on = !!rec.gens[c.name]; });
       const P = rec.P ? JSON.parse(JSON.stringify(rec.P)) : null;
@@ -152,7 +152,7 @@ window.SLSProjects = (() => {
     const q = new Map(); let timer = null, list = null, listAt = 0;
     const data = r => ({ v: 1, name: r.name, P: r.P || null, songName: r.songName, songFile: r.songFile || null, step: r.step, style: r.style, aspect: r.aspect, words: r.words, duration: r.duration,
       gens: r.gens || {}, thumb: r.thumb || "", createdAt: r.createdAt, updatedAt: r.updatedAt,
-      clips: (r.clips || []).map(c => ({ bk: c.bk, name: c.name, kind: c.kind, credit: c.credit || null, src: c.src || null, on: c.on })) });
+      clips: (r.clips || []).map(c => ({ bk: c.bk, name: c.name, kind: c.kind, credit: c.credit || null, src: c.src || null, on: c.on, sound: !!c.sound })) });
     function push(r){ if(!on() || !r || !r.P) return; q.set(r.id, r); clearTimeout(timer); timer = setTimeout(flush, 2500); }
     async function flush(){
       const recs = [...q.values()]; q.clear();

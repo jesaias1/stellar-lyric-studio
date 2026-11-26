@@ -174,8 +174,28 @@ window.SLSExport = (() => {
     const main = oc.createBufferSource(); main.buffer = playBuffer(); const g = oc.createGain(); g.gain.value = S.P.mainMute ? 0 : (S.P.mainVol ?? 1); main.connect(g).connect(out); main.start(0, a, len);
     (S.P.aux || []).forEach(x => { const buf = S.auxBuf[x.id]; if(!buf || x.mute) return; const s = oc.createBufferSource(), gg = oc.createGain(); s.buffer = buf; gg.gain.value = x.vol ?? 1; s.connect(gg).connect(out);
       const off = -(x.start || 0); if(off < 0) s.start(-off, 0); else if(off < buf.duration) s.start(0, off); });
+    await clipSounds(oc, out, a, b);
     out.gain.setValueAtTime(0, 0); out.gain.linearRampToValueAtTime(1, 0.01); out.gain.setValueAtTime(1, Math.max(0.02, len - 0.03)); out.gain.linearRampToValueAtTime(0, len);   // no clicks at the cut points
     return oc.startRendering();
+  }
+  // a video clip's own sound (TikTok videos with the speaker on), decoded once per clip
+  async function clipAudio(c){
+    if(c.abuf !== undefined) return c.abuf;
+    try { c.abuf = await new OfflineAudioContext(2, 48000, 48000).decodeAudioData(await c.blob.arrayBuffer()); } catch { c.abuf = null; }
+    return c.abuf;
+  }
+  async function clipSounds(oc, out, a, b){
+    const { segs, order } = segInfo();
+    for(let i = 0; i < segs.length; i++){
+      const c = S.clips.find(x => x.id === order[i]); if(!c || c.kind !== "video" || !c.sound) continue;
+      const s0 = Math.max(a, segs[i].a), s1 = Math.min(b, segs[i].b); if(s1 - s0 < 0.02) continue;
+      const buf = await clipAudio(c); if(!buf) continue;
+      const sl = slotOf(i), sp = sl.sp || 1, inAt = (sl.in ?? defaultIn(i, c.el)) + (s0 - segs[i].a) * sp;
+      const src = oc.createBufferSource(), g = oc.createGain(); src.buffer = buf; src.loop = true; src.playbackRate.value = sp; src.connect(g).connect(out);
+      const when = s0 - a, dur = s1 - s0, f = Math.min(0.012, dur / 4);   // short fades, so a cut doesn't click
+      g.gain.setValueAtTime(0, when); g.gain.linearRampToValueAtTime(1, when + f); g.gain.setValueAtTime(1, when + dur - f); g.gain.linearRampToValueAtTime(0, when + dur);
+      src.start(when, inAt % buf.duration, dur * sp);
+    }
   }
   // one video with the project as it is now: frame by frame, encoded, packed
   async function renderOne(mb, f, s, tag){

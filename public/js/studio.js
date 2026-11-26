@@ -824,10 +824,12 @@ function manageVideos(segs, order, si, t){
   if(cur && cur.kind === "video"){ const v = vidFor(cur, si); keep.add(v);
     if(v.duration){ const want = wantTime(v, t - segs[si].a, si);
       const sp = slotOf(si).sp || 1; if(v.playbackRate !== sp) v.playbackRate = sp;
+      const hear = !!cur.sound && S.playing; if(v.muted === hear) v.muted = !hear;
       if(S.playing){ if(Math.abs(v.currentTime - want) > 0.3 && !v.seeking) v.currentTime = want; if(v.paused) v.play().catch(()=>{}); }
       else { if(!v.paused) v.pause(); if(Math.abs(v.currentTime - want) > 0.04 && !v.seeking) v.currentTime = want; } } }
   const nx = si + 1, nc = clipAt(nx);
   if(nc && nc.kind === "video" && segs[nx].a - t < 1.2){ const v = vidFor(nc, nx); keep.add(v);
+    if(!v.muted) v.muted = true;
     if(v.duration){ const want = wantTime(v, 0, nx); if(!v.paused) v.pause(); if(Math.abs(v.currentTime - want) > 0.04 && !v.seeking) v.currentTime = want; } }
   for(const c of S.clips) if(c.kind === "video") for(const v of [c.el, c.el2]) if(v && !keep.has(v) && !v.paused) v.pause();
   parkVideos(keep);
@@ -874,10 +876,6 @@ function renderFrame(tr0){
     sc.rotate((half ? k2 : k2 - 1)*0.5); const z = half ? 1 + k2*0.6 : 1.6 - k2*0.6; sc.scale(z, z); sc.translate(-W/2, -H/2); sc.drawImage(half ? cutC : footC, 0, 0); sc.restore(); }
   if(tr === "flash" && si > 0 && lt < XF){ sc.fillStyle = `rgba(255,255,255,${0.55*(1 - lt/XF)})`; sc.fillRect(0,0,W,H); }
   if(tr === "dip" && si > 0 && lt < XF){ sc.fillStyle = `rgba(0,0,0,${0.85*(1 - lt/XF)})`; sc.fillRect(0,0,W,H); }
-  // the song's colour, softly over all the footage (under the darkening and the lyrics)
-  const tn = P.tint; if(tn && tn.on && /^#[0-9a-f]{6}$/i.test(tn.color || "") && tn.amount > 0){ const k = clamp(tn.amount, 0, 1);
-    sc.save(); sc.fillStyle = tn.color; sc.globalCompositeOperation = "soft-light"; sc.globalAlpha = Math.min(1, k * 1.5); sc.fillRect(0,0,W,H);
-    sc.globalCompositeOperation = "source-over"; sc.globalAlpha = k * 0.16; sc.fillRect(0,0,W,H); sc.restore(); }
   if(st.scrim > 0){ sc.fillStyle = `rgba(6,5,10,${st.scrim})`; sc.fillRect(0,0,W,H);
     const vg = sc.createRadialGradient(W/2,H/2,Math.min(W,H)*0.3,W/2,H/2,Math.max(W,H)*0.75); vg.addColorStop(0,"rgba(0,0,0,0)"); vg.addColorStop(1,`rgba(0,0,0,${st.scrim*0.9})`); sc.fillStyle = vg; sc.fillRect(0,0,W,H); }
   // hook
@@ -1335,7 +1333,7 @@ function moveLimits(ws){
 }
 function selectWord(i, add){ const w = S.P.words[i]; if(!w) return; if(add && selWords()){ const st = selWords(); st.has(w) ? st.delete(w) : st.add(w); if(!st.size) return selectNone(); } else S.sel = {type:"words", set:new Set([w])}; tlDirty = true; showTab("lyrics"); syncWordCard(); }
 function selectAllWords(){ if(!S.P.words.length) return; S.sel = {type:"words", set:new Set(S.P.words)}; tlDirty = true; showTab("lyrics"); syncWordCard(); }
-function selectSeg(i){ S.sel = {type:"seg", i}; tlDirty = true; showTab("clips"); syncSegCard(); }
+function selectSeg(i){ S.sel = {type:"seg", i}; tlDirty = true; if(!sheetOpen) showTab("cuts"); syncSegCard(); }
 function selectNone(){ setTimeout(syncTextEditor, 0); S.sel = null; tlDirty = true; syncWordCard(); syncSegCard(); }
 function syncWordCard(){
   const st = selWords(); [...(st||[])].forEach(w => { if(!S.P.words.includes(w)) st.delete(w); });
@@ -1419,20 +1417,6 @@ function syncCutUI(){ const m = S.P.cuts.mode;
   $("#xfField").hidden = (S.P.cuts.transition || "none") === "none" && !(S.P.cuts.slots || []).some(sl => sl && sl.tr && sl.tr !== "none"); $("#xfDur").value = S.P.cuts.xf ?? 0.35; $("#xfDurVal").textContent = (+(S.P.cuts.xf ?? 0.35)).toFixed(2) + "s";
   $$("#cutMode button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === m)));
   $("#cutCountField").hidden = m !== "count"; $("#cutEveryField").hidden = m !== "beat"; $("#cutManualField").hidden = m !== "manual";
-  const fh = $("#cutFeelHint"); if(fh){ fh.hidden = m !== "feel"; fh.textContent = m === "feel" ? FEEL_WORDS[songEnergy()] : ""; }
-  syncTintUI(); }
-const FEEL_WORDS = {
-  calm: "A calm song: each picture stays for a lyric line or longer, with soft crossfades.",
-  steady: "A steady song: a new picture on most lyric lines, with short crossfades.",
-  lively: "A lively song: a clean cut on every other beat.",
-  intense: "An intense song: a cut with a flash on every beat.",
-};
-function syncTintUI(){
-  const f = $("#tintField"); if(!f) return;
-  const tn = S.P.tint, on = !!(tn && tn.on), v = window.SLSVibe ? SLSVibe.cached() : null;
-  $("#tintOn").hidden = on; $("#tintCtl").hidden = !on; $("#tintOff").hidden = !on;
-  if(on){ if(document.activeElement !== $("#tintColor")) $("#tintColor").value = tn.color; if(document.activeElement !== $("#tintAmt")) $("#tintAmt").value = Math.round(tn.amount * 100); $("#tintVal").textContent = Math.round(tn.amount * 100) + "%"; }
-  $("#tintOn").textContent = v ? "Use the song's colour" : "Read the song and use its colour";
 }
 function syncHookUI(){ const h = S.P.hook, len = S.P.section.b - S.P.section.a;
   fillFonts("#hFont");
@@ -1520,6 +1504,7 @@ const SHEETS = {
   style: ["Templates", () => [$('[data-rpane="looks"]')]],
   font: ["Lyric text", () => [$('[data-rpane="type"]')]],
   clips: ["Clips", () => [$('[data-pane="clips"]')]],
+  cuts: ["Cuts", () => [$('[data-pane="cuts"]'), $('[data-pane="framing"]')]],
   hook: ["Hook", () => [$("#hookSeg").closest(".card")]],
   text: ["Text boxes", () => [$("#textCard")]],
   audio: ["Audio", () => [$("#vocalMode"), $(".tlbar")]],
@@ -1555,7 +1540,7 @@ $("#msheetPlay").onclick = () => $("#playBtn").click();   // the sheet covers th
 window.matchMedia("(max-width:700px) and (pointer:coarse)").addEventListener("change", ev => { if(!ev.matches) closeSheet(); sizeTimeline(); fitStage(); });
 function showTab(name){ document.body.dataset.mtab = name; $$(".tabs [data-tab]").forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === name)));
   if(name === "style"){ renderPresetThumbs(); return; } $$("[data-pane]").forEach(p => p.hidden = p.dataset.pane !== name);
-  if(name === "clips") openTimelineOnce(); }
+  if(name === "clips" || name === "cuts") openTimelineOnce(); }
 // the clip timings are edited on the timeline, so it opens (once per visit) when you go to Clips
 let tlOpenedForClips = false;
 function openTimelineOnce(){ if(tlOpenedForClips || isPhone()) return; tlOpenedForClips = true; if(document.body.dataset.tl !== "open" && $("#tlToggle")) $("#tlToggle").click(); }
@@ -1620,16 +1605,7 @@ $("#secLenIn").oninput = e => { const v = +e.target.value; if(!(v >= 2) || S.pla
 // hook timing: the preview follows the slider (start shows the hook appearing, length shows its last moment)
 $("#hStart").addEventListener("input", () => { if(!S.playing) S.t = S.P.section.a + (S.P.hook.start || 0) + 0.05; });
 $("#hDur").addEventListener("input", () => { if(!S.playing) S.t = Math.min(S.P.section.b - 0.04, S.P.section.a + (S.P.hook.start || 0) + S.P.hook.dur - 0.05); });
-$("#tintOn").onclick = async () => {
-  let v = window.SLSVibe ? SLSVibe.cached() : null;
-  if(!v && window.SLSVibe){ $("#tintOn").textContent = "Listening to the song…"; v = await SLSVibe.get(); }
-  const c = (S.P.tint && S.P.tint.color) || (window.SLSVibe && SLSVibe.tintOf(v)) || "#c8913a";
-  S.P.tint = { on: true, color: c, amount: (S.P.tint && S.P.tint.amount) || 0.35 }; syncTintUI(); dirty();
-};
-$("#tintOff").onclick = () => { S.P.tint = { ...(S.P.tint || {}), on: false }; syncTintUI(); dirty(); };
-$("#tintColor").oninput = e => { if(!S.P.tint) return; S.P.tint.color = e.target.value; saveDraft(); };
-$("#tintAmt").oninput = e => { if(!S.P.tint) return; S.P.tint.amount = +e.target.value / 100; $("#tintVal").textContent = e.target.value + "%"; saveDraft(); };
-slsOn("vibe", () => { syncTintUI(); if(S.P.cuts.mode === "feel") syncCutUI(); });
+slsOn("vibe", () => { if(S.P.cuts.mode === "feel") syncCutUI(); });
 $("#cutOrder").onclick = e => { const b = e.target.closest("button"); if(!b) return; S.P.cuts.order = b.dataset.v; S.P.cuts.slots = null; syncCutUI(); dirty(); };
 $("#cutTrans").onclick = e => { const b = e.target.closest("button"); if(!b) return; S.P.cuts.transition = b.dataset.v; syncCutUI(); saveDraft(); if(!S.playing){ const {segs} = segInfo(); const k = segs.findIndex(x => x.a > S.t); if(k > 0){ S.t = segs[k].a - 0.6; play({}); } } };
 function addCutAt(t0){ if(S.locks.cuts){ toast("The cuts track is locked"); return false; } toManualCuts(); const t = snapTime(t0, 2), {a,b} = S.P.section; if(t <= a + 0.15 || t >= b - 0.15){ toast("Move the playhead inside the soundbite first"); return false; }
@@ -1912,12 +1888,15 @@ document.addEventListener("keydown", e => {
 let clipId = 0;
 function genThumb(g){ const cv = document.createElement("canvas"); cv.width = 120; cv.height = 160; drawGen(cv.getContext("2d"), 120, 160, g, 1.3, 0); return cv.toDataURL("image/jpeg", .8); }
 function addThumb(c, url){ c.thumb = url; c.thumbImg = new Image(); c.thumbImg.onload = () => tlDirty = true; c.thumbImg.src = url; }
+const SPK_OFF = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="m16 9 5 6M21 9l-5 6"/></svg>', SPK_ON = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>';
 function renderClips(){
   $("#clipGrid").innerHTML = S.clips.map(c => `<button class="clipt${c.on?"":" off"}" data-id="${c.id}" aria-pressed="${c.on}" draggable="true" title="${c.on?"In":"Out of"} the shuffle. Drag onto a clip on the timeline to put it there.">
-    <img alt="" src="${c.thumb||""}"><span class="cap"><span>${esc(c.name)}</span><span class="kind">${c.kind==="gen"?"Built-in":c.src&&c.src.kind==="ai"?"AI":c.src&&c.src.kind==="stock"?"Stock":c.src&&c.src.kind==="photo"&&c.src.source==="Pinterest"?"Pinterest":c.src&&c.src.kind==="board"?"Moodboard":c.kind==="img"?"Photo":"Video"}</span></span>
-    ${c.kind!=="gen"?`<span class="x" data-rm="${c.id}" role="button" aria-label="Remove ${esc(c.name)}">×</span>`:""}</button>`).join("");
+    <img alt="" src="${c.thumb||""}"><span class="cap"><span>${esc(c.name)}</span><span class="kind">${c.kind==="gen"?"Built-in":c.src&&c.src.kind==="ai"?"AI":c.src&&c.src.kind==="stock"?"Stock":c.src&&c.src.kind==="tiktok"?"TikTok":c.src&&c.src.kind==="photo"&&c.src.source==="Pinterest"?"Pinterest":c.src&&c.src.kind==="board"?"Moodboard":c.kind==="img"?"Photo":"Video"}</span></span>
+    ${c.kind!=="gen"?`<span class="x" data-rm="${c.id}" role="button" aria-label="Remove ${esc(c.name)}">×</span>`:""}${c.kind==="video" && (c.src&&c.src.kind==="tiktok" || c.sound) ? `<span class="snd${c.sound?" on":""}" data-snd="${c.id}" role="button" aria-pressed="${!!c.sound}" aria-label="${c.sound?"Mute":"Unmute"} ${esc(c.name)}" title="${c.sound?"Sound on: tap to mute":"Muted: tap to hear it"}">${c.sound?SPK_ON:SPK_OFF}</span>` : ""}</button>`).join("");
 }
 $("#clipGrid").onclick = e => {
+  const snd = e.target.closest("[data-snd]");
+  if(snd){ const c = S.clips.find(x => x.id === snd.dataset.snd); if(c){ c.sound = !c.sound; renderClips(); saveDraft(); toast(c.sound ? `${c.name}: sound on` : `${c.name}: muted`); } return; }
   const rm = e.target.closest("[data-rm]");
   if(rm){ const i = S.clips.findIndex(c => c.id === rm.dataset.rm); if(i>=0){ const c = S.clips[i]; if(c.url) URL.revokeObjectURL(c.url); S.clips.splice(i,1); } renderClips(); tlDirty = true; return; }
   const b = e.target.closest(".clipt"); if(!b) return; const c = S.clips.find(c => c.id === b.dataset.id);

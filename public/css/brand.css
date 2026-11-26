@@ -25,7 +25,7 @@
 body{font:14px/1.4 var(--ui);letter-spacing:-.005em}
 
 /* ---------- type: one grotesk, medium weight, tight; light italic for secondary lines ---------- */
-.label{font:500 11px/1.2 var(--ui);letter-spacing:.01em;text-transform:lowercase;color:var(--muted)}
+.label{font:500 11px/1.2 var(--ui);letter-spacing:.01em;text-transform:none;color:var(--muted)}   /* titles as written: "Your clips", "How cuts are chosen" */
 .hint{letter-spacing:0}
 .dialog h2,.ly-title h2,.drop-title,.work-step,.oops-title,.ly-empty b,.paste-head b,.pj-head h2,.tp-head .label{font:500 22px/1.05 var(--display);font-stretch:normal;font-style:normal;letter-spacing:-.02em;text-transform:none}
 .ly-title h2{font-size:28px}

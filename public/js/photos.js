@@ -14,11 +14,11 @@ window.SLSPhotos = (() => {
   panel.innerHTML = `
     <div class="seg" id="phFrom"><button data-v="search">Search</button><button data-v="boards">My moodboards</button></div>
     <div class="ph-box" id="phSearchBox">
-      <label class="field"><span class="hint">What should the images look like? Keywords or a prompt.</span>
+      <label class="field"><span class="label">Search</span>
         <textarea id="phPrompt" rows="2" maxlength="300" placeholder="e.g. rainy city nights, neon, shot on film"></textarea></label>
       <div class="chips fx-ideas" id="phIdeas">${IDEAS.map(q => `<button type="button" data-q="${q}">${q}</button>`).join("")}</div>
-      <div class="field"><span class="hint">Look</span><div class="seg ph-src" id="phLook"><button data-v="mix" title="Paintings, illustration and film-style photos">Mixed</button><button data-v="art" title="Paintings, drawings and illustration">Art</button><button data-v="photo" title="Film-style and real photos, no stock">Photos</button></div></div>
-      <div class="field"><span class="hint">From</span><div class="seg ph-src" id="phSrc"><button data-v="free">Free photos</button><button data-v="pinterest">Pinterest</button><button data-v="both">Both</button><button data-v="mine" title="The pins you have saved on your own Pinterest">My pins</button></div></div>
+      <div class="field"><span class="label">Look</span><div class="seg ph-src" id="phLook"><button data-v="mix" title="Paintings, illustration and film-style photos">Mixed</button><button data-v="art" title="Paintings, drawings and illustration">Art</button><button data-v="photo" title="Film-style and real photos, no stock">Photos</button></div></div>
+      <div class="field"><span class="label">From</span><div class="seg ph-src" id="phSrc"><button data-v="free">Free photos</button><button data-v="pinterest">Pinterest</button><button data-v="both">Both</button><button data-v="mine" title="The pins you have saved on your own Pinterest">My pins</button></div></div>
       <div class="ph-mine" id="phMine" hidden></div>
       <div class="hint ph-note" id="phSrcNote"></div>
     </div>
@@ -27,9 +27,9 @@ window.SLSPhotos = (() => {
       <button class="btn small" id="mbNew" type="button">+ New moodboard</button>
     </div>
     <div class="field ph-count">
-      <span class="row" style="justify-content:space-between"><span class="hint">Number of images</span><span class="hint" id="phCountVal"></span></span>
+      <span class="row" style="justify-content:space-between"><span class="label">Number of images</span><span class="hint" id="phCountVal"></span></span>
       <input type="range" id="phCount" min="2" max="40" step="1" aria-label="Number of images">
-      <span class="hint" id="phCountWhy"></span>
+      <span class="hint" id="phCountWhy" hidden></span>
     </div>
     <button class="btn primary small" id="phGo" type="button">Find the best images</button>
     <div class="fx-msg hint" id="phMsg"></div>`;
@@ -106,15 +106,11 @@ window.SLSPhotos = (() => {
         const a = PIN.get();
         box.innerHTML = !p.mine ? `<span class="hint">Connecting Pinterest isn't switched on yet. It needs a Pinterest app (PINTEREST_APP_ID and PINTEREST_APP_SECRET) in the site's settings.</span>`
           : a ? `<span class="ph-mine-who">${a.avatar ? `<img src="${esc(a.avatar)}" alt="" referrerpolicy="no-referrer">` : ""}<span>Searching the saved pins of <b>${esc(PIN.who())}</b></span></span><button class="btn small ghost" type="button" data-pin="off">Disconnect</button>`
-          : `<span class="hint">Search the pins you've saved yourself: real pictures you picked, so no AI filler. Pinterest only shares your own pins and boards with other apps, not your home feed.</span><button class="btn small" type="button" data-pin="on">Connect Pinterest</button>`;
-        if(a) notes.push("Pinterest searches your pins' own titles and descriptions, so plain keywords work best (beach, night, flowers).");
+          : `<button class="btn small" type="button" data-pin="on">Connect Pinterest</button>`;
       }
       if((from === "pinterest" || from === "both") && h.photos && !p.pinterest) notes.push("Pinterest search isn't switched on yet. It needs a SerpApi key (SERPAPI_KEY) in the site's settings.");
       else if((from === "free" || from === "both") && h.photos && !free) notes.push("Free photo search isn't switched on yet. It needs a free Pixabay or Pexels key in the site's settings.");
-      if((from === "pinterest" || from === "both") && p.pinterest){
-        notes.push(`Each search with Pinterest on uses 3 to 4 of the SerpApi account's monthly searches${pinLeft != null ? ` (${pinLeft} left this month)` : ""}. Looking through the results costs nothing extra, and nothing is downloaded until you add the images.`);
-        notes.push("Pinterest images belong to the people who posted them. Fine for drafts and moods; for videos you publish, the free photos are the safe choice.");
-      }
+      if((from === "pinterest" || from === "both") && p.pinterest && pinLeft != null && pinLeft < 50) notes.push(`${pinLeft} Pinterest searches left this month.`);
       $("#phSrcNote").textContent = notes.join(" ");
     });
     msg("");
@@ -310,7 +306,7 @@ window.SLSPhotos = (() => {
         <button class="mb-pick" type="button" aria-pressed="${b.id === selected}"><span class="mb-mosaic">${b.items.slice(0, 4).map(it => `<img alt="" src="${it.thumb}">`).join("") || "<i></i>"}</span>
         <span class="mb-name">${esc(b.name)}</span><span class="hint">${b.items.length} image${b.items.length === 1 ? "" : "s"}</span></button>
         <button class="btn small ghost mb-edit" type="button" data-edit="${b.id}">Edit</button></div>`).join("")
-      : `<div class="hint">A moodboard is your own set of images: drop in photos from your computer or paste a public Pinterest board. The grabber then picks from it for each song.</div>`;
+      : `<div class="hint">No moodboards yet.</div>`;
   }
   $("#mbList").onclick = e => {
     const ed = e.target.closest("[data-edit]"); if(ed){ editBoard(boards.find(b => b.id === ed.dataset.edit)); return; }
@@ -349,10 +345,10 @@ window.SLSPhotos = (() => {
         <b>Drop images here</b><span class="hint">or <span class="drop-link">choose them from your computer</span></span></label>
       <form class="fx-search" id="mbPinForm" autocomplete="off"><input type="url" id="mbPin" placeholder="…or paste a public Pinterest board link" aria-label="Pinterest board link"><button class="btn small" type="submit">Import</button></form>
       <div class="mb-pin-app"><a class="btn small mb-open-pin" href="https://www.pinterest.com/" target="_blank" rel="noopener">Open Pinterest</a><button class="btn small" id="mbPaste" type="button">Paste board link</button>
-        <span class="hint">In Pinterest, open the board, tap Share, then Copy link. Come back and tap Paste board link.</span></div>
+</div>
       <div class="mb-mine" id="mbMine"></div>
       <div class="hint" id="mbMsg"></div>
-      <div class="hint" id="mbOrderHint" hidden>Drag the images to put them in order. On a phone, press and hold an image first.</div>
+      <div class="hint" id="mbOrderHint" hidden></div>
       <div class="ph-grid mb-grid" id="mbGrid"></div>
       <div class="row ph-actions"><button class="btn primary" id="mbDone" type="button">Done</button><button class="btn ghost" id="mbDel" type="button">Delete moodboard</button></div>
     </div>`;
@@ -367,7 +363,7 @@ window.SLSPhotos = (() => {
   function paintEditor(){
     $("#mbGrid").innerHTML = B.items.map(it => `<div class="ph-tile mb-tile" data-k="${esc(it.k)}"><img alt="" src="${it.thumb}" draggable="false"><button class="ph-x" type="button" data-rm="${esc(it.k)}" aria-label="Remove">✕</button></div>`).join("");
     $("#mbTitle").textContent = B.items.length ? `Moodboard · ${B.items.length} image${B.items.length === 1 ? "" : "s"}` : "Moodboard";
-    $("#mbOrderHint").hidden = B.items.length < 2;
+    $("#mbOrderHint").hidden = true;
   }
   async function saveBoard(){ B.name = $("#mbName").value.trim() || B.name || "My moodboard"; const { fresh, ...rec } = B; rec.at = Date.now(); await DB.put(rec); B.fresh = false; selected = B.id; keep.set("sls-mb-sel", selected); $("#mbDel").hidden = false; }
   $("#mbGrid").onclick = async e => {
@@ -530,7 +526,7 @@ window.SLSPhotos = (() => {
     getHealth().then(h => {
       if(!(h.photos && h.photos.mine)){ el.innerHTML = ""; return; }
       const a = PIN.get();
-      if(!a){ el.innerHTML = `<button class="btn small" type="button" data-mb="connect">Connect Pinterest</button><span class="hint">to import any of your boards, secret ones too, with every pin.</span>`; return; }
+      if(!a){ el.innerHTML = `<button class="btn small" type="button" data-mb="connect">Connect Pinterest</button>`; return; }
       el.innerHTML = `<div class="row mb-mine-head"><button class="btn small" type="button" data-mb="boards" aria-expanded="${boardsOpen}">${boardsOpen ? "Hide your boards" : "Import one of your boards"}</button><span class="hint">${esc(PIN.who())}</span></div>`
         + (boardsOpen ? (myBoards == null ? `<p class="hint">Loading your boards…</p>` : myBoards.length ? `<div class="mb-boards">${myBoards.map(b => `<button type="button" class="mb-board" data-board="${esc(b.id)}">
             ${b.cover ? `<img src="${esc(b.cover)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : `<i></i>`}<b>${esc(b.name)}</b><span class="hint">${b.count} pin${b.count === 1 ? "" : "s"}${b.secret ? " · secret" : ""}</span></button>`).join("")}</div>`

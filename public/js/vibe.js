@@ -53,7 +53,7 @@ window.SLSVibe = (() => {
     return "";
   }
   // the first time a song is read, its colour goes over the footage, softly (Clips > Song colour turns it off)
-  function firstTint(v){ if(S.P.tint === undefined){ const c = tintOf(v); if(c) S.P.tint = { on: true, color: c, amount: 0.35 }; } }
+  function firstTint(){}   // the song colour over the footage was removed (26 Nov 2026); the reading keeps its colour for the image searches
   let pending = null, pendingKey = "";
   async function get(){
     const have = cached(); if(have) return have;
