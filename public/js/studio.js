@@ -422,7 +422,7 @@ const PRESETS = [
       c.font = fnt(o.pf, px); c.textAlign = "center"; c.textBaseline = "middle"; c.globalAlpha *= k; c.fillStyle = o.tx; c.fillText(txt, W/2, cy(H,st));
   }},
 
-  { id:"stack", name:"Stack", cat:"minimal", caseDef:"lower", demo:"it's gorgeous she think i'm flying too high", def:{pf:"narrow", hi:"#ffffff"},
+  { id:"stack", name:"Brat", cat:"minimal", caseDef:"lower", demo:"it's gorgeous she think i'm flying too high", def:{pf:"narrow", hi:"#ffffff"},
     draw(c,W,H,s,t,st,o){
       const texts = s.words.map(w => caseOf(st,"lower",w.w)), maxW = W*0.8, px = fitK(c, o.pf, texts, maxW, H*0.074); c.font = fnt(o.pf, px);
       const sp = c.measureText(" ").width, lay = layoutWords(c, texts, maxW), lh = px*1.02;
@@ -1397,6 +1397,8 @@ function updateTapPad(){
   else { $("#tapNext").textContent = "Press start, then tap each word"; $("#tapAfter").textContent = "Space bar or tap here as each word is sung"; }
 }
 $("#tapStart").onclick = startTap;
+// "Do the timing by hand": to the tap pad, ready to start
+$("#toTap").onclick = () => { const p = $("#tapPad"); p.scrollIntoView({ behavior: "smooth", block: "center" }); setTimeout(() => $("#tapStart").focus({ preventScroll: true }), 350); };
 $("#tapCancel").onclick = () => { pause(); endTap(false); };
 $("#tapPad").addEventListener("pointerdown", e => { if(S.tap && !e.target.closest("button")){ e.preventDefault(); tapNow(); } });
 

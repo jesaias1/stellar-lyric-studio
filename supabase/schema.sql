@@ -206,3 +206,35 @@ create policy "team changes the plan" on public.content_plan for update to authe
 create policy "team removes from the plan" on public.content_plan for delete to authenticated using (true);
 revoke all on public.content_plan from anon;
 grant select, insert, update, delete on public.content_plan to authenticated;
+
+
+-- ---------- bookings: each person's own calendar (periods they book for an artist on the roster) ----------
+-- "I'm posting videos for Ingrid Eikeland until 24 December": a period, an artist, what it's for. Everyone logged in
+-- sees all bookings (the calendar's Team view); only the person who made a booking can change or remove it.
+-- Run this part once in Supabase (SQL editor) to turn bookings on.
+create table if not exists public.bookings (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  owner_name text not null default '' check (char_length(owner_name) <= 80),
+  artist text not null check (char_length(artist) between 1 and 120),
+  title text not null default '' check (char_length(title) <= 200),
+  starts date not null,
+  ends date not null,
+  note text not null default '' check (char_length(note) <= 1000),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  check (ends >= starts)
+);
+create index if not exists bookings_range on public.bookings (starts, ends);
+create index if not exists bookings_user on public.bookings (user_id, starts);
+alter table public.bookings enable row level security;
+drop policy if exists "team reads bookings" on public.bookings;
+drop policy if exists "own bookings: add" on public.bookings;
+drop policy if exists "own bookings: change" on public.bookings;
+drop policy if exists "own bookings: remove" on public.bookings;
+create policy "team reads bookings" on public.bookings for select to authenticated using (true);
+create policy "own bookings: add" on public.bookings for insert to authenticated with check ((select auth.uid()) = user_id);
+create policy "own bookings: change" on public.bookings for update to authenticated using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
+create policy "own bookings: remove" on public.bookings for delete to authenticated using ((select auth.uid()) = user_id);
+revoke all on public.bookings from anon;
+grant select, insert, update, delete on public.bookings to authenticated;

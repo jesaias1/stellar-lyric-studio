@@ -175,7 +175,7 @@ window.SLSAuth = (() => {
         <button class="btn primary auth-go" type="submit" id="authGo">Log in</button>
         <p class="auth-note" id="authNote"></p>
       </form>
-      <p class="auth-legal"><button class="auth-tut" type="button" data-tut-open>Watch how it works (1 min)</button> · <a href="/terms.html" target="_blank" rel="noopener">Terms</a> · <a href="/privacy.html" target="_blank" rel="noopener">Privacy</a> · Stellar Music</p>
+      <p class="auth-legal"><button class="auth-tut" type="button" data-tut-open>Watch how it works (1½ min)</button> · <a href="/terms.html" target="_blank" rel="noopener">Terms</a> · <a href="/privacy.html" target="_blank" rel="noopener">Privacy</a> · Stellar Music</p>
     </div>`;
   document.body.append(gate);
   const $g = s => gate.querySelector(s);

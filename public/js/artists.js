@@ -24,7 +24,7 @@
   /* ---------- level 1: the artists ---------- */
   async function showArtists(){
     stopPreview(); openId = ""; const my = ++token;
-    title.textContent = "Stellar Music artists"; prev.hidden = true;
+    title.textContent = "Pick an artist song"; prev.hidden = true;
     if(!artists){
       body.innerHTML = skeleton(6);
       try { artists = (await SLSBackend.api("/api/catalog")).artists || []; }
@@ -32,7 +32,7 @@
       if(my !== token) return;
     }
     body.innerHTML = artists.length
-      ? [["", "Stellar Music artists"], ["ai", "AI-assisted artists"]].map(([g, label]) => { const list = artists.filter(a => (a.group || "") === g); return list.length ? `<div class="ar-group">${label}</div><div class="ar-grid">${list.map(a => `<button class="ar-card" type="button" data-id="${esc(a.id)}">${photo(a, "big")}<span class="ar-name">${esc(a.name)}</span></button>`).join("")}</div>` : ""; }).join("")
+      ? [["", "Stellar Music catalog"], ["ai", "AI-assisted artists"]].map(([g, label]) => { const list = artists.filter(a => (a.group || "") === g); return list.length ? `<div class="ar-group">${label}</div><div class="ar-grid">${list.map(a => `<button class="ar-card" type="button" data-id="${esc(a.id)}">${photo(a, "big")}<span class="ar-name">${esc(a.name)}</span></button>`).join("")}</div>` : ""; }).join("")
       : `<div class="ar-state"><p>No artists yet.</p></div>`;
     body.insertAdjacentHTML("beforeend", `<div class="ar-more"><button class="ar-find" type="button" data-ar="find"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg>Another artist? Search Apple Music</button></div>`);
     const f = body.querySelector(".ar-card"); if(f && isOpen) f.focus({ preventScroll: true });

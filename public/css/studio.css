@@ -288,8 +288,17 @@ input[type=color]{width:34px;height:28px;border:1px solid var(--line-2);border-r
 .stage:fullscreen .stagebar{display:none}
 body.stage-full .stage{position:fixed;inset:0;z-index:950;background:var(--canvas)}
 body.stage-full .stage .stagebar{display:none}
-.style-tip{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:2px 0 8px}
-.style-tip .link-btn{font-size:inherit;padding:0}
+/* the design step's Lyrics tab: a small way back to the lyrics step */
+.ly-back{display:inline-block;margin:0 0 12px;font-size:13px}
+/* "Suits this song": a card with the style's moving preview, why it fits and Use it */
+.style-tip{display:flex;align-items:center;gap:10px;margin:4px 0 10px;padding:8px 8px 8px 8px;border:1px solid color-mix(in srgb,var(--accent,#5b6cff) 55%,var(--line-2));border-radius:12px;background:color-mix(in srgb,var(--accent,#5b6cff) 12%,var(--raise))}
+.style-tip canvas{width:54px;height:72px;border-radius:7px;flex:none;background:#15131c}
+.style-tip .sug-t{display:grid;gap:1px;flex:1;min-width:0}
+.style-tip .sug-k{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--accent,#7b8cff)}
+.style-tip .sug-t b{font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.style-tip .sug-why{font-size:12px;color:var(--muted);line-height:1.3}
+.style-tip .btn{flex:none}
+.style-tip .tip-x{align-self:flex-start}
 .tip-x{background:none;border:0;color:var(--muted);padding:2px 6px;font-size:12px;line-height:1;cursor:pointer}
 .tip-x:hover{color:var(--text)}
 .tint-row{gap:10px;flex-wrap:nowrap;align-items:center}
@@ -600,6 +609,25 @@ body.cal-open .toast{z-index:1600}
 .cal-dayh{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
 .cal-dayh h3{margin:0}
 .cal-planh{margin-top:16px}
+/* bookings: a bar in the artist's colour across the booked days, the name on the first day of each week */
+.cal-books{display:grid;gap:2px;margin:1px -4px 3px}
+.cal-book{display:block;height:16px;border:0;padding:0 6px;background:hsl(var(--bh) 62% 52% / .28);box-shadow:inset 0 0 0 1px hsl(var(--bh) 62% 58% / .55);border-radius:0;color:var(--text);font:600 10.5px/16px inherit;text-align:left;cursor:pointer;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.cal-book.first{border-top-left-radius:5px;border-bottom-left-radius:5px;margin-left:4px}
+.cal-book.last{border-top-right-radius:5px;border-bottom-right-radius:5px;margin-right:4px}
+.cal-book:hover,.cal-book.on{background:hsl(var(--bh) 62% 52% / .45)}
+.cal-book .cal-n{font-size:10.5px}
+.cal-bm{display:inline-block;flex:none;width:12px;height:8px;border-radius:3px;background:hsl(var(--bh) 62% 55%);margin:0 1px}
+.cal-dayb{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.cal-who button{padding:5px 10px}
+@media (max-width:760px){
+  .cal-books{align-self:stretch;margin:0 -3px 1px;gap:1px}
+  .cal-book{height:5px;padding:0;font-size:0}
+  .cal-book.first{margin-left:2px} .cal-book.last{margin-right:2px}
+  .cal-book .cal-n{display:none}
+  /* the header: title, Trending and close on top; the artist filter and Mine / Team below; then the month */
+  .cal-head #calFilter{order:3;flex:1 1 150px;min-width:0}
+  .cal-who{order:3}
+}
 .cal-day .cal-list + .cal-list{margin-top:6px}
 .cal-pform{display:grid;gap:12px}
 .cal-f2{display:grid;grid-template-columns:1fr 1fr;gap:10px}

@@ -1,4 +1,4 @@
-/* The 1-minute tutorial video on the front page.
+/* The tutorial video on the front page (about 1 min 20 s).
    Nothing is downloaded until someone opens it (the video's src is set on open), and closing it stops playback.
    Opens from the "Watch how it works" button, the "tutorial" link in the top bar, the login screen, or a link to /#tutorial. */
 (() => {
@@ -6,8 +6,8 @@
   const box = $t("#tutModal"), video = $t("#tutVideo");
   if(!box || !video) return;
   // a wide video for computers, a tall one (made for phones) on phones and narrow upright screens
-  const WIDE = { src: "media/tutorial.mp4?v=4", poster: "media/tutorial-poster.jpg?v=4", w: 1280, h: 720 };
-  const TALL = { src: "media/tutorial-phone.mp4?v=1", poster: "media/tutorial-phone-poster.jpg?v=1", w: 720, h: 1280 };
+  const WIDE = { src: "media/tutorial.mp4?v=5", poster: "media/tutorial-poster.jpg?v=5", w: 1280, h: 720 };
+  const TALL = { src: "media/tutorial-phone.mp4?v=2", poster: "media/tutorial-phone-poster.jpg?v=2", w: 720, h: 1280 };
   const PHONE = matchMedia("(max-width: 640px), (orientation: portrait) and (max-width: 900px)");
   const frame = box.querySelector(".tut-box");
   let opener = null;

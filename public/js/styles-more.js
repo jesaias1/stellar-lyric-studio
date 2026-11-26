@@ -533,8 +533,8 @@
     why = [{ low: "slow", mid: "mid-tempo", high: "fast" }[pr.energy], ...top].join(", ");
     renderPresetGrid(); paintSuggest();
   }
-  /* One quiet line under the categories: the style that suits the song best. It's only a suggestion: it hides once
-     that style is in use, and × hides it for this song. */
+  /* A card under the categories: the style that suits the song best, with its moving preview, why it fits and a
+     Use it button. It's only a suggestion: it hides once that style is in use, and × hides it for this song. */
   const HIDE = "sls-style-tip-off";
   const hidden = () => { try { return (JSON.parse(sessionStorage.getItem(HIDE)) || []).includes(S.songName || ""); } catch { return false; } };
   function paintSuggest(){
@@ -542,13 +542,28 @@
     const p = best && PRESETS.find(x => x.id === best);
     if(!p || p.id === S.P.style.preset || hidden()){ el.hidden = true; return; }
     el.hidden = false;
-    el.innerHTML = `<span>Suits this song: <button class="link-btn" type="button" data-use="${esc(p.id)}">${esc(p.name)}</button></span><button class="tip-x" type="button" aria-label="Hide this suggestion">✕</button>`;
+    if(el.dataset.id !== p.id){
+      el.dataset.id = p.id;
+      el.innerHTML = `<canvas width="72" height="96" aria-hidden="true"></canvas><span class="sug-t"><span class="sug-k">Suits this song</span><b>${esc(p.name)}</b>${why ? `<span class="sug-why">For a ${esc(why)} song</span>` : ""}</span>
+        <button class="btn small primary" type="button" data-use="${esc(p.id)}">Use it</button><button class="tip-x" type="button" aria-label="Hide this suggestion">✕</button>`;
+    }
+    sugAnim(p);
+  }
+  // the card's preview plays the style's own demo, like the big preview above
+  let sugRaf = 0;
+  function sugAnim(p){
+    cancelAnimationFrame(sugRaf);
+    const tick = now => { const el = $("#styleSuggest"), cv = el && !el.hidden && el.querySelector("canvas"); if(!cv || el.dataset.id !== p.id) return;
+      if(cv.offsetParent !== null){ const n = Math.max(1, (p.demo || "x").split(/\s+/).length), loop = n * 0.38 + 1.4, c = cv.getContext("2d");
+        c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, cv.width, cv.height); drawStyleCard(c, cv.width, cv.height, p, (now / 1000) % loop, false); }
+      sugRaf = requestAnimationFrame(tick); };
+    sugRaf = requestAnimationFrame(tick);
   }
   document.addEventListener("click", e => {
     const el = $("#styleSuggest"); if(!el || !el.contains(e.target)) return;
     const use = e.target.closest("[data-use]");
     if(use){ S.P.style.preset = use.dataset.use; S.P.style.case = "auto"; syncUI(); saveDraft(); renderPresetGrid(); paintSuggest(); return; }
-    if(e.target.closest(".tip-x")){ try { const l = JSON.parse(sessionStorage.getItem(HIDE)) || []; l.push(S.songName || ""); sessionStorage.setItem(HIDE, JSON.stringify(l.slice(-50))); } catch {} el.hidden = true; }
+    if(e.target.closest(".tip-x")){ cancelAnimationFrame(sugRaf); try { const l = JSON.parse(sessionStorage.getItem(HIDE)) || []; l.push(S.songName || ""); sessionStorage.setItem(HIDE, JSON.stringify(l.slice(-50))); } catch {} el.hidden = true; }
   });
   window.SLSStyleRecs = { recommend, get why(){ return why; } };
   let timer = 0; slsOn("change", () => { clearTimeout(timer); timer = setTimeout(() => { recommend(); paintSuggest(); }, 400); });

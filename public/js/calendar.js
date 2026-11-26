@@ -48,6 +48,7 @@ window.SLSCalendar = (() => {
         <button class="btn small" type="button" data-cal="today">Today</button>
       </div>
       <select id="calFilter" aria-label="Show posts for"><option value="">All artists</option></select>
+      <div class="seg cal-who" role="group" aria-label="Whose bookings"><button type="button" data-cal="mine" aria-pressed="true">Mine</button><button type="button" data-cal="team" aria-pressed="false">Team</button></div>
       <button class="btn small cal-trend-btn" type="button" data-cal="trend" aria-pressed="false">Trending sounds</button>
       <button class="icon-btn cal-x" type="button" data-cal="close" aria-label="Close the calendar">✕</button>
     </header>
@@ -73,6 +74,8 @@ window.SLSCalendar = (() => {
   let view = null, posts = [], upcoming = [], filter = "", selDay = "", openId = "", editing = false, busy = false;
   let isOpen = false, opener = null, loadTok = 0, timer = null, err = "", loading = false, loadedOnce = false;
   let plans = [], planNext = [], planMissing = false, planEdit = null, trendOn = false;
+  // bookings: periods each person books for an artist ("Ingrid Eikeland until 24 Dec"). Mine = only my own, Team = everyone's
+  let books = [], bookNext = [], bookMissing = false, bookEdit = null, whose = (() => { try { return localStorage.getItem("sls-cal-whose") === "team" ? "team" : "mine"; } catch { return "mine"; } })();
   const today = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
   const gridStart = v => { const f = new Date(v.y, v.m, 1), dow = (f.getDay() + 6) % 7; return new Date(v.y, v.m, 1 - dow); };
   const weeksIn = v => Math.ceil((((new Date(v.y, v.m, 1).getDay() + 6) % 7) + new Date(v.y, v.m + 1, 0).getDate()) / 7);
@@ -90,7 +93,7 @@ window.SLSCalendar = (() => {
       if(tok !== loadTok) return;
       posts = Array.isArray(a) ? a : []; upcoming = Array.isArray(b) ? b : []; err = ""; loadedOnce = true;
     } catch(e){ if(tok !== loadTok) return; if(!quiet || !loadedOnce) err = (e && e.message) || "The calendar couldn't be loaded."; }
-    await loadPlan(from, to, tok);
+    await Promise.all([loadPlan(from, to, tok), loadBooks(from, to, tok)]);
     loading = false; paint();
   }
   /* ---------- the content plan ---------- */
@@ -165,6 +168,92 @@ window.SLSCalendar = (() => {
     catch(e){ busy = false; const m = $c("#calMsg"); if(m) m.textContent = (e && e.message) || "That didn't work. Try again."; }
   }
 
+  /* ---------- bookings: my calendar ----------
+     A period someone books for an artist on the roster: a campaign, a run of videos. Everyone sees them under Team,
+     only the person who booked one can change it (row-level security in the bookings table). */
+  const me = () => (window.SLSAuth && SLSAuth.user && SLSAuth.user()) || {};
+  const mineOnly = () => whose === "mine" && me().id ? `&user_id=eq.${encodeURIComponent(me().id)}` : "";
+  async function loadBooks(from, to, tok){
+    try {
+      const last = new Date(to); last.setDate(last.getDate() - 1);
+      const [a, b] = await Promise.all([
+        SLSAuth.rest(`bookings?select=*&starts=lte.${dayKey(last)}&ends=gte.${dayKey(from)}${mineOnly()}&order=starts.asc,created_at.asc`),
+        SLSAuth.rest(`bookings?select=*&ends=gte.${dayKey(today())}${mineOnly()}&order=starts.asc,created_at.asc&limit=12`)]);
+      if(tok !== loadTok) return;
+      books = Array.isArray(a) ? a : []; bookNext = Array.isArray(b) ? b : []; bookMissing = false;
+    } catch(e){ if(tok !== loadTok) return; if(missingTable(e)){ bookMissing = true; books = []; bookNext = []; } }
+  }
+  const hueOf = s => { let h = 0; for(const c of String(s || "")) h = (h * 31 + c.charCodeAt(0)) % 360; return h; };
+  const shortRange = b => { const a = pDay(b.starts), z = pDay(b.ends); return +a === +z ? shortDay(a) : `${shortDay(a)} – ${shortDay(z)}`; };
+  const ownBook = b => b.user_id && b.user_id === me().id;
+  const bookVisible = rows => filter ? rows.filter(b => b.artist === filter) : rows;
+  // in a day: a bar in the artist's colour, with the name on the first day and at the start of each week
+  const bookBar = (b, k) => { const first = k === b.starts || pDay(k).getDay() === 1, last = k === b.ends;
+    return `<button class="cal-book${first ? " first" : ""}${last ? " last" : ""}${bookEdit && bookEdit.id === b.id ? " on" : ""}" type="button" data-book="${esc(b.id)}" style="--bh:${hueOf(b.artist)}" title="${esc(`${b.artist}${b.title ? " · " + b.title : ""} · ${shortRange(b)}${b.owner_name && !ownBook(b) ? " · " + b.owner_name : ""}`)}">${first ? `<span class="cal-n">${esc(b.artist)}</span>` : ""}</button>`; };
+  const bookRow = b => `<button class="cal-row cal-brow${bookEdit && bookEdit.id === b.id ? " on" : ""}" type="button" data-book="${esc(b.id)}" style="--bh:${hueOf(b.artist)}"><i class="cal-bm" aria-hidden="true"></i>
+      <span class="cal-rt"><b>${esc(b.artist)}${b.title ? ` · ${esc(b.title)}` : ""}</b><span>${esc(shortRange(b))}${whose === "team" && b.owner_name ? " · " + esc(ownBook(b) ? "you" : b.owner_name) : ""}</span></span></button>`;
+  const bookSetup = `<p class="cal-hint">To book periods here, the calendar needs a one-time setup: in Supabase, open the SQL editor and run the <b>bookings</b> part of supabase/schema.sql.</p>`;
+  let roster = null;
+  async function rosterNames(){
+    if(roster) return roster;
+    try { const d = await SLSBackend.api("/api/catalog"); roster = [...new Set((d.artists || []).map(a => String(a.name || "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b)); }
+    catch { roster = []; }
+    return roster;
+  }
+  async function editBook(b){
+    bookEdit = b; planEdit = null; openId = ""; editing = false;
+    const [names, projs] = await Promise.all([rosterNames(), !projNames.length && window.SLSProjects && SLSProjects.names ? SLSProjects.names() : projNames]);
+    projNames = (projs || []).slice(0, 40);
+    paintBookForm(names);
+  }
+  function paintBookForm(names){
+    const b = bookEdit, box = $c("#calDetail"); if(!b) return;
+    const own = !b.id || ownBook(b);
+    box.dataset.id = ""; box.dataset.st = ""; box.dataset.at = "";
+    box.innerHTML = `
+      <div class="cal-dh"><button class="icon-btn cal-dback" type="button" data-act="book-close" aria-label="Back to the calendar">‹</button><h3 id="calDetT">${b.id ? (own ? "Your booking" : `${esc(b.owner_name || "Someone")}'s booking`) : "Book a period"}</h3><button class="icon-btn" type="button" data-act="book-close" aria-label="Close">✕</button></div>
+      <form class="cal-db cal-pform" id="calBookForm" autocomplete="off">
+        <label class="cal-f"><span>Artist</span><input id="cbArtist" maxlength="120" list="cbArtists" required placeholder="Pick an artist from the roster" value="${esc(b.artist || "")}"${own ? "" : " disabled"}><datalist id="cbArtists">${(names || []).map(n => `<option value="${esc(n)}"></option>`).join("")}</datalist></label>
+        <label class="cal-f"><span>What you're doing <em class="cal-muted">a campaign or project</em></span><input id="cbTitle" maxlength="200" list="cbProjects" placeholder="e.g. Posting videos for the new single" value="${esc(b.title || "")}"${own ? "" : " disabled"}><datalist id="cbProjects">${projNames.map(n => `<option value="${esc(n)}"></option>`).join("")}</datalist></label>
+        <div class="cal-f2">
+          <label class="cal-f"><span>From</span><input type="date" id="cbFrom" required value="${esc(b.starts || selDay || dayKey(today()))}"${own ? "" : " disabled"}></label>
+          <label class="cal-f"><span>Until</span><input type="date" id="cbTo" required value="${esc(b.ends || b.starts || selDay || dayKey(today()))}"${own ? "" : " disabled"}></label>
+        </div>
+        <label class="cal-f"><span>Note</span><textarea id="cbNote" rows="3" maxlength="1000" placeholder="Anything to remember: how many videos, which songs…"${own ? "" : " disabled"}>${esc(b.note || "")}</textarea></label>
+        ${own ? `<div class="cal-acts"><button class="btn small primary" type="submit">${b.id ? "Save" : "Book it"}</button>${b.id ? `<button class="btn small ghost cal-danger" type="button" data-act="book-del">Remove</button>` : ""}</div>`
+          : `<p class="cal-hint">Only ${esc(b.owner_name || "the person who booked it")} can change this booking.</p>`}
+        <div class="cal-msg" id="calMsg" role="status"></div>
+      </form>`;
+    const was = box.hidden; box.hidden = false; $c("#calScrim").hidden = false;
+    if(was){ requestAnimationFrame(() => box.classList.add("open")); } else box.classList.add("open");
+    setTimeout(() => { const f = $c("#cbArtist"); if(f && !b.id) f.focus({ preventScroll: true }); }, 40);
+    $c("#calBookForm").onsubmit = e => { e.preventDefault(); saveBook(); };
+  }
+  async function saveBook(){
+    if(busy) return; const b = bookEdit, msg = $c("#calMsg");
+    const artist = $c("#cbArtist").value.trim().replace(/\s+/g, " "), title = $c("#cbTitle").value.trim(), starts = $c("#cbFrom").value, ends = $c("#cbTo").value;
+    if(!artist){ msg.textContent = "Pick the artist."; return; }
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(starts) || !/^\d{4}-\d{2}-\d{2}$/.test(ends)){ msg.textContent = "Pick the first and the last day."; return; }
+    if(ends < starts){ msg.textContent = "The last day can't be before the first."; return; }
+    const body = { artist, title, starts, ends, note: $c("#cbNote").value.trim(), updated_at: new Date().toISOString() };
+    if(!b.id) body.owner_name = String(me().name || (me().email || "").split("@")[0] || "").slice(0, 80);
+    busy = true;
+    try {
+      if(b.id) await SLSAuth.rest(`bookings?id=eq.${encodeURIComponent(b.id)}`, { method: "PATCH", body, prefer: "return=minimal" });
+      else await SLSAuth.rest("bookings", { method: "POST", body, prefer: "return=minimal" });
+      toast(b.id ? "Saved." : `Booked: ${artist}, ${shortRange(body)}.`); selDay = starts; bookEdit = null; busy = false; closeDetail(true);
+      const d = pDay(starts); if(d.getMonth() !== view.m || d.getFullYear() !== view.y) view = { y: d.getFullYear(), m: d.getMonth() };
+      await load(true);
+    } catch(e){ busy = false; if(missingTable(e)){ bookMissing = true; msg.innerHTML = bookSetup; } else msg.textContent = (e && e.message) || "That didn't save. Try again."; }
+  }
+  async function removeBook(btn){
+    const b = bookEdit; if(!b || !b.id || busy) return;
+    if(!btn.dataset.sure){ btn.dataset.sure = "1"; btn.textContent = "Really remove?"; setTimeout(() => { if(btn.isConnected){ delete btn.dataset.sure; btn.textContent = "Remove"; } }, 3500); return; }
+    busy = true;
+    try { await SLSAuth.rest(`bookings?id=eq.${encodeURIComponent(b.id)}`, { method: "DELETE", prefer: "return=minimal" }); toast("Booking removed."); bookEdit = null; busy = false; closeDetail(true); await load(true); }
+    catch(e){ busy = false; const m = $c("#calMsg"); if(m) m.textContent = (e && e.message) || "That didn't work. Try again."; }
+  }
+
   /* ---------- what worked ----------
      Posts that went out and have results, from the last 90 days: per song, the versions side by side (which part of the
      song, which look, which frame shape), best first. The results come from the platforms (see src/schedule.js). */
@@ -212,24 +301,25 @@ window.SLSCalendar = (() => {
     if(SLSAuth.mode !== "accounts") s.innerHTML = "";
     else if(err) s.innerHTML = `<span>${esc(err)}</span> <button class="btn small" type="button" data-cal="retry">Try again</button>`;
     else if(loading && !loadedOnce) s.textContent = "Loading…";
-    else if(loadedOnce && !visible(posts).length && !planVisible(plans).length) s.textContent = "Nothing planned this month";
+    else if(loadedOnce && !visible(posts).length && !planVisible(plans).length && !bookVisible(books).length) s.textContent = "Nothing planned this month";
     else s.textContent = "";
     s.hidden = !s.textContent && !s.innerHTML;
     s.classList.toggle("bad", !!err);
   }
   function paint(){
     const login = !window.SLSAuth || SLSAuth.mode !== "accounts";
-    $c("#calBody").hidden = login; $c(".cal-head .cal-nav").hidden = login; $c("#calFilter").hidden = login;
+    $c("#calBody").hidden = login; $c(".cal-head .cal-nav").hidden = login; $c("#calFilter").hidden = login; $c(".cal-who").hidden = login;
     if(login){ const s = $c("#calState"); s.hidden = false; s.classList.remove("bad"); s.textContent = "The calendar needs a login"; $c("#calMonth").textContent = ""; closeDetail(true); return; }
     $c("#calMonth").textContent = `${MONTHS[view.m]} ${view.y}`;
     // artist filter: everyone seen in the loaded posts
-    const names = [...new Set([...posts, ...upcoming].map(who).concat([...plans, ...planNext].map(p => p.artist || artistOf(p.project))).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    const names = [...new Set([...posts, ...upcoming].map(who).concat([...plans, ...planNext].map(p => p.artist || artistOf(p.project)), [...books, ...bookNext].map(b => b.artist)).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    root.querySelectorAll(".cal-who [data-cal]").forEach(x => x.setAttribute("aria-pressed", String(x.dataset.cal === whose)));
     if(filter && !names.includes(filter)) names.push(filter);
     const sel = $c("#calFilter"), want = `<option value="">All artists</option>` + names.map(n => `<option value="${esc(n)}"${n === filter ? " selected" : ""}>${esc(n)}</option>`).join("");
     if(sel.dataset.sig !== want){ sel.innerHTML = want; sel.dataset.sig = want; } sel.value = filter;
     paintState(); paintGrid(); paintSide(); paintResults();
     if(openId) paintDetail();
-    $c("#calBody").hidden = trendOn; $c("#calState").hidden = trendOn || $c("#calState").hidden; $c(".cal-head .cal-nav").hidden = trendOn; $c("#calFilter").hidden = trendOn; $c("#calTrend").hidden = !trendOn;
+    $c("#calBody").hidden = trendOn; $c("#calState").hidden = trendOn || $c("#calState").hidden; $c(".cal-head .cal-nav").hidden = trendOn; $c("#calFilter").hidden = trendOn; $c(".cal-who").hidden = trendOn; $c("#calTrend").hidden = !trendOn;
     $c(".cal-trend-btn").setAttribute("aria-pressed", String(trendOn)); $c(".cal-trend-btn").textContent = trendOn ? "Back to the calendar" : "Trending sounds";
   }
   function paintGrid(){
@@ -238,10 +328,11 @@ window.SLSCalendar = (() => {
     for(const r of visible(posts)){ const k = dayKey(new Date(r.publish_at)); (byDay.get(k) || byDay.set(k, []).get(k)).push(r); }
     let h = "";
     for(let i = 0; i < weeks * 7; i++){
-      const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i), k = dayKey(d), rows = byDay.get(k) || [];
+      const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i), k = dayKey(d), rows = byDay.get(k) || [], bk = bookVisible(books).filter(b => b.starts <= k && b.ends >= k);
       const cls = ["cal-cell", d.getMonth() !== view.m && "out", +d === +t0 && "today", d < t0 && "past", k === selDay && "sel"].filter(Boolean).join(" ");
       h += `<div class="${cls}" role="group" aria-label="${esc(shortDay(d))}, ${rows.length} item${rows.length === 1 ? "" : "s"}">
         <button class="cal-dn" type="button" data-day="${k}"${+d === +t0 ? ` aria-current="date"` : ""}>${d.getDate()}</button>
+        ${bk.length ? `<div class="cal-books">${bk.slice(0, 3).map(b => bookBar(b, k)).join("")}</div>` : ""}
         <div class="cal-chips">${rows.slice(0, 3).map(r => r.plan ? planChip(r.plan) : chip(r)).join("")}${rows.length > 3 ? `<button class="cal-more" type="button" data-day="${k}">+${rows.length - 3} more</button>` : ""}</div>
         ${rows.length ? `<button class="cal-dots" type="button" data-day="${k}" aria-label="Show the ${rows.length} item${rows.length === 1 ? "" : "s"} on ${esc(shortDay(d))}">${rows.slice(0, 4).map(r => r.plan ? `<i class="cal-pl p-plan pl-${esc(r.plan.status)}"></i>` : `<i class="cal-pl p-${esc(r.platform)} st-${esc(r.status)}"></i>`).join("")}${rows.length > 4 ? `<em>+${rows.length - 4}</em>` : ""}</button>` : ""}
       </div>`;
@@ -256,15 +347,20 @@ window.SLSCalendar = (() => {
     if(selDay){
       const [y, m, dd] = selDay.split("-").map(Number), d = new Date(y, m - 1, dd), rows = visible(posts).filter(r => dayKey(new Date(r.publish_at)) === selDay), pl = planVisible(plans).filter(p => p.day === selDay);
       dayBox.hidden = false;
-      dayBox.innerHTML = `<div class="cal-dayh"><h3>${esc(shortDay(d))}</h3>${planMissing ? "" : `<button class="btn small" type="button" data-act="plan-new">＋ Plan a video</button>`}</div>`
+      const bk = bookVisible(books).filter(b => b.starts <= selDay && b.ends >= selDay);
+      dayBox.innerHTML = `<div class="cal-dayh"><h3>${esc(shortDay(d))}</h3><span class="cal-dayb">${bookMissing ? "" : `<button class="btn small ghost" type="button" data-act="book-new">＋ Book</button>`}${planMissing ? "" : `<button class="btn small" type="button" data-act="plan-new">＋ Plan a video</button>`}</span></div>`
+        + (bk.length ? `<div class="cal-list">${bk.map(bookRow).join("")}</div>` : "")
         + (pl.length ? `<div class="cal-list">${pl.map(p => planRow(p)).join("")}</div>` : "")
         + (rows.length ? `<div class="cal-list">${rows.map(r => row(r)).join("")}</div>`
-        : pl.length ? "" : `<p class="cal-hint">${d >= today() ? "Nothing planned for this day yet. Plan a video here, or open a project and choose Schedule when posting." : "Nothing was posted on this day."}</p>`)
+        : pl.length || bk.length ? "" : `<p class="cal-hint">${d >= today() ? "Nothing planned for this day yet. Plan a video here, or open a project and choose Schedule when posting." : "Nothing was posted on this day."}</p>`)
         + (planMissing ? planSetup : "");
     } else { dayBox.hidden = true; dayBox.innerHTML = ""; }
     const up = visible(upcoming);
     const pn = planVisible(planNext);
-    $c("#calUp").innerHTML = `<h3>Coming up</h3>` + (up.length ? `<div class="cal-list">${up.map(r => row(r, true)).join("")}</div>` : `<p class="cal-hint">No scheduled posts yet.</p>`)
+    const bn = bookVisible(bookNext);
+    $c("#calUp").innerHTML = `<div class="cal-dayh"><h3>${whose === "team" ? "Team bookings" : "My bookings"}</h3>${bookMissing ? "" : `<button class="btn small ghost" type="button" data-act="book-new">＋ Book a period</button>`}</div>`
+      + (bookMissing ? bookSetup : bn.length ? `<div class="cal-list">${bn.map(bookRow).join("")}</div>` : `<p class="cal-hint">${whose === "team" ? "Nobody has booked anything coming up." : "Nothing booked yet. Book the period you work on an artist, like posting videos for a new single until a date."}</p>`)
+      + `<h3 class="cal-planh">Coming up</h3>` + (up.length ? `<div class="cal-list">${up.map(r => row(r, true)).join("")}</div>` : `<p class="cal-hint">No scheduled posts yet.</p>`)
       + `<div class="cal-dayh cal-planh"><h3>Planned videos</h3>${planMissing ? "" : `<button class="btn small ghost" type="button" data-act="plan-new">＋ Plan</button>`}</div>`
       + (planMissing ? planSetup : pn.length ? `<div class="cal-list">${pn.map(p => planRow(p, true)).join("")}</div>` : `<p class="cal-hint">No videos planned yet. Pick a day and plan one: what it is, which project, and how far along it is.</p>`);
   }
@@ -310,7 +406,7 @@ window.SLSCalendar = (() => {
   }
   function openDetail(id){ openId = id; editing = false; paint(); }
   function closeDetail(quiet){
-    const box = $c("#calDetail"); const had = openId; openId = ""; editing = false; planEdit = null;
+    const box = $c("#calDetail"); const had = openId; openId = ""; editing = false; planEdit = null; bookEdit = null;
     box.classList.remove("open"); box.hidden = true; $c("#calScrim").hidden = true; box.innerHTML = "";
     if(had && !quiet){ paintGrid(); paintSide(); const b = root.querySelector(`[data-id="${CSS.escape(had)}"]`); if(b) b.focus({ preventScroll: true }); }
   }
@@ -338,6 +434,9 @@ window.SLSCalendar = (() => {
     if(a){
       const k = a.dataset.act;
       if(k === "plan-new"){ editPlan({ day: selDay || dayKey(today()), status: "idea" }); return; }
+      if(k === "book-new"){ editBook({ starts: selDay || dayKey(today()), ends: selDay || dayKey(today()) }); return; }
+      if(k === "book-close"){ closeDetail(); return; }
+      if(k === "book-del"){ removeBook(a); return; }
       if(k === "plan-close"){ closeDetail(); return; }
       if(k === "plan-del"){ removePlan(a); return; }
       const r = known(openId); if(k === "closed"){ closeDetail(); return; } if(!r || busy) return;
@@ -364,8 +463,11 @@ window.SLSCalendar = (() => {
       if(k === "close") close(); else if(k === "prev") go(-1); else if(k === "next") go(1);
       else if(k === "today"){ const n = new Date(); view = { y: n.getFullYear(), m: n.getMonth() }; selDay = dayKey(n); load(); paint(); }
       else if(k === "retry") load();
+      else if(k === "mine" || k === "team"){ if(whose !== k){ whose = k; try { localStorage.setItem("sls-cal-whose", k); } catch {} closeDetail(true); load(); paint(); } }
       else if(k === "trend"){ trendOn = !trendOn; closeDetail(true); paint(); if(trendOn && window.SLSTrends) SLSTrends.paint($c("#calTrend")); }
       return; }
+    const bookEl = t.closest("[data-book]");
+    if(bookEl){ const b = [...books, ...bookNext].find(x => x.id === bookEl.dataset.book); if(b){ editBook({ ...b }); } return; }
     const planEl = t.closest("[data-plan]");
     if(planEl){ const p = [...plans, ...planNext].find(x => x.id === planEl.dataset.plan); if(p){ selDay = p.day; paintGrid(); paintSide(); editPlan({ ...p }); } return; }
     const chipEl = t.closest("[data-id]");
@@ -379,7 +481,7 @@ window.SLSCalendar = (() => {
 
   /* ---------- open / close ---------- */
   function onKey(e){
-    if(e.key === "Escape"){ e.preventDefault(); e.stopImmediatePropagation(); if(openId || planEdit) closeDetail(); else if(trendOn){ trendOn = false; paint(); } else close(); return; }
+    if(e.key === "Escape"){ e.preventDefault(); e.stopImmediatePropagation(); if(openId || planEdit || bookEdit) closeDetail(); else if(trendOn){ trendOn = false; paint(); } else close(); return; }
     if(e.key !== "Tab") return;
     const f = [...root.querySelectorAll("button,select,input,a[href]")].filter(x => !x.disabled && x.offsetParent !== null && !x.closest("[hidden]"));
     if(!f.length) return; const a = f[0], z = f[f.length - 1];
@@ -390,7 +492,7 @@ window.SLSCalendar = (() => {
   function open(dateISO){
     const d = dateISO ? new Date(dateISO) : new Date(), ok = !isNaN(d), base = ok ? d : new Date();
     opener = document.activeElement; view = { y: base.getFullYear(), m: base.getMonth() }; selDay = ok && dateISO ? dayKey(base) : "";
-    if(!isOpen){ posts = []; upcoming = []; plans = []; planNext = []; err = ""; loadedOnce = false; filter = ""; trendOn = false; }
+    if(!isOpen){ posts = []; upcoming = []; plans = []; planNext = []; books = []; bookNext = []; err = ""; loadedOnce = false; filter = ""; trendOn = false; }
     closeDetail(true); isOpen = true; root.hidden = false; document.body.classList.add("cal-open");
     document.addEventListener("keydown", onKey, true);
     clearInterval(timer); timer = setInterval(() => { if(isOpen && !document.hidden && !busy) load(true); }, 60000);
