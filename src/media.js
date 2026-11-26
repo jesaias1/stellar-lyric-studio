@@ -71,12 +71,13 @@ async function relay(env, url, request, json) {
 const shape = (w, h) => (h > w * 1.15 ? "portrait" : w > h * 1.15 ? "landscape" : "square");
 
 // one query on both sources, interleaved, best orientation match first; kept a day (unsigned links)
-async function searchBoth(env, q, orientation, page) {
-  const key = `${q.toLowerCase()}|${orientation}|${page}`, hit = cache.get(key);
+// film: real footage only (no Pixabay animations), for the videos picked for a song
+async function searchBoth(env, q, orientation, page, film = false) {
+  const key = `${q.toLowerCase()}|${orientation}|${page}|${film ? 1 : 0}`, hit = cache.get(key);
   if (hit && Date.now() - hit.at < 86400000) return hit.data;
   const jobs = [];
   if (env.PEXELS_KEY) jobs.push(pexels(env, q, orientation, page).catch(e => ({ error: "Pexels: " + e.message, results: [] })));
-  if (env.PIXABAY_KEY) jobs.push(pixabay(env, q, orientation, page).catch(e => ({ error: "Pixabay: " + e.message, results: [] })));
+  if (env.PIXABAY_KEY) jobs.push(pixabay(env, q, orientation, page, film).catch(e => ({ error: "Pixabay: " + e.message, results: [] })));
   const parts = await Promise.all(jobs);
   const lists = parts.map(p => p.results), results = [];
   for (let i = 0; lists.some(l => i < l.length); i++) for (const l of lists) if (l[i]) results.push({ ...l[i], q });
@@ -123,7 +124,7 @@ async function stockMatch(env, request, json, ai) {
   if (!queries.length) return json({ error: "no_vibe", message: "The song couldn't be read yet. Add the lyrics first, or type a search." }, 400);
   const page = again ? Math.max(1, Math.min(19, Math.round(+b.page || 1))) + 1 : 1;
   const exclude = new Set((Array.isArray(b.exclude) ? b.exclude : []).slice(0, 2000).map(String));
-  const runs = await Promise.all(queries.map(q => searchBoth(env, q, orientation, page)));
+  const runs = await Promise.all(queries.map(q => searchBoth(env, q, orientation, page, true)));
   const errors = [...new Set(runs.flatMap(r => r.errors))], seen = new Set(), pool = [];
   for (let i = 0; runs.some(r => i < r.results.length); i++) for (const r of runs) {
     const it = r.results[i]; if (!it || seen.has(it.id) || exclude.has(it.id)) continue;
@@ -159,11 +160,14 @@ async function rankVideos(ai, vibe, lyrics, items, want) {
   }
 }
 
-async function pixabay(env, q, orientation, page) {
-  const u = `https://pixabay.com/api/videos/?key=${encodeURIComponent(env.PIXABAY_KEY)}&q=${encodeURIComponent(q)}&per_page=30&page=${page}&safesearch=true`;
+/* Clips made to be keyed out (green screen, chroma key) or with an empty background are no use behind lyrics.
+   Their full tag list says so, often near the end (the title only shows the first three tags). */
+const KEYED = /(^|,)\s*(green ?screen|greenscreen|chroma ?key|chromakey|blue ?screen|alpha (channel|matte)|transparent background|overlay)\s*(,|$)/i;
+async function pixabay(env, q, orientation, page, film = false) {
+  const u = `https://pixabay.com/api/videos/?key=${encodeURIComponent(env.PIXABAY_KEY)}&q=${encodeURIComponent(q)}&per_page=30&page=${page}&safesearch=true${film ? "&video_type=film" : ""}`;
   const r = await fetch(u); if (!r.ok) throw new Error(r.status === 429 ? "busy, try again in a minute" : `HTTP ${r.status}`);
   const d = await r.json();
-  return { results: (d.hits || []).filter(h => !aiMade({ isAiGenerated: h.isAiGenerated, tags: h.tags })).map(h => {
+  return { results: (d.hits || []).filter(h => !aiMade({ isAiGenerated: h.isAiGenerated, tags: h.tags }) && !KEYED.test(String(h.tags || "")) && !(film && /(^|,)\s*cartoon\s*(,|$)/i.test(String(h.tags || "")))).map(h => {
     const v = h.videos || {}, big = v.medium && v.medium.url ? v.medium : v.small && v.small.url ? v.small : v.large;
     const pick = big && big.size > 30e6 && v.small && v.small.url ? v.small : big;   // keep downloads reasonable
     if (!pick || !pick.url) return null;

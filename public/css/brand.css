@@ -199,3 +199,28 @@ textarea:focus,input:focus,select:focus{box-shadow:none!important;border-color:v
 .auth-brand .logo-sls{height:58px}
 #brandBtn .logo-sls{height:28px}
 [data-theme="light"] #brandBtn .logo-sls{filter:brightness(0)}
+
+/* ---------- front page: the 1-minute tutorial ---------- */
+.tut-btn{display:inline-flex;align-items:center;gap:10px;margin-top:18px;padding:7px 16px 7px 7px;border:1px solid rgba(255,255,255,.7);border-radius:999px;background:transparent;color:#fff;font:500 14px/1 var(--ui);cursor:pointer;transition:background .2s,color .2s,border-color .2s}
+.tut-btn i{font-style:normal;font-weight:400;opacity:.72;margin-left:-2px}
+.tut-btn i::before{content:"·";margin-right:8px}
+.tut-play{display:grid;place-items:center;width:28px;height:28px;border-radius:50%;background:#fff;color:#0010da;padding-left:2px;transition:transform .2s}
+.tut-btn:hover,.tut-btn:focus-visible{background:#fff;color:#0010da;border-color:#fff}
+.tut-btn:hover .tut-play,.tut-btn:focus-visible .tut-play{background:#0010da;color:#fff;transform:scale(1.06)}
+.tut-btn:focus-visible{outline:2px solid #fff;outline-offset:3px}
+.auth-tut{background:none;border:0;padding:0;font:inherit;color:rgba(255,255,255,.85);text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.tut{position:fixed;inset:0;z-index:2200;display:grid;place-items:center;padding:clamp(12px,4vw,56px);background:rgba(2,3,15,.86);backdrop-filter:blur(6px)}
+.tut[hidden]{display:none}
+.tut-box{position:relative;width:min(1280px,100%,(100dvh - 2 * clamp(12px,4vw,56px)) * 16 / 9);animation:tut-in .28s cubic-bezier(.2,.8,.2,1)}
+.tut-box video{display:block;width:100%;height:auto;aspect-ratio:16/9;border-radius:14px;background:#0010da;box-shadow:0 24px 80px rgba(0,0,0,.55)}
+.tut-x{position:absolute;top:-46px;right:0;width:38px;height:38px;display:grid;place-items:center;border:0;border-radius:50%;background:rgba(255,255,255,.14);color:#fff;cursor:pointer}
+.tut-x:hover,.tut-x:focus-visible{background:#fff;color:#0010da}
+html.tut-on{overflow:hidden}
+@keyframes tut-in{from{opacity:0;transform:translateY(10px) scale(.985)}}
+@media (max-width:640px){
+  .tut-btn{margin-top:14px;font-size:13.5px}
+  .tut{padding:12px;align-content:center}
+  .tut-box video{border-radius:10px}
+  .tut-x{top:-48px}
+}
+@media (prefers-reduced-motion:reduce){.tut-box{animation:none}.tut-btn,.tut-play{transition:none}}

@@ -313,7 +313,7 @@ body.stage-full .stage .stagebar{display:none}
 body.tl-drop .timeline{outline:2px dashed var(--tape);outline-offset:-2px}
 
 /* ---------- logins ---------- */
-body.auth-locked > :not(.auth-gate):not(.toast):not(#toast):not(#splash){visibility:hidden}
+body.auth-locked > :not(.auth-gate):not(.toast):not(#toast):not(#splash):not(.tut){visibility:hidden}
 /* the opening animation plays over the login window too, then reveals it */
 body.auth-locked #splash{z-index:2100}
 .auth-gate{position:fixed;inset:0;z-index:2000;display:grid;place-items:center;padding:24px;background:var(--stellar,#0626c7);color:#fff;overflow:auto}

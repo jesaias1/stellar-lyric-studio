@@ -3,7 +3,7 @@
 <!-- the editor can switch between light and dark (js/app.js); the blue start screen looks the same in both -->
 <head>
 <meta charset="utf-8">
-<meta name="sls-build" content="202611251426">
+<meta name="sls-build" content="202611260909">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Stellar Lyric Studio</title>
 <meta name="description" content="Turn a song into a lyric video for social media. Upload the track and the lyrics write and time themselves.">
@@ -58,7 +58,7 @@
 <section class="home" id="home" aria-label="Start">
   <div class="home-bar">
     <div class="brand"><img class="logo-sls" src="img/logo-sls.webp" alt="SLS" width="185" height="144" draggable="false"><span class="brand-sub">Stellar Lyric Studio</span></div>
-    <nav class="home-nav" aria-label="Start screen"><a href="#projects" id="navProjects">projects</a><a href="#" id="navArtists">artists</a><a href="#" id="navCalendar">calendar</a><a href="#" id="navDemo">sample song</a><a href="https://stellarmusic.dk" target="_blank" rel="noopener">stellar music</a></nav>
+    <nav class="home-nav" aria-label="Start screen"><a href="#projects" id="navProjects">projects</a><a href="#" id="navArtists">artists</a><a href="#" id="navCalendar">calendar</a><a href="#tutorial" id="navTutorial">tutorial</a><a href="#" id="navDemo">sample song</a><a href="https://stellarmusic.dk" target="_blank" rel="noopener">stellar music</a></nav>
     <div class="home-bar-r">
       <button class="btn ghost small" id="homeBack" hidden>Back to my project</button>
       <div class="acct" data-sls-user hidden></div>
@@ -69,6 +69,7 @@
     <div class="home-copy">
       <h1>Your song in. Lyric video out.</h1>
       <p>Drop a track and SLS times every word to the music. Check the lyrics, pick a look, and export a video ready for Instagram, TikTok and Shorts.</p>
+      <button class="tut-btn" id="tutBtn" type="button" aria-haspopup="dialog"><span class="tut-play" aria-hidden="true"><svg viewBox="0 0 12 12" width="10" height="10"><path d="M3 1.6v8.8L10.2 6z" fill="currentColor"/></svg></span>Watch how it works<i>1 min</i></button>
     </div>
 
     <!-- state 1: waiting for a song (and, if you have them, the lyrics) -->
@@ -135,6 +136,14 @@
     <p class="home-legal"><a href="/terms.html">Terms of Service</a> · <a href="/privacy.html">Privacy Policy</a> · Stellar Music, Copenhagen</p>
   </div>
 </section>
+
+<!-- ============ tutorial video ============ -->
+<div class="tut" id="tutModal" role="dialog" aria-modal="true" aria-label="How Stellar Lyric Studio works, a 1-minute video" hidden>
+  <div class="tut-box">
+    <button class="tut-x" id="tutClose" type="button" aria-label="Close the video"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    <video id="tutVideo" controls playsinline preload="none" width="1280" height="720"></video>
+  </div>
+</div>
 
 <!-- ============ passcode ============ -->
 <div class="modal" id="passModal" hidden>
@@ -611,5 +620,6 @@
 <script src="js/calendar.js"></script>
 <script src="js/ttsound.js"></script>
 <script src="js/projects.js"></script>
+<script src="js/tutorial.js"></script>
 </body>
 </html>
