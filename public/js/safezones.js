@@ -58,11 +58,17 @@ window.SLSSafe = (() => {
     const m = n.match(/^(.+?)\s+[-–]\s+(.+)$/); return m ? { artist: m[1].trim(), title: m[2].trim() } : { artist: "artist", title: n };
   }
   const fit = (c, t, maxW) => { if(c.measureText(t).width <= maxW) return t; while(t.length > 1 && c.measureText(t + "…").width > maxW) t = t.slice(0, -1); return t + "…"; };
-  /* TikTok, drawn like the app: a soft shadow at the top and the bottom (no hard strips), the top bar with LIVE,
-     Following | For You and search, the side buttons, and a caption with the song's own name and sound */
+  /* The phone apps (TikTok, Reels, Shorts), like CapCut's preview: one soft tint over the whole frame, a little
+     deeper towards the top and bottom edges so the white text reads, and no strips or bars with an edge. */
+  function tint(c, w, h){
+    c.fillStyle = "rgba(0,0,0,.12)"; c.fillRect(0, 0, w, h);
+    let g = c.createLinearGradient(0, 0, 0, h * 0.25); g.addColorStop(0, "rgba(0,0,0,.22)"); g.addColorStop(1, "rgba(0,0,0,0)"); c.fillStyle = g; c.fillRect(0, 0, w, h * 0.25);
+    g = c.createLinearGradient(0, h * 0.55, 0, h); g.addColorStop(0, "rgba(0,0,0,0)"); g.addColorStop(1, "rgba(0,0,0,.3)"); c.fillStyle = g; c.fillRect(0, h * 0.55, w, h * 0.45);
+  }
+  /* TikTok, drawn like the app: the soft tint, the top bar with LIVE, Following | For You and search, the side
+     buttons, and a caption with the song's own name and sound. No bottom bar, as in CapCut's preview. */
   function drawTikTok(c, w, h, u, p){
-    let g = c.createLinearGradient(0, 0, 0, h * 0.2); g.addColorStop(0, "rgba(0,0,0,.45)"); g.addColorStop(1, "rgba(0,0,0,0)"); c.fillStyle = g; c.fillRect(0, 0, w, h * 0.2);
-    g = c.createLinearGradient(0, h * 0.58, 0, h * 0.93); g.addColorStop(0, "rgba(0,0,0,0)"); g.addColorStop(0.55, "rgba(0,0,0,.28)"); g.addColorStop(1, "rgba(0,0,0,.62)"); c.fillStyle = g; c.fillRect(0, h * 0.58, w, h * 0.35);
+    tint(c, w, h);
     c.save(); c.shadowColor = "rgba(0,0,0,.45)"; c.shadowBlur = 3;
     // top bar
     const ty = h * 0.052; c.textBaseline = "middle";
@@ -89,11 +95,6 @@ window.SLSSafe = (() => {
     c.fillStyle = "rgba(255,255,255,.8)"; c.font = `600 ${3.3 * u}px system-ui, sans-serif`; c.fillText("more", cx0 + Math.min(c.measureText(fit(c, `${sb.title} 🎶 #lyrics #fyp`, maxW - 9 * u)).width, maxW - 9 * u) + 1.6 * u, cy1 + 5 * u);
     c.fillStyle = "#fff"; c.font = `500 ${3.2 * u}px system-ui, sans-serif`; c.fillText(fit(c, `♫  ${sb.title} · ${sb.artist === "artist" ? "original sound" : sb.artist}`, maxW), cx0, cy1 + 10.4 * u);
     c.restore();
-    // bottom bar
-    const nav = p.bars.find(b => b.nav); if(nav){ const ny = nav.r[1] * h, nh = nav.r[3] * h; c.fillStyle = "#000"; c.fillRect(0, ny, w, nh);
-      ["Home", "Friends", "", "Inbox", "Profile"].forEach((l, i) => { const bx = w * (i + 0.5) / 5, by = ny + nh / 2;
-        if(i === 2){ c.fillStyle = "#fff"; c.beginPath(); c.roundRect ? c.roundRect(bx - 4.4 * u, by - 2.6 * u, 8.8 * u, 5.2 * u, 1.4 * u) : c.rect(bx - 4.4 * u, by - 2.6 * u, 8.8 * u, 5.2 * u); c.fill(); c.fillStyle = "#000"; c.font = `700 ${4.2 * u}px system-ui, sans-serif`; c.textAlign = "center"; c.textBaseline = "middle"; c.fillText("+", bx, by + 0.2 * u); }
-        else { c.fillStyle = i === 0 ? "#fff" : "rgba(255,255,255,.62)"; c.font = `${i === 0 ? 700 : 500} ${2.5 * u}px system-ui, sans-serif`; c.textAlign = "center"; c.textBaseline = "middle"; c.fillText(l, bx, by); } }); }
   }
 
   let last = "";
@@ -106,19 +107,21 @@ window.SLSSafe = (() => {
     const p = P[mode]; warn.hidden = true;
     if(!p || !p.aspects.includes(aspectKey(S.P.aspect, true))) return;
     const R = ([x, y, ww, hh]) => [x * w, y * h, ww * w, hh * h], u = Math.min(w, h) / 100;
+    const soft = mode === "reels" || mode === "shorts";
+    if(soft) tint(c, w, h);
     if(mode === "tiktok") drawTikTok(c, w, h, u, p);
     else for(const b of p.bars){
       const [x, y, bw, bh] = R(b.r);
-      // dim the strip the interface covers
+      // dim the strip the interface covers (the phone apps get the soft tint instead)
       const g = y < h / 2 ? c.createLinearGradient(0, y, 0, y + bh) : c.createLinearGradient(0, y + bh, 0, y);
-      if(!b.rail){ g.addColorStop(0, "rgba(0,0,0,.55)"); g.addColorStop(1, "rgba(0,0,0,0)"); c.fillStyle = g; c.fillRect(x, y, bw, bh); }
+      if(!b.rail && !soft){ g.addColorStop(0, "rgba(0,0,0,.55)"); g.addColorStop(1, "rgba(0,0,0,0)"); c.fillStyle = g; c.fillRect(x, y, bw, bh); }
       c.fillStyle = "rgba(255,255,255,.92)"; c.strokeStyle = "rgba(255,255,255,.92)";
       if(b.label != null){ c.font = `700 ${4 * u}px system-ui, sans-serif`; c.textAlign = "center"; c.textBaseline = "middle"; c.fillText(b.label, w / 2, y + bh / 2); }
       if(b.rail){ const n = b.rail.length, step = bh / n, r = Math.min(bw * 0.28, step * 0.28);
         b.rail.forEach((ic, i) => { const cx = x + bw / 2, cy0 = y + step * (i + 0.42); c.save(); c.fillStyle = "rgba(255,255,255,.95)"; c.strokeStyle = c.fillStyle; c.shadowColor = "rgba(0,0,0,.5)"; c.shadowBlur = 4; (ICON[ic] || ICON.more)(c, cx, cy0, r); c.restore();
           if(ICON[ic] && ICON[ic].label){ c.font = `600 ${2.6 * u}px system-ui, sans-serif`; c.textAlign = "center"; c.textBaseline = "top"; c.fillStyle = "rgba(255,255,255,.9)"; c.fillText(ICON[ic].label, cx, cy0 + r * 1.2); } }); }
       if(b.caption){ c.textAlign = "left"; c.textBaseline = "top"; b.caption.forEach((t, i) => { c.font = `${i ? 500 : 700} ${(i ? 3.2 : 3.6) * u}px system-ui, sans-serif`; c.fillStyle = "rgba(255,255,255,.92)"; c.fillText(t, x + 4 * u, y + 2 * u + i * 5 * u); }); }
-      if(b.nav){ c.fillStyle = "rgba(0,0,0,.85)"; c.fillRect(x, y, bw, bh); c.fillStyle = "rgba(255,255,255,.85)"; for(let i = 0; i < b.nav; i++){ const nx = x + bw * (i + 0.5) / b.nav, ny = y + bh / 2; if(i === 2){ c.beginPath(); c.roundRect ? c.roundRect(nx - 4 * u, ny - 2.4 * u, 8 * u, 4.8 * u, 1.2 * u) : c.rect(nx - 4 * u, ny - 2.4 * u, 8 * u, 4.8 * u); c.fill(); } else { c.beginPath(); c.arc(nx, ny, 1.8 * u, 0, Math.PI * 2); c.fill(); } } }
+      if(b.nav){ if(!soft){ c.fillStyle = "rgba(0,0,0,.85)"; c.fillRect(x, y, bw, bh); } c.fillStyle = "rgba(255,255,255,.85)"; for(let i = 0; i < b.nav; i++){ const nx = x + bw * (i + 0.5) / b.nav, ny = y + bh / 2; if(i === 2){ c.beginPath(); c.roundRect ? c.roundRect(nx - 4 * u, ny - 2.4 * u, 8 * u, 4.8 * u, 1.2 * u) : c.rect(nx - 4 * u, ny - 2.4 * u, 8 * u, 4.8 * u); c.fill(); } else { c.beginPath(); c.arc(nx, ny, 1.8 * u, 0, Math.PI * 2); c.fill(); } } }
       if(b.story){ for(let i = 0; i < 4; i++){ c.fillStyle = i ? "rgba(255,255,255,.4)" : "rgba(255,255,255,.95)"; c.fillRect(3 * u + i * (w - 6 * u) / 4, 2 * u, (w - 6 * u) / 4 - u, 0.6 * u); }
         c.beginPath(); c.arc(7 * u, 7 * u, 3 * u, 0, Math.PI * 2); c.fill(); c.font = `700 ${3.4 * u}px system-ui, sans-serif`; c.textAlign = "left"; c.textBaseline = "middle"; c.fillText("artist  2h", 12 * u, 7 * u); }
       if(b.reply){ c.strokeStyle = "rgba(255,255,255,.8)"; c.lineWidth = 2; c.beginPath(); c.roundRect ? c.roundRect(4 * u, y + bh * 0.25, w * 0.68, bh * 0.5, bh * 0.25) : c.rect(4 * u, y + bh * 0.25, w * 0.68, bh * 0.5); c.stroke();

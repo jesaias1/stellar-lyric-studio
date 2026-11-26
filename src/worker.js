@@ -26,6 +26,7 @@
  *   POST   /api/photos/pick       keywords + lyrics in, the best photos out     }
  *   POST   /api/photos/rank       ranks a moodboard's images against the song   }
  *   POST   /api/moodboard/pinterest  a public Pinterest board's latest pins     }
+ *   POST   /api/pinterest/...     your own Pinterest: connect, your boards, a board's pins } see src/pinterest.js
  *   POST   /api/publish/...       link YouTube, Instagram, TikTok accounts and post to them } see src/publish.js
  *   GET    /api/oauth/:platform   where a login comes back (no passcode, signed state)    }
  *
@@ -45,6 +46,7 @@ import { mediaRoute, mediaHealth } from "./media.js";
 import { photosRoute, photosHealth } from "./photos.js";
 import { vibeRoute } from "./vibe.js";
 import { publishRoute, publishPublicRoute, publishHealth } from "./publish.js";
+import { pinterestRoute, pinterestPublicRoute } from "./pinterest.js";
 
 const MODEL = "@cf/openai/whisper-large-v3-turbo";
 const MAX_AUDIO_B64 = 6_000_000;      // about 4.4 MB of audio per request; the app sends ~1 MB chunks
@@ -78,6 +80,8 @@ async function route(request, env, url) {
   // other servers, so they carry their own signatures instead of the passcode.
   const pub = await publishPublicRoute(request, env, url, path, method);
   if (pub) return pub;
+  const pinBack = await pinterestPublicRoute(request, env, url, path, method);   // the Pinterest login coming back
+  if (pinBack) return pinBack;
 
   // Meta's callbacks for when someone removes the app from Instagram, or asks for their data to be deleted.
   // Nothing about Instagram accounts is kept on the server (logins are sealed into the person's studio account),
@@ -122,10 +126,12 @@ async function route(request, env, url) {
   if (hooks) return hooks;
   const media = await mediaRoute(request, env, url, path, method, { hasAI: hasAI(env), runModel, json });
   if (media) return media;
-  const photos = await photosRoute(request, env, url, path, method, { hasAI: hasAI(env), runModel, json });
+  const photos = await photosRoute(request, env, url, path, method, { hasAI: hasAI(env), runModel, json, user: who });
   if (photos) return photos;
   const vibe = await vibeRoute(request, env, path, method, { hasAI: hasAI(env), runModel, json });
   if (vibe) return vibe;
+  const pinterest = await pinterestRoute(request, env, url, path, method, { json, user: who });
+  if (pinterest) return pinterest;
   const publish = await publishRoute(request, env, url, path, method, { json, user: who });
   if (publish) return publish;
 

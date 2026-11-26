@@ -18,7 +18,8 @@ window.SLSPhotos = (() => {
         <textarea id="phPrompt" rows="2" maxlength="300" placeholder="e.g. rainy city nights, neon, shot on film"></textarea></label>
       <div class="chips fx-ideas" id="phIdeas">${IDEAS.map(q => `<button type="button" data-q="${q}">${q}</button>`).join("")}</div>
       <div class="field"><span class="hint">Look</span><div class="seg ph-src" id="phLook"><button data-v="mix" title="Paintings, illustration and film-style photos">Mixed</button><button data-v="art" title="Paintings, drawings and illustration">Art</button><button data-v="photo" title="Film-style and real photos, no stock">Photos</button></div></div>
-      <div class="field"><span class="hint">From</span><div class="seg ph-src" id="phSrc"><button data-v="free">Free photos</button><button data-v="pinterest">Pinterest</button><button data-v="both">Both</button></div></div>
+      <div class="field"><span class="hint">From</span><div class="seg ph-src" id="phSrc"><button data-v="free">Free photos</button><button data-v="pinterest">Pinterest</button><button data-v="both">Both</button><button data-v="mine" title="The pins you have saved on your own Pinterest">My pins</button></div></div>
+      <div class="ph-mine" id="phMine" hidden></div>
       <div class="hint ph-note" id="phSrcNote"></div>
     </div>
     <div class="ph-box" id="phBoardBox" hidden>
@@ -56,6 +57,36 @@ window.SLSPhotos = (() => {
   $("#phCountVal").onclick = e => { if(e.target.id === "phAuto"){ manualCount = null; paintCount(); } };
   slsOn("change", () => { if(!panel.hidden) paintCount(); });
 
+  /* ---------- your own Pinterest (src/pinterest.js) ----------
+     Connected in a login window; the login comes back sealed and is kept in this browser only. */
+  const PIN = window.SLSPin = (() => {
+    let acct = keep.get("sls-pinterest", null);
+    const fire = () => dispatchEvent(new Event("sls-pinterest"));
+    const set = a => { acct = a && a.sealed ? a : null; if(acct) keep.set("sls-pinterest", acct); else { try { localStorage.removeItem("sls-pinterest"); } catch {} } fire(); };
+    async function connect(){
+      const w = window.open("", "sls-pin", "width=520,height=760");   // opened right away so popup blockers allow it
+      if(!(await SLSApp.ensurePass())){ if(w) w.close(); return; }
+      try {
+        const d = await api.api("/api/pinterest/connect", { method: "POST", body: {}, timeout: 20000 });
+        if(w) w.location = d.url; else location.href = d.url;
+        toast("Log in to Pinterest in the new window and allow access.");
+      } catch(err){ if(w) w.close(); toast(errText(err)); }
+    }
+    addEventListener("message", e => {
+      if(e.origin !== location.origin || !e.data || e.data.sls !== "pinterest") return;
+      if(e.data.ok && e.data.record){ set(e.data.record); toast(`Pinterest connected${acct.handle ? ` (@${acct.handle})` : ""}.`); }
+      else if(e.data.problem) toast(e.data.problem);
+    });
+    addEventListener("storage", e => { if(e.key === "sls-pinterest"){ acct = keep.get("sls-pinterest", null); fire(); } });
+    return {
+      get: () => acct, connect, forget: () => set(null),
+      // a reply that renewed the login carries the new sealed one; a login that ran out is forgotten
+      took(d){ const s = d && (d.pinAccount || d.account); if(s && acct){ acct = { ...acct, sealed: s }; keep.set("sls-pinterest", acct); } },   // the same account, renewed: nothing to redraw
+      failed(err){ if(err && err.code === "relink") set(null); },
+      who: () => acct ? (acct.handle ? "@" + acct.handle : acct.name || "your Pinterest") : "",
+    };
+  })();
+
   /* ---------- where the images come from ---------- */
   let mode = keep.get("sls-ph-mode", "search"), from = keep.get("sls-ph-from", "free"), look = keep.get("sls-ph-look", "mix"), health = null, pinLeft = null;
   const msg = (t) => { $("#phMsg").textContent = t || ""; };
@@ -69,10 +100,18 @@ window.SLSPhotos = (() => {
     if(mode === "boards") paintBoards();
     getHealth().then(h => {
       const p = h.photos || {}, free = p.pexels || p.pixabay;
-      const notes = [];
-      if(from !== "free" && h.photos && !p.pinterest) notes.push("Pinterest search isn't switched on yet. It needs a SerpApi key (SERPAPI_KEY) in the site's settings.");
-      else if(from !== "pinterest" && h.photos && !free) notes.push("Free photo search isn't switched on yet. It needs a free Pixabay or Pexels key in the site's settings.");
-      if(from !== "free" && p.pinterest){
+      const notes = [], box = $("#phMine");
+      box.hidden = from !== "mine";
+      if(from === "mine"){
+        const a = PIN.get();
+        box.innerHTML = !p.mine ? `<span class="hint">Connecting Pinterest isn't switched on yet. It needs a Pinterest app (PINTEREST_APP_ID and PINTEREST_APP_SECRET) in the site's settings.</span>`
+          : a ? `<span class="ph-mine-who">${a.avatar ? `<img src="${esc(a.avatar)}" alt="" referrerpolicy="no-referrer">` : ""}<span>Searching the saved pins of <b>${esc(PIN.who())}</b></span></span><button class="btn small ghost" type="button" data-pin="off">Disconnect</button>`
+          : `<span class="hint">Search the pins you've saved yourself: real pictures you picked, so no AI filler. Pinterest only shares your own pins and boards with other apps, not your home feed.</span><button class="btn small" type="button" data-pin="on">Connect Pinterest</button>`;
+        if(a) notes.push("Pinterest searches your pins' own titles and descriptions, so plain keywords work best (beach, night, flowers).");
+      }
+      if((from === "pinterest" || from === "both") && h.photos && !p.pinterest) notes.push("Pinterest search isn't switched on yet. It needs a SerpApi key (SERPAPI_KEY) in the site's settings.");
+      else if((from === "free" || from === "both") && h.photos && !free) notes.push("Free photo search isn't switched on yet. It needs a free Pixabay or Pexels key in the site's settings.");
+      if((from === "pinterest" || from === "both") && p.pinterest){
         notes.push(`Each search with Pinterest on uses 3 to 4 of the SerpApi account's monthly searches${pinLeft != null ? ` (${pinLeft} left this month)` : ""}. Looking through the results costs nothing extra, and nothing is downloaded until you add the images.`);
         notes.push("Pinterest images belong to the people who posted them. Fine for drafts and moods; for videos you publish, the free photos are the safe choice.");
       }
@@ -82,6 +121,8 @@ window.SLSPhotos = (() => {
   }
   $("#phFrom").onclick = e => { const b = e.target.closest("button"); if(!b) return; mode = b.dataset.v; keep.set("sls-ph-mode", mode); paintMode(); };
   $("#phLook").onclick = e => { const b = e.target.closest("button"); if(!b) return; look = b.dataset.v; keep.set("sls-ph-look", look); paintMode(); };
+  $("#phMine").onclick = e => { const b = e.target.closest("[data-pin]"); if(!b) return; if(b.dataset.pin === "on") PIN.connect(); else { PIN.forget(); toast("Pinterest disconnected from this browser. To cut the studio off completely, remove it under Pinterest's settings, Apps."); } };
+  addEventListener("sls-pinterest", () => paintMode());
   $("#phSrc").onclick = e => { const b = e.target.closest("button"); if(!b) return; from = b.dataset.v; keep.set("sls-ph-from", from); paintMode(); };
   $("#phIdeas").onclick = e => { const b = e.target.closest("[data-q]"); if(!b) return; $("#phPrompt").value = b.dataset.q; $("#phPrompt").focus(); };
   $("#phPrompt").value = keep.get("sls-ph-prompt", "");
@@ -110,17 +151,19 @@ window.SLSPhotos = (() => {
     if(!prompt && !lyrics.trim()){ msg("Type a few keywords or a prompt first."); $("#phPrompt").focus(); return; }
     if(!(await SLSApp.ensurePass())) return;
     const n = count(), go = $("#phGo"); busy = true; go.disabled = true; go.textContent = "Finding images…";
-    msg(`Searching ${from === "free" ? "free photos" : from === "pinterest" ? "Pinterest" : "free photos and Pinterest"} and picking the ${n} that fit your song best…`);
+    if(from === "mine" && !PIN.get()){ msg("Connect your Pinterest first."); PIN.connect(); busy = false; go.disabled = false; go.textContent = "Find the best images"; return; }
+    msg(`Searching ${from === "free" ? "free photos" : from === "pinterest" ? "Pinterest" : from === "mine" ? "your saved pins" : "free photos and Pinterest"} and picking the ${n} that fit your song best…`);
     try {
       const d = await api.api("/api/photos/pick", { method: "POST", body: { prompt, lyrics, count: n, aspect: aspectKey(), from, look, exclude: usedKeys(),
-        vibe: SLSVibe.cached(), title: S.songName, sound: SLSVibe.cached() ? undefined : SLSVibe.sound() }, timeout: 120000 });
+        vibe: SLSVibe.cached(), title: S.songName, sound: SLSVibe.cached() ? undefined : SLSVibe.sound(), ...(from === "mine" ? { pinAccount: PIN.get().sealed } : {}) }, timeout: 120000 });
+      PIN.took(d);
       SLSVibe.keep(d.vibe);
       if(d.pinLeft != null){ pinLeft = d.pinLeft; paintMode(); }
       if(!d.picks.length){ msg(d.message || "Nothing found. Try other keywords."); return; }
       const toItem = photoItem(prompt);
       msg(d.errors && d.errors.length ? d.errors.join(" · ") : "");
       review({ picks: d.picks.map(toItem), spare: d.spare.map(toItem), target: n, searched: d.queries, page: d.page || 1, next: d.next || {}, prompt, lyrics, from, look, skipped: d.skipped || 0 });
-    } catch(err){ msg(errText(err)); }
+    } catch(err){ PIN.failed(err); msg(errText(err)); }
     finally { busy = false; go.disabled = false; go.textContent = "Find the best images"; }
   }
 
@@ -186,7 +229,9 @@ window.SLSPhotos = (() => {
     setBusy(true); b.textContent = "Finding more…";
     try {
       const d = await api.api("/api/photos/pick", { method: "POST", timeout: 120000, body: { prompt: R.prompt, lyrics: R.lyrics, from: R.from, aspect: aspectKey(),
-        count: Math.max(6, R.target), queries: R.searched, page: R.page, next: R.next, look: R.look, exclude: [...usedKeys(), ...shown], vibe: SLSVibe.cached() } });
+        count: Math.max(6, R.target), queries: R.searched, page: R.page, next: R.next, look: R.look, exclude: [...usedKeys(), ...shown], vibe: SLSVibe.cached(),
+        ...(R.from === "mine" && PIN.get() ? { pinAccount: PIN.get().sealed } : {}) } });
+      PIN.took(d);
       if(!R) return;
       if(d.pinLeft != null) pinLeft = d.pinLeft;
       R.page = d.page || R.page + 1; R.next = d.next || {};
@@ -197,7 +242,7 @@ window.SLSPhotos = (() => {
       for(const p of fresh){ if(kept < R.target){ R.picks.push({ ...p, out: false }); kept++; } else R.spare.push(p); }
       R.note = `${fresh.length} new image${fresh.length === 1 ? "" : "s"} found.`;
       paintReview();
-    } catch(err){ R.note = errText(err); paintReview(); }
+    } catch(err){ PIN.failed(err); R.note = errText(err); paintReview(); }
     finally { setBusy(false); b.textContent = "Find more images"; }
   };
   $("#phPicks").onclick = e => { const t = e.target.closest(".ph-tile"); if(!t || rv.classList.contains("busy")) return; const p = R.picks[+t.dataset.i]; p.out = !p.out; paintReview(); };
@@ -305,6 +350,7 @@ window.SLSPhotos = (() => {
       <form class="fx-search" id="mbPinForm" autocomplete="off"><input type="url" id="mbPin" placeholder="…or paste a public Pinterest board link" aria-label="Pinterest board link"><button class="btn small" type="submit">Import</button></form>
       <div class="mb-pin-app"><a class="btn small mb-open-pin" href="https://www.pinterest.com/" target="_blank" rel="noopener">Open Pinterest</a><button class="btn small" id="mbPaste" type="button">Paste board link</button>
         <span class="hint">In Pinterest, open the board, tap Share, then Copy link. Come back and tap Paste board link.</span></div>
+      <div class="mb-mine" id="mbMine"></div>
       <div class="hint" id="mbMsg"></div>
       <div class="hint" id="mbOrderHint" hidden>Drag the images to put them in order. On a phone, press and hold an image first.</div>
       <div class="ph-grid mb-grid" id="mbGrid"></div>
@@ -315,7 +361,7 @@ window.SLSPhotos = (() => {
   const mbMsg = t => { $("#mbMsg").textContent = t || ""; };
   function editBoard(b){
     B = b ? { ...b, items: b.items.slice() } : { id: "mb" + uid(), name: "", at: Date.now(), items: [], fresh: true };
-    $("#mbName").value = B.name; $("#mbPin").value = ""; mbMsg(""); $("#mbDel").hidden = !!B.fresh; ed.hidden = false; paintEditor();
+    $("#mbName").value = B.name; $("#mbPin").value = ""; mbMsg(""); $("#mbDel").hidden = !!B.fresh; ed.hidden = false; paintEditor(); paintMine();
     if(B.fresh) setTimeout(() => $("#mbName").focus(), 30);
   }
   function paintEditor(){
@@ -454,6 +500,11 @@ window.SLSPhotos = (() => {
     edBusy = true; mbMsg("Reading the board…");
     try {
       const d = await api.api("/api/moodboard/pinterest", { method: "POST", body: { url: link }, timeout: 30000 });
+      await importPins(d); $("#mbPin").value = "";
+    } catch(err){ mbMsg(errText(err)); }
+    finally { edBusy = false; }
+  };
+  async function importPins(d){
       if(!$("#mbName").value.trim()) $("#mbName").value = d.name;
       let ok = 0; const have = new Set(B.items.map(it => it.page).filter(Boolean));
       const fresh = d.images.filter(im => !im.page || !have.has(im.page));
@@ -468,11 +519,44 @@ window.SLSPhotos = (() => {
         if(added) ok++;
         paintEditor();
       }
-      await saveBoard(); $("#mbPin").value = "";
+      await saveBoard();
       mbMsg(`${ok} image${ok === 1 ? "" : "s"} imported from the board.` + (fresh.length < d.images.length ? ` ${d.images.length - fresh.length} were already here.` : "") + (d.note ? " " + d.note : ""));
-    } catch(err){ mbMsg(errText(err)); }
+  }
+
+  /* your own boards, from the connected Pinterest: every pin, secret boards too */
+  let myBoards = null, boardsOpen = false;
+  function paintMine(){
+    const el = $("#mbMine"); if(!el) return;
+    getHealth().then(h => {
+      if(!(h.photos && h.photos.mine)){ el.innerHTML = ""; return; }
+      const a = PIN.get();
+      if(!a){ el.innerHTML = `<button class="btn small" type="button" data-mb="connect">Connect Pinterest</button><span class="hint">to import any of your boards, secret ones too, with every pin.</span>`; return; }
+      el.innerHTML = `<div class="row mb-mine-head"><button class="btn small" type="button" data-mb="boards" aria-expanded="${boardsOpen}">${boardsOpen ? "Hide your boards" : "Import one of your boards"}</button><span class="hint">${esc(PIN.who())}</span></div>`
+        + (boardsOpen ? (myBoards == null ? `<p class="hint">Loading your boards…</p>` : myBoards.length ? `<div class="mb-boards">${myBoards.map(b => `<button type="button" class="mb-board" data-board="${esc(b.id)}">
+            ${b.cover ? `<img src="${esc(b.cover)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : `<i></i>`}<b>${esc(b.name)}</b><span class="hint">${b.count} pin${b.count === 1 ? "" : "s"}${b.secret ? " · secret" : ""}</span></button>`).join("")}</div>`
+          : `<p class="hint">There are no boards on this Pinterest account yet.</p>`) : "");
+    });
+  }
+  async function loadMyBoards(){
+    myBoards = null; paintMine();
+    try { const d = await api.api("/api/pinterest/boards", { method: "POST", body: { account: PIN.get().sealed }, timeout: 30000 }); PIN.took(d); myBoards = d.boards || []; }
+    catch(err){ PIN.failed(err); boardsOpen = false; myBoards = null; mbMsg(errText(err)); }
+    paintMine();
+  }
+  $("#mbMine").onclick = async e => {
+    const t = e.target.closest("[data-mb], [data-board]"); if(!t || edBusy) return;
+    if(t.dataset.mb === "connect") return PIN.connect();
+    if(t.dataset.mb === "boards"){ boardsOpen = !boardsOpen; if(boardsOpen && !myBoards) { if(!(await SLSApp.ensurePass())) { boardsOpen = false; return; } loadMyBoards(); } else paintMine(); return; }
+    if(!PIN.get()) return;
+    edBusy = true; mbMsg("Reading the board…");
+    try {
+      const d = await api.api("/api/pinterest/board", { method: "POST", body: { account: PIN.get().sealed, id: t.dataset.board }, timeout: 60000 });
+      PIN.took(d); boardsOpen = false; paintMine();
+      await importPins(d);
+    } catch(err){ PIN.failed(err); mbMsg(errText(err)); }
     finally { edBusy = false; }
   };
+  addEventListener("sls-pinterest", () => { myBoards = null; boardsOpen = false; paintMine(); });
 
   /* ---------- start ---------- */
   const tabBtn = $('.fx-tabs [data-fx="photos"]');

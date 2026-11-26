@@ -13,6 +13,7 @@ SLS_PASSCODE=choose-a-long-passcode
 # CHARTMETRIC_REFRESH_TOKEN=your-chartmetric-refresh-token   (trending TikTok sounds)
 # PEXELS_KEY=your-pexels-key
 # SERPAPI_KEY=your-serpapi-key   (Pinterest in the image grabber)
+# PINTEREST_APP_ID=...   PINTEREST_APP_SECRET=...   (Connect your Pinterest: your own pins and boards)
 
 # Optional: posting to YouTube, Instagram and TikTok (see the setup guide). Local testing needs the
 # http://localhost:8787/api/oauth/... addresses registered with each platform, which TikTok and Instagram refuse

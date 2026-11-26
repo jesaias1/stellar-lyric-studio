@@ -25,6 +25,7 @@
  */
 import { mediaLink } from "./media.js";
 import { aiMade, readVibe, vibeFrom, vibeText } from "./vibe.js";
+import { pinterestReady, openPin, renewed, mineSearch } from "./pinterest.js";
 
 const TEXT_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36";
@@ -32,13 +33,13 @@ const ORIENT = { "9:16": "portrait", "4:5": "portrait", "1:1": "square", "16:9":
 const cache = new Map();   // search results for a day, per server instance (Pixabay asks for caching)
 
 export function photosHealth(env) {
-  return { photos: { pexels: !!env.PEXELS_KEY, pixabay: !!env.PIXABAY_KEY, pinterest: !!env.SERPAPI_KEY } };
+  return { photos: { pexels: !!env.PEXELS_KEY, pixabay: !!env.PIXABAY_KEY, pinterest: !!env.SERPAPI_KEY, mine: pinterestReady(env) } };
 }
 
-export async function photosRoute(request, env, url, path, method, { hasAI, runModel, json }) {
+export async function photosRoute(request, env, url, path, method, { hasAI, runModel, json, user = {} }) {
   const ai = hasAI ? (input) => runModel(env, TEXT_MODEL, input) : null;
   if (path === "/api/photos/search" && method === "GET") return searchRoute(env, url, json);
-  if (path === "/api/photos/pick" && method === "POST") return pickRoute(env, request, json, ai);
+  if (path === "/api/photos/pick" && method === "POST") return pickRoute(env, request, json, ai, user);
   if (path === "/api/photos/rank" && method === "POST") return rankRoute(request, json, ai);
   if (path === "/api/moodboard/pinterest" && method === "POST") return boardRoute(env, request, json);
   return null;
@@ -48,7 +49,8 @@ export async function photosRoute(request, env, url, path, method, { hasAI, runM
 async function body(request) { try { return await request.json(); } catch { return {}; } }
 const shape = (w, h) => (!w || !h ? "unknown" : h > w * 1.15 ? "portrait" : w > h * 1.15 ? "landscape" : "square");
 const clean = s => String(s || "").replace(/\s+/g, " ").trim();
-const wantFree = from => from !== "pinterest";
+const FROM = ["free", "pinterest", "both", "mine"];
+const wantFree = from => from === "free" || from === "both";
 const wantPin = from => from === "pinterest" || from === "both";
 
 function sources(env, from) {
@@ -56,10 +58,12 @@ function sources(env, from) {
     pexels: wantFree(from) && !!env.PEXELS_KEY,
     pixabay: wantFree(from) && !!env.PIXABAY_KEY,
     pinterest: wantPin(from) && !!env.SERPAPI_KEY,
+    mine: from === "mine" && pinterestReady(env),
   };
 }
 function noSourceMessage(env, from) {
   if (from === "pinterest") return "Pinterest search isn't switched on yet. It needs a SerpApi key (SERPAPI_KEY) in the site's settings.";
+  if (from === "mine") return "Connecting Pinterest isn't switched on yet. It needs a Pinterest app (PINTEREST_APP_ID and PINTEREST_APP_SECRET) in the site's settings.";
   if (!env.PEXELS_KEY && !env.PIXABAY_KEY) return "Free photo search isn't switched on yet. It needs a free Pixabay or Pexels key in the site's settings.";
   return "No photo source is switched on.";
 }
@@ -105,26 +109,38 @@ async function pinterest(env, q, next) {
     thumb: p.thumbnail || p.original, file: p.original,
     author: (p.pinner && (p.pinner.name || p.pinner.username)) || "Pinterest", page: p.pin_link || p.link || (p.board && p.board.link) || "https://www.pinterest.com",
     title: clean([p.title, p.alt_text, p.description].filter(Boolean).join(" · ")).slice(0, 220),
-    ai: aiMade({ title: [p.title, p.alt_text, p.description, p.board && p.board.name].filter(Boolean).join(" · ") }),
+    ai: aiMade({ title: [p.title, p.alt_text, p.description, p.board && p.board.name].filter(Boolean).join(" · ") }) || aiPin(p),
   })).filter(p => !p.ai);
   return { items, next: (d.serpapi_pagination && d.serpapi_pagination.next_page_token) || d.next_page_token || null };
 }
 
+/* Pinterest's "less AI" still lets through many generated pictures that aren't labelled as such. These catch more:
+   pins that link to an AI-image site, and pinners or boards whose names say they post AI art. */
+const AI_HOSTS = /(^|\.)(openart\.ai|civitai\.com|lexica\.art|playground(ai)?\.com|nightcafe\.studio|leonardo\.ai|midjourney\.com|tensor\.art|seaart\.ai|pixai\.art|getimg\.ai|starryai\.com|craiyon\.com|dreamstudio\.ai|creator\.nightcafe\.studio|yodayo\.com|aiartshop\.com|promptbase\.com|krea\.ai|ideogram\.ai|pollinations\.ai|deepai\.org|imagine\.art|artbreeder\.com|perchance\.org|pixlr\.com|neural\.love|hotpot\.ai|dreamina\.capcut\.com|mage\.space)$/i;
+const AI_NAME = /(^|[^a-z])ai([^a-z]|$)|ai_?(art|arts|artist|artwork|gen|generated|images?|pics?|creations?|dreams?|world|studio|aesthetics?|vibes?|magic|visions?|beauty|girls?|wallpapers?)|(art|gen|dream|vision|prompt)s?_?ai([^a-z]|$)|prompts?\b|midjourney|stablediffusion|aigenerated/i;
+function aiPin(p) {
+  for (const u of [p.link, p.domain && "https://" + p.domain]) { try { if (u && AI_HOSTS.test(new URL(u).hostname)) return true; } catch {} }
+  const who = [p.pinner && p.pinner.username, p.pinner && p.pinner.name, p.board && p.board.name].filter(Boolean).join(" ");
+  return AI_NAME.test(who);
+}
+
 /* Runs one query on every source that is on. Results interleaved, so no source crowds out the others.
    pin: false leaves Pinterest out (each Pinterest search costs one of the SerpApi account's monthly searches). */
-async function searchAll(env, q, orientation, from, { page = 1, next = null, per = 20, look = "mix", pin = true } = {}) {
-  const on = { ...sources(env, from) }; if (!pin) on.pinterest = false;
-  const key = `${q.toLowerCase()}|${orientation}|${from}|${page}|${next || ""}|${look}|${pin ? 1 : 0}`, hit = cache.get(key);
+async function searchAll(env, q, orientation, from, { page = 1, next = null, per = 20, look = "mix", pin = true, mine = null } = {}) {
+  const on = { ...sources(env, from) }; if (!pin) { on.pinterest = false; on.mine = false; } if (!mine) on.mine = false;
+  // someone's own pins are theirs: never kept in the shared cache
+  const key = `${q.toLowerCase()}|${orientation}|${from}|${page}|${next || ""}|${look}|${pin ? 1 : 0}`, hit = on.mine ? null : cache.get(key);
   if (hit && Date.now() - hit.at < 86400000) return hit.data;
   const jobs = [];
   if (on.pexels) jobs.push(pexels(env, q, orientation, page, per).catch(e => ({ error: "Pexels: " + e.message, items: [] })));
   if (on.pixabay) jobs.push(pixabay(env, q, orientation, page, per, look).catch(e => ({ error: "Pixabay: " + e.message, items: [] })));
   if (on.pinterest && (page === 1 || next)) jobs.push(pinterest(env, q, next).then(x => ({ ...x, pin: true })).catch(e => ({ error: "Pinterest: " + e.message, items: [], pin: true })));
+  if (on.mine && (page === 1 || next)) jobs.push(mineSearch(env, mine, q, next).then(x => ({ ...x, pin: true })).catch(e => ({ error: "Your Pinterest: " + e.message, fatal: /relink|denied|busy/.test(e.code || "") ? e : null, items: [], pin: true })));
   const parts = await Promise.all(jobs), lists = parts.map(p => p.items), items = [];
   for (let i = 0; lists.some(l => i < l.length); i++) for (const l of lists) if (l[i]) items.push({ ...l[i], q });
   const pinPart = parts.find(p => p.pin);
-  const data = { items, errors: parts.map(p => p.error).filter(Boolean), next: pinPart ? pinPart.next || null : null };
-  if (items.length) { cache.set(key, { at: Date.now(), data }); if (cache.size > 500) cache.delete(cache.keys().next().value); }
+  const data = { items, errors: parts.map(p => p.error).filter(Boolean), next: pinPart ? pinPart.next || null : null, fatal: (parts.find(p => p.fatal) || {}).fatal || null };
+  if (items.length && !on.mine) { cache.set(key, { at: Date.now(), data }); if (cache.size > 500) cache.delete(cache.keys().next().value); }
   return data;
 }
 
@@ -169,14 +185,24 @@ function jsonArray(out) {
    ("snowy cabin night") mostly finds polished stock shots and glossy AI renders, while "snowy cabin night oil
    painting" or "snowy street night 35mm film" finds the characterful pictures people actually pin. */
 const LOOKS = {
-  art: ["oil painting", "illustration", "gouache painting", "vintage illustration", "anime background art", "watercolor painting"],
-  photo: ["35mm film photo", "film photography", "cinematic film still", "analog photo"],
+  art: ["classical oil painting", "vintage illustration", "1960s gouache illustration", "90s anime screencap", "impressionist painting", "old watercolor painting"],
+  photo: ["35mm film photo", "film photography", "cinematic film still", "analog photo", "disposable camera photo", "vintage photograph"],
 };
 const ART_Q = /\b(painting|painted|illustration|drawing|art|artwork|gouache|watercolou?r|linocut|pastel|sketch|anime|storybook|impressionist|print)\b/i;
 function withMedium(q, look, k) {
   if (ART_Q.test(q) || /\b(film|35mm|analog|photograph|photo|polaroid|still)\b/i.test(q)) return q;
   const pool = look === "art" ? LOOKS.art : look === "photo" ? LOOKS.photo : (k % 2 ? LOOKS.photo : LOOKS.art);
   return `${q} ${pool[(k * 3 + q.length) % pool.length]}`;
+}
+/* Searching your own pins: Pinterest matches the pins' own words, so a long styled query finds nothing. Plain
+   subjects instead: the creator's own words, then each query without its medium, at most three words. */
+const MEDIUM = /\b(35mm|film|films|photo|photos|photograph|photography|analog|analogue|cinematic|still|grainy|candid|vintage|retro|classic|classical|old|oil|painting|paintings|painted|illustration|illustrations|gouache|watercolou?r|anime|screencap|screenshot|background|art|artwork|storybook|linocut|museum|impressionist|scan|archive|disposable|camera|polaroid|editorial|\d0s|1\d{3}s?|century|19th|20th)\b/gi;
+function mineQueries(queries, prompt) {
+  const SMALL = /^(a|an|the|at|in|on|of|by|with|under|over|and|or|to|from|into|for)$/i;
+  const short = q => clean(q.replace(MEDIUM, " ")).split(" ").filter(w => !SMALL.test(w)).slice(0, 3).join(" ");
+  const base = clean(prompt).split(/[,.;]/)[0].trim();
+  const out = [...(base && base.split(" ").length <= 4 ? [base] : base ? [short(base)] : []), ...queries.map(short)].filter(Boolean);
+  return [...new Set(out.map(q => q.toLowerCase()))].slice(0, 4);
 }
 async function writeQueries(ai, lyrics, prompt, n, look = "mix", vibe = null) {
   const base = clean(prompt);
@@ -192,13 +218,13 @@ async function writeQueries(ai, lyrics, prompt, n, look = "mix", vibe = null) {
     return qs.map((q, k) => k === 0 && base ? q : withMedium(q, look, k));
   };
   if (!ai || (!base && !clean(lyrics))) return { queries: [...new Set(fallback())], ai: false };
-  const medium = look === "art" ? "Every query names an art medium (for example oil painting, gouache, watercolor, vintage or storybook illustration, anime background art, linocut)."
-    : look === "photo" ? "Every query names a photo style that isn't stock (for example 35mm film, analog, grainy, cinematic film still, candid, vintage photograph)."
-    : "Mix the mediums: about half the queries name an art medium (oil painting, gouache, vintage or storybook illustration, anime background art, watercolor), the other half a photo style that isn't stock (35mm film, analog, cinematic film still, grainy, candid).";
+  const medium = look === "art" ? "Every query names an older, hand-made art medium (for example classical or impressionist oil painting, vintage gouache or storybook illustration, 90s anime screencap, old watercolor, linocut)."
+    : look === "photo" ? "Every query names a photo style that isn't stock (for example 35mm film, analog, disposable camera, grainy, cinematic film still, candid, vintage photograph)."
+    : "Mix the mediums: about half the queries name an older, hand-made art medium (classical or impressionist oil painting, vintage gouache or storybook illustration, 90s anime screencap, old watercolor), the other half a photo style that isn't stock (35mm film, analog, disposable camera, cinematic film still, candid).";
   const feel = vibeText(vibe);
   const sys = `You help pick images for a music lyric video on social media. Write exactly ${n} short image search queries for Pinterest-style searches (3 to 7 words each, in English, whatever language the lyrics are in). Aim for characterful, artistic, interesting images, the kind people collect on mood boards: not polished stock photos, not people posing, not glossy 3D or fantasy renders. Match the song's own mood and colours: bright, warm and playful for an upbeat song, soft for a gentle one, dark only when the song is dark. Each query = a concrete scene or subject + a medium or style.` +
     (base ? ` The creator asked for: "${base}". Every query must stay inside that request (same subject, style or category); use the lyrics only to steer the mood, places, season and colours.` : " Base them on the imagery, mood, setting and season of the lyrics.") +
-    ` ${medium} Make the queries different from each other (different scenes, angles, mediums) so the results vary. No artist names, no song titles, no words like "lyrics", "quote", "wallpaper" or "stock". Answer with a JSON array of ${n} strings and nothing else.`;
+    ` ${medium} Make the queries different from each other (different scenes, angles, mediums) so the results vary. No artist names, no song titles, no words like "lyrics", "quote", "wallpaper", "stock", "aesthetic", "dreamy", "fantasy", "digital art", "concept art", "4k" or "hyper realistic": searches for new digital art are full of AI-made pictures, while wording that points to real, older or film pictures (vintage, film, museum, 90s) finds what people actually made. Answer with a JSON array of ${n} strings and nothing else.`;
   try {
     const out = await ai({ messages: [{ role: "system", content: sys + (feel ? " The song has been read already (below): follow its feel, energy, colours and light closely." : "") }, { role: "user", content: (feel ? `How the song feels:\n${feel}\n\n` : "") + `Lyrics:\n${clean(lyrics) ? lyrics.slice(0, 4000) : "(no lyrics yet)"}` }], max_tokens: 240, temperature: 0.8 });
     let qs = jsonArray(out).map(x => clean(x).replace(/["#]/g, "").slice(0, 70)).filter(Boolean);
@@ -246,13 +272,19 @@ async function rankByText(ai, lyrics, prompt, items, want, vibe = null) {
 }
 
 /* ---------- the whole grab ---------- */
-async function pickRoute(env, request, json, ai) {
-  const b = await body(request), from = ["free", "pinterest", "both"].includes(b.from) ? b.from : "free";
+async function pickRoute(env, request, json, ai, user) {
+  const b = await body(request), from = FROM.includes(b.from) ? b.from : "free";
   const count = Math.max(1, Math.min(40, Math.round(+b.count || 10))), orientation = ORIENT[b.aspect] || "portrait";
   const lyrics = String(b.lyrics || "").slice(0, 6000), prompt = clean(b.prompt).slice(0, 300);
   const look = ["mix", "art", "photo"].includes(b.look) ? b.look : "mix";
   const on = sources(env, from);
-  if (!on.pexels && !on.pixabay && !on.pinterest) return json({ error: "no_photos", message: noSourceMessage(env, from) }, 503);
+  if (!on.pexels && !on.pixabay && !on.pinterest && !on.mine) return json({ error: "no_photos", message: noSourceMessage(env, from) }, 503);
+  // your own Pinterest: the connected account, sealed, from this browser
+  let mine = null;
+  if (on.mine) {
+    if (!b.pinAccount) return json({ error: "relink", message: "Connect your Pinterest first." }, 409);
+    try { mine = await openPin(env, b.pinAccount, user); } catch (e) { return json({ error: e.code, message: e.message }, e.status || 409); }
+  }
   const vibe = vibeFrom(b.vibe) || (ai && !b.queries && clean(lyrics) ? await readVibe(ai, { lyrics, title: b.title, sound: b.sound }) : null);
   // images already used (in this video or an earlier one) or already shown: never offered again
   const exclude = new Set((Array.isArray(b.exclude) ? b.exclude : []).slice(0, 4000).map(x => String(x).replace(/\?.*$/, "")));
@@ -264,7 +296,8 @@ async function pickRoute(env, request, json, ai) {
 
   // more searches when more pictures are needed, so there is plenty to choose from
   const nq = count > 16 ? 4 : 3;
-  const { queries, ai: wrote } = again ? { queries: again, ai: false } : await writeQueries(ai, lyrics, prompt, nq, look, vibe);
+  let { queries, ai: wrote } = again ? { queries: again, ai: false } : await writeQueries(ai, lyrics, prompt, nq, look, vibe);
+  if (on.mine && !again) queries = mineQueries(queries, prompt);
   const per = Math.max(12, Math.min(30, Math.ceil(count * 2.2 / queries.length)));
   const used = it => exclude.has(it.id) || exclude.has(String(it.page || "").replace(/\?.*$/, "")) || exclude.has(it.file.replace(/\?.*$/, ""));
   const seen = new Set(), pool = [], errors = new Set(), tokens = {};
@@ -273,7 +306,9 @@ async function pickRoute(env, request, json, ai) {
   for (let round = 0; round < 3 && page <= 20; round++, page++) {
     lastPage = page;
     // Pinterest only on the first round: every Pinterest search uses one of the month's SerpApi searches
-    const runs = await Promise.all(queries.map(q => searchAll(env, q, orientation, from, { per, page, look, pin: round === 0, next: page > 1 ? next[q] || null : null })));
+    const runs = await Promise.all(queries.map(q => searchAll(env, q, orientation, from, { per, page, look, pin: round === 0, mine, next: page > 1 ? next[q] || null : null })));
+    const fatal = runs.find(r => r.fatal);
+    if (fatal) return json({ error: fatal.fatal.code, message: fatal.fatal.message, ...(mine && mine.changed ? { pinAccount: (await renewed(env, mine)).account } : {}) }, fatal.fatal.status || 502);
     runs.forEach((r, k) => { r.errors.forEach(e => errors.add(e)); tokens[queries[k]] = r.next || null; next[queries[k]] = r.next || null; });
     // one list, no duplicates, the first results of every query first
     for (let i = 0; runs.some(r => i < r.items.length); i++) for (const r of runs) {
@@ -287,8 +322,11 @@ async function pickRoute(env, request, json, ai) {
     if (pool.length >= count * 1.6 || !more) break;
   }
   const pinLeft = on.pinterest ? await searchesLeft(env) : null;
-  if (!pool.length) return json({ queries, picks: [], spare: [], errors: [...errors], ai: wrote, page: lastPage, next: tokens, skipped, pinLeft,
-    message: skipped ? "Every image these searches found has been used already. Try other keywords." : `Nothing found for ${queries.map(q => `"${q}"`).join(", ")}. Try other keywords.` });
+  const pinAccount = mine && mine.changed ? (await renewed(env, mine)).account : undefined;
+  if (!pool.length) return json({ queries, picks: [], spare: [], errors: [...errors], ai: wrote, page: lastPage, next: tokens, skipped, pinLeft, pinAccount,
+    message: skipped ? "Every image these searches found has been used already. Try other keywords."
+      : on.mine ? `None of your saved pins match ${queries.map(q => `"${q}"`).join(", ")}. Pinterest searches your pins' own titles and descriptions, so try one or two plain words (beach, night, flowers).`
+      : `Nothing found for ${queries.map(q => `"${q}"`).join(", ")}. Try other keywords.` });
 
   // quality first, then the AI's judgement on the best of them
   const scored = pool.map((it, i) => ({ it, s: baseScore(it, orientation, i) })).sort((x, y) => y.s - x.s).map(x => x.it);
@@ -300,7 +338,7 @@ async function pickRoute(env, request, json, ai) {
   ranked = [...ranked, ...scored.slice(shortlist.length)];
 
   const picks = await signAll(env, ranked.slice(0, count)), spare = await signAll(env, ranked.slice(count, count + Math.max(12, count)));
-  return json({ queries, picks, spare, vibe, errors: [...errors], ai: !!order || wrote, sources: on, page: lastPage, next: tokens, skipped, pinLeft });
+  return json({ queries, picks, spare, vibe, errors: [...errors], ai: !!order || wrote, sources: on, page: lastPage, next: tokens, skipped, pinLeft, pinAccount });
 }
 
 async function rankRoute(request, json, ai) {
