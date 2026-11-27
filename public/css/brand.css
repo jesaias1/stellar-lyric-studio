@@ -210,6 +210,17 @@ textarea:focus,input:focus,select:focus{box-shadow:none!important;border-color:v
 .tut-btn:hover,.tut-btn:focus-visible{background:#fff;color:#0010da;border-color:#fff}
 .tut-btn:hover .tut-play,.tut-btn:focus-visible .tut-play{background:#0010da;color:#fff;transform:scale(1.06)}
 .tut-btn:focus-visible{outline:2px solid #fff;outline-offset:3px}
+/* the tutorial and Feedback buttons side by side under the intro text */
+.home-ctas{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:18px}
+.home-ctas .fb-btn{margin-top:0}
+/* same shape as the red Feedback button, in white and blue */
+.tut-pill{display:inline-flex;align-items:center;gap:8px;padding:9px 18px;border:0;border-radius:999px;background:#fff;color:#0010da;font:600 14px/1 var(--ui,inherit);cursor:pointer;box-shadow:0 6px 22px rgba(0,0,0,.18);transition:transform .12s,background .15s}
+.tut-pill i{font-style:normal;font-weight:400;opacity:.7}
+.tut-pill i::before{content:"·";margin-right:6px}
+.tut-pill:hover,.tut-pill:focus-visible{background:#e8ebff;transform:translateY(-1px)}
+.tut-pill:focus-visible{outline:2px solid #fff;outline-offset:3px}
+@media (prefers-reduced-motion:reduce){.tut-pill{transition:none}}
+@media (max-width:420px){.tut-pill i{display:none}}   /* phones: both buttons stay on one line */
 .auth-tut{background:none;border:0;padding:0;font:inherit;color:rgba(255,255,255,.85);text-decoration:underline;text-underline-offset:3px;cursor:pointer}
 .tut{position:fixed;inset:0;z-index:2200;display:grid;place-items:center;padding:clamp(12px,4vw,56px);background:rgba(2,3,15,.86);backdrop-filter:blur(6px)}
 .tut[hidden]{display:none}
