@@ -250,7 +250,7 @@ window.SLSApp = (() => {
     const real = !!(S.audio && S.songName !== "Demo track");
     $("#pasteText").value = text != null ? text : (S.P.srcLyrics || S.P.lyrics || "");
     $("#pasteTime").hidden = !real;
-    $("#pasteHint").textContent = real ? "One line per lyric line. The AI listens to the song and gives every word its time. Labels like [Verse 1], Chorus x2 or (Artist name) are removed for you."
+    $("#pasteTitle").dataset.tip = real ? "One line per lyric line. The AI listens to the song and gives every word its time. Labels like [Verse 1], Chorus x2 or (Artist name) are removed for you."
       : "One line per lyric line. Load your own song to have them timed automatically. Labels like [Verse 1], Chorus x2 or (Artist name) are removed for you.";
     $("#pasteModal").hidden = false; setTimeout(() => $("#pasteText").focus(), 30);
   }
@@ -269,11 +269,15 @@ window.SLSApp = (() => {
   const tlBtn = $("#tlToggle");
   function setTl(open){ body.dataset.tl = open ? "open" : "closed"; tlBtn.textContent = open ? "Hide timeline" : "Show timeline"; tlBtn.setAttribute("aria-expanded", String(open)); keep.set("sls-tl", open ? "1" : "0"); requestAnimationFrame(() => { sizeTimeline(); fitStage(); tlDirty = true; }); }
   tlBtn.onclick = () => setTl(body.dataset.tl !== "open"); setTl(keep.get("sls-tl") === "1");
+  // the tempo tools stay folded behind a small "120 BPM" button (the tempo is found by itself)
+  const bpmBtn = $("#bpmToggle"), bpmVal = $("#bpmVal"); let shownBpm = null;
+  if(bpmBtn) bpmBtn.onclick = () => { const open = body.dataset.bpm !== "open"; body.dataset.bpm = open ? "open" : "closed"; bpmBtn.setAttribute("aria-expanded", String(open)); requestAnimationFrame(() => { sizeTimeline(); fitStage(); tlDirty = true; }); };
+  const showBpm = () => { const b = S.P && S.P.bpm; if(bpmVal && b && b !== shownBpm){ shownBpm = b; bpmVal.textContent = Math.round(b * 10) / 10; } };
   const vid = $("#vidCard"); if(vid && !window.claude?.use) vid.hidden = true;   // that tool only works inside Claude
   const seekBar = $("#rvSeek"); let seeking = false;
   seekBar.addEventListener("pointerdown", () => { seeking = true; }); addEventListener("pointerup", () => { seeking = false; });
   seekBar.addEventListener("input", () => { SLSLyricsUI.clearHear(); seek(+seekBar.value); });
-  (function frame(){ try { if(home.hidden && body.dataset.step === "lyrics"){ SLSLyricsUI.tick(); if(!seeking) seekBar.value = songTime(); } } catch(err){ if(!frame.warned){ frame.warned = true; console.error(err); } } requestAnimationFrame(frame); })();
+  (function frame(){ try { showBpm(); if(home.hidden && body.dataset.step === "lyrics"){ SLSLyricsUI.tick(); if(!seeking) seekBar.value = songTime(); } } catch(err){ if(!frame.warned){ frame.warned = true; console.error(err); } } requestAnimationFrame(frame); })();
 
   body.dataset.step = "lyrics"; S.review = false; showHome("drop"); paintSteps();
   /* true once someone is logged in (the login window is up until then) */

@@ -927,3 +927,8 @@ body.cal-open .toast{z-index:1600}
 @container (max-width:372px){ .tabs .ctab{font-size:10px;letter-spacing:-.01em;padding-inline:0} }
 .pane-part{display:flex;flex-direction:column;gap:14px}
 .pane-part + .pane-part{margin-top:4px;padding-top:14px;border-top:1px solid var(--line)}
+
+/* hover tips: the page shows just the titles, the explanation pops up over them (js/tips.js) */
+[data-tip]:not(button){cursor:help;text-decoration:underline dotted;text-decoration-color:color-mix(in srgb,currentColor 35%,transparent);text-underline-offset:3px}
+.tipbub{position:fixed;z-index:4000;max-width:280px;padding:8px 11px;border-radius:9px;background:#14142a;color:#fff;font:400 12.5px/1.45 var(--ui,inherit);text-transform:none;letter-spacing:normal;box-shadow:0 10px 28px rgba(0,0,0,.4);pointer-events:none}
+.tipbub[hidden]{display:none}

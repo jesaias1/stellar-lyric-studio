@@ -27,7 +27,7 @@ window.SLSPhotos = (() => {
       <button class="btn small" id="mbNew" type="button">+ New moodboard</button>
     </div>
     <div class="field ph-count">
-      <span class="row" style="justify-content:space-between"><span class="label">Number of images</span><span class="hint" id="phCountVal"></span></span>
+      <span class="row" style="justify-content:space-between"><span class="label" id="phCountLbl">Number of images</span><span class="hint" id="phCountVal"></span></span>
       <input type="range" id="phCount" min="2" max="40" step="1" aria-label="Number of images">
       <span class="hint" id="phCountWhy" hidden></span>
     </div>
@@ -51,7 +51,7 @@ window.SLSPhotos = (() => {
     const auto = autoCount(), n = count();
     $("#phCount").value = n;
     $("#phCountVal").innerHTML = manualCount == null ? `${n} · auto` : `${n} · <button class="linkish" id="phAuto" type="button">back to auto (${auto.n})</button>`;
-    $("#phCountWhy").textContent = manualCount == null ? auto.why : "";
+    $("#phCountWhy").textContent = ""; $("#phCountLbl").dataset.tip = auto.why;
   }
   $("#phCount").oninput = e => { manualCount = +e.target.value; paintCount(); };
   $("#phCountVal").onclick = e => { if(e.target.id === "phAuto"){ manualCount = null; paintCount(); } };

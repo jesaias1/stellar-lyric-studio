@@ -26,8 +26,7 @@ window.SLSTemplates = (() => {
   ];
   const pane = $("#tplPane");
   pane.innerHTML = `
-    <div class="tp-head"><span class="label">Complete looks</span><button class="btn small" id="tpNew">+ Save current look</button></div>
-    <div class="hint">A complete look also carries the cuts, transitions, format and footage, not just the lyric template.</div>
+    <div class="tp-head"><span class="label" data-tip="A complete look also carries the cuts, transitions, format and footage, not just the lyric template.">Complete looks</span><button class="btn small" id="tpNew">+ Save current look</button></div>
     <form class="tp-form card" id="tpForm" hidden>
       <label class="field"><span class="hint">Name</span><input type="text" id="tpName" placeholder="e.g. Ingrid · Christmas look" maxlength="80"></label>
       <div class="field"><span class="hint">What it should carry</span><div class="tp-parts" id="tpParts">${PARTS.map(p => `<label class="tp-part"><input type="checkbox" value="${p.id}" ${p.off ? "" : "checked"}><span><b>${p.name}</b><i>${p.desc}</i></span></label>`).join("")}</div></div>
@@ -35,13 +34,12 @@ window.SLSTemplates = (() => {
     </form>
     <div class="label">Starter looks</div>
     <div class="tp-grid" id="tpStarters"></div>
-    <div class="label">Your templates</div>
+    <div class="label" id="tplMineLbl" data-tip="Saved in this browser. Use &quot;Save all as file&quot; to keep a copy or share one with someone.">Your templates</div>
     <div class="tp-grid" id="tplList"></div>
-    <div class="hint" id="tplWhere">Saved in this browser. Use "Save as file" to keep a copy or share one with someone.</div>
+    <div class="hint" id="tplWhere" hidden></div>
     <div class="row"><button class="btn small ghost" id="tplDownload">Save all as file</button><label class="btn small ghost file">Open file<input id="tplOpen" type="file" accept=".json,application/json"></label></div>
-    <div class="label">Song templates</div>
-    <div class="tlist" id="builtinList"></div>
-    <div class="hint">A song template is made for one specific song. Load that song and it lines up automatically.</div>`;
+    <div class="label" data-tip="A song template is made for one specific song. Load that song and it lines up automatically.">Song templates</div>
+    <div class="tlist" id="builtinList"></div>`;
 
   const partNames = parts => PARTS.filter(p => parts && parts[p.id]).map(p => p.name);
   const clone = o => JSON.parse(JSON.stringify(o ?? null));

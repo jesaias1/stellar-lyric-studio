@@ -2345,7 +2345,7 @@ function initTemplates(){
   if(!source) return; if(tplUnsub){ try { tplUnsub(); } catch {} tplUnsub = null; }
   Promise.resolve(source).then(db => {
     if(!db) return; DB = db; localMode = false;
-    $("#tplWhere").textContent = "Templates are shared with everyone who has this page. They keep the section, lyric timing, beat grid, cuts, style and hook. Footage isn't stored, so you can swap visuals for each new version.";
+    { const l = $("#tplMineLbl"); if(l) l.dataset.tip = "Templates are shared with everyone who has this page. They keep the section, lyric timing, beat grid, cuts, style and hook. Footage isn't stored, so you can swap visuals for each new version."; }
     tplUnsub = db.collection("templates").orderBy("savedAt","desc").limit(200).onSnapshot(snap => {
       templates = snap.docs.map(d => ({id:d.id, ...d.data()})); renderTemplates();
     }, err => { toast("Shared templates unavailable (" + err.code + "). Saving in this browser instead."); localMode = true; templates = store.get("sls-templates") || []; renderTemplates(); });

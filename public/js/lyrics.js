@@ -66,7 +66,7 @@ window.SLSLyricsUI = (() => {
     else bar.hidden = true;
     const lang = S.P.lang && window.SLSTranscribe ? " · " + SLSTranscribe.langName(S.P.lang) : "";
     $("#lyStat").textContent = words.length ? `${words.length} words · ${lines} lines${lang}` : "";
-    $("#lySub").textContent = words.length ? "Click any word to fix it. Click a line's time to hear it." : "Nothing here yet.";
+    $("#lySub").textContent = words.length ? "" : "Nothing here yet."; $("#lySub").hidden = !!words.length;
   }
   function schedule(){ stale = true; if(queued) return; queued = true; requestAnimationFrame(() => { queued = false; if(stale && document.body.dataset.step === "lyrics") render(); }); }
 

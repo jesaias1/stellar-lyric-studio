@@ -3,7 +3,7 @@
 <!-- the editor can switch between light and dark (js/app.js); the blue start screen looks the same in both -->
 <head>
 <meta charset="utf-8">
-<meta name="sls-build" content="202611271016">
+<meta name="sls-build" content="202611271100">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Stellar Lyric Studio</title>
 <meta name="description" content="Turn a song into a lyric video for social media. Upload the track and the lyrics write and time themselves.">
@@ -164,7 +164,6 @@
 <div class="modal" id="pasteModal" hidden>
   <div class="dialog" role="dialog" aria-labelledby="pasteTitle" style="width:min(560px,100%)">
     <h2 id="pasteTitle">Paste the lyrics</h2>
-    <div class="hint" id="pasteHint">One line per lyric line. The AI listens to the song and gives every word its time. Labels like [Verse 1], Chorus x2 or (Artist name) are removed for you.</div>
     <textarea id="pasteText" spellcheck="false" style="min-height:240px"></textarea>
     <div class="row"><button class="btn primary" id="pasteTime">Time them to the song</button><button class="btn" id="pasteOk">Just use the text</button><button class="btn ghost" id="pasteCancel">Cancel</button></div>
   </div>
@@ -197,8 +196,8 @@
     <section class="lystep" id="lyStep" aria-label="Lyrics">
       <header class="ly-head">
         <div class="ly-title">
-          <h2>Check the lyrics</h2>
-          <p class="hint" id="lySub">Click any word to fix it. Press a line's time to hear it.</p>
+          <h2 data-tip="Click any word to fix it. Click a line's time to hear it.">Check the lyrics</h2>
+          <p class="hint" id="lySub" hidden></p>
         </div>
         <div class="ly-actions">
           <button class="btn small ghost" id="lyRedo" title="Run the lyric AI on this song again">Listen again</button>
@@ -248,25 +247,22 @@
       <section class="pane" data-pane="lyrics">
         <button class="link-btn ly-back" id="openLyEd" type="button">&#8592; Back to checking the lyrics</button>
         <div class="field">
-          <label class="label" for="lyricsText">Lyrics for this section</label>
+          <label class="label" for="lyricsText" data-tip="One line per lyric line. Apply keeps your timings when the word count is unchanged.">Lyrics for this section</label>
           <textarea id="lyricsText" spellcheck="false"></textarea>
           <div class="row">
             <button class="btn small" id="applyLyrics">Apply lyrics</button>
             <button class="btn small ghost" id="autoSpace">Spread across beats</button>
             <button class="btn small ghost" id="selAll">Select all words</button>
           </div>
-          <div class="hint">One line per lyric line. Apply keeps your timings when the word count is unchanged.</div>
           <!-- downloading the timings (.lrc / .srt) lives in the lyrics step's More menu, which clicks these -->
           <span hidden><button id="lrcOut" type="button">Download LRC</button><button id="srtOut" type="button">Download SRT</button></span>
-          <div class="field shift-f"><span class="row" style="justify-content:space-between"><span class="label">Shift all words</span><button class="link-btn" id="shiftReset" type="button">Reset</button></span>
+          <div class="field shift-f"><span class="row" style="justify-content:space-between"><span class="label" data-tip="Below 0 moves every word earlier, above 0 later. Type an exact offset, or use the arrow keys for 0.01 s steps.">Shift all words</span><button class="link-btn" id="shiftReset" type="button">Reset</button></span>
             <div class="row shift-row"><button class="btn small ghost" id="shiftDown" type="button" aria-label="Earlier by 0.05 seconds" title="Earlier by 0.05 s">−</button><input type="number" id="shiftNum" step="0.01" min="-10" max="10" inputmode="decimal" aria-label="Offset in seconds"><span class="hint">s</span><button class="btn small ghost" id="shiftUp" type="button" aria-label="Later by 0.05 seconds" title="Later by 0.05 s">+</button></div>
-            <input type="range" id="shiftRange" min="-2" max="2" step="0.01" aria-label="Offset">
-            <span class="hint">Below 0 moves every word earlier, above 0 later. Type an exact offset, or use the arrow keys for 0.01 s steps.</span></div>
+            <input type="range" id="shiftRange" min="-2" max="2" step="0.01" aria-label="Offset"></div>
         </div>
 
         <div class="card" id="timeFileCard">
-          <div class="label">Have a file with your lyric timings?</div>
-          <div class="hint">Like an .lrc or .srt file. Upload it and every line gets its time from the file.</div>
+          <div class="label" data-tip="Like an .lrc or .srt file. Upload it and every line gets its time from the file.">Timing file</div>
           <div class="row"><label class="btn small file">Upload timing file<input id="lrcFile" type="file" accept=".lrc,.srt,.txt"></label><button class="btn small ghost" id="toTap" type="button">Do the timing by hand</button></div>
         </div>
 
@@ -292,7 +288,7 @@
         </div>
 
         <div class="card" id="wordCard" hidden>
-          <div class="label" id="wMultiLbl">Selected word</div>
+          <div class="label" id="wMultiLbl" data-tip="Drag any selected word to move them together. Arrow keys nudge (Shift for a quarter beat). Shift-click adds words.">Selected word</div>
           <div id="wSingle" class="field">
             <input type="text" id="wText" aria-label="Word text">
             <div class="grid2">
@@ -301,7 +297,6 @@
             </div>
           </div>
           <div class="row"><button class="btn small" id="wDelete">Delete</button><button class="btn small ghost" id="wNone">Deselect</button></div>
-          <span class="hint">Drag any selected word to move them together. Arrow keys nudge (Shift for a quarter beat). Shift-click adds words.</span>
         </div>
       </section>
 
@@ -378,15 +373,13 @@
       <!-- Effects: how photos move and how every clip fills the frame -->
       <section class="pane" data-pane="framing" hidden>
         <div class="field">
-          <span class="label">Photos move</span>
+          <span class="label" data-tip="Gives your photos a gentle camera move. Still is the default. Videos always play as they are.">Photos move</span>
           <div class="seg seg-wrap" id="cutMotion"><button data-v="still">Still</button><button data-v="zoom">Slow zoom and pan</button><button data-v="zoomin">Zoom in</button><button data-v="zoomout">Zoom out</button></div>
-          <p class="hint">Off by default. Pick a movement to give your photos a gentle camera move. Videos always play as they are.</p>
         </div>
         <div class="field">
           <span class="label">Framing</span>
           <div class="seg" id="cutFit"><button data-v="fill">Fill the frame</button><button data-v="fit">Whole picture</button></div>
-          <label class="srow"><span>Size</span><span class="row" style="gap:8px;flex:1;flex-wrap:nowrap"><input type="range" id="cutZoom" min="50" max="300" step="1"><span class="hint" id="cutZoomVal" style="min-width:42px;text-align:right">100%</span></span></label>
-          <p class="hint">Size makes every clip bigger (cropped in closer) or smaller (more of the picture shows). 100% is as it fits.</p>
+          <label class="srow"><span data-tip="Bigger crops in closer, smaller shows more of the picture. 100% is as it fits.">Size</span><span class="row" style="gap:8px;flex:1;flex-wrap:nowrap"><input type="range" id="cutZoom" min="50" max="300" step="1"><span class="hint" id="cutZoomVal" style="min-width:42px;text-align:right">100%</span></span></label>
         </div>
       </section>
 
@@ -418,35 +411,32 @@
         <div class="card lyr-show">
           <div class="label">Lyrics on screen</div>
           <div class="seg seg-wrap" id="sShow" role="group" aria-label="How the lyrics appear"><button type="button" data-v="words">Word by word</button><button type="button" data-v="line">Full line</button></div>
-          <label class="srow"><span>Transition</span><select id="sTrans" aria-label="How each lyric line comes in"><option value="template">The template's own</option><option value="none">None</option><option value="fade">Fade</option><option value="pop">Pop</option><option value="slide">Slide up</option><option value="blur">Blur in</option></select></label>
-          <span class="hint">How each line comes in. None shows it straight away.</span>
+          <label class="srow"><span data-tip="How each line comes in. None shows it straight away.">Transition</span><select id="sTrans" aria-label="How each lyric line comes in"><option value="template">The template's own</option><option value="none">None</option><option value="fade">Fade</option><option value="pop">Pop</option><option value="slide">Slide up</option><option value="blur">Blur in</option></select></label>
         </div>
         <div class="card">
           <div class="label" id="ssTitle">Text for Brat</div>
           <label class="srow"><span>Font</span><select id="sPf"></select></label>
           <label class="srow" id="sSfRow"><span>Second font</span><select id="sSf"></select></label>
           <div class="field size-f">
-            <span class="row" style="justify-content:space-between"><span class="label">Size</span><span class="row" style="gap:4px"><input type="number" id="sizeNum" class="size-num" min="0" max="100" step="1" aria-label="Lyric size from 0 to 100"><span class="hint">/ 100</span></span></span>
+            <span class="row" style="justify-content:space-between"><span class="label" data-tip="0 is tiny, 50 is the template's own size, 100 is huge. Long lines still shrink to fit the frame.">Size</span><span class="row" style="gap:4px"><input type="number" id="sizeNum" class="size-num" min="0" max="100" step="1" aria-label="Lyric size from 0 to 100"><span class="hint">/ 100</span></span></span>
             <input type="range" id="sSize" min="0" max="100" step="0.5" aria-label="Lyric size">
-            <span class="hint">0 is tiny, 50 is the template's own size, 100 is huge. Long lines still shrink to fit the frame.</span>
           </div>
           <div class="srow"><span>Highlight</span><div class="swatches" id="hiSw"></div></div>
           <div class="srow"><span>Text colour</span><div class="swatches"><input type="color" id="sColor" title="Text colour"></div></div>
           <label class="srow"><span>Case</span><select id="sCase"><option value="auto">Template default</option><option value="as">As typed</option><option value="lower">lowercase</option><option value="upper">UPPERCASE</option></select></label>
         </div>
         <div class="card">
-          <div class="field"><span class="row" style="justify-content:space-between"><span class="label">Position</span><button class="btn small ghost" id="sCenter">Center</button></span>
+          <div class="field"><span class="row" style="justify-content:space-between"><span class="label" data-tip="Or drag the lyrics on the preview.">Position</span><button class="btn small ghost" id="sCenter">Center</button></span>
             <div class="grid2"><label class="field"><span class="hint">Left / right</span><input type="range" id="sX" min="0" max="1" step="0.01"></label>
-            <label class="field"><span class="hint">Up / down</span><input type="range" id="sY" min="0" max="1" step="0.01"></label></div>
-            <span class="hint">Or drag the lyrics on the preview.</span></div>
+            <label class="field"><span class="hint">Up / down</span><input type="range" id="sY" min="0" max="1" step="0.01"></label></div></div>
           <label class="field"><span class="label">Darken footage behind the text</span><input type="range" id="sScrim" min="0" max="0.75" step="0.01"></label>
         </div>
       </section>
         <section class="pane-part" data-rpane="titles">
         <div class="card">
-          <div class="row" style="justify-content:space-between"><span class="label">Hook text</span>
+          <div class="row" style="justify-content:space-between"><span class="label" data-tip="Optional. A line like &quot;New single out now&quot; over the first seconds. Drag it on the preview to move it.">Hook text</span>
             <div class="seg" id="hookSeg"><button data-v="off">Off</button><button data-v="on">On</button></div></div>
-          <span class="hint" id="hOffHint">Optional. Turn it on to show a line like "New single out now" over the first seconds.</span>
+          <span class="hint" id="hOffHint" hidden></span>
           <div class="field" id="hFields">
             <input type="text" id="hText" placeholder="New single out now">
             <div class="chips" id="hLook"><button data-v="pill">Pill</button><button data-v="box">Box</button><button data-v="caption">Caption</button><button data-v="outline">Outline</button><button data-v="sticker">Sticker</button><button data-v="banner">Banner</button></div>
@@ -456,15 +446,14 @@
             <label class="srow"><span>Text transition</span><select id="hAnim"><option value="none">None</option><option value="fade">Fade in</option><option value="pop">Pop</option><option value="slide">Slide up</option><option value="type">Type on</option></select></label>
             <div class="grid2"><label class="field"><span class="hint">Left / right</span><input type="range" id="hX" min="0" max="1" step="0.01"></label>
               <label class="field"><span class="hint">Up / down</span><input type="range" id="hY" min="0" max="1" step="0.01"></label></div>
-            <span class="hint">Or drag the hook on the preview.</span>
             <label class="field"><span class="row" style="justify-content:space-between"><span class="hint">Starts after</span><span class="hint" id="hStartVal">0.0s</span></span><input type="range" id="hStart" min="0" max="30" step="0.25"></label>
             <label class="field"><span class="row" style="justify-content:space-between"><span class="hint">On screen for</span><span class="hint" id="hDurVal">3.0s</span></span><input type="range" id="hDur" min="0.5" max="30" step="0.25"></label>
           </div>
         </div>
         <div class="card" id="textCard">
-          <div class="row" style="justify-content:space-between"><span class="label">Text boxes</span><button class="btn small" id="txtAdd">+ Add text</button></div>
+          <div class="row" style="justify-content:space-between"><span class="label" data-tip="Your own text, like in TikTok: it starts in the middle in the TikTok font and stays on for the whole video. Drag it on the preview to move it.">Text boxes</span><button class="btn small" id="txtAdd">+ Add text</button></div>
           <div class="chips" id="txtList"></div>
-          <span class="hint" id="txtEmpty">Add your own text, like in TikTok: it starts in the middle in the TikTok font and stays on for the whole video. Drag it on the preview to move it.</span>
+          <span class="hint" id="txtEmpty">No text yet.</span>
           <div class="field" id="txtEdit" hidden>
             <textarea id="txtText" rows="3" style="min-height:70px;font:14px/1.4 var(--ui)" placeholder="Type your text"></textarea>
             <label class="srow"><span>Font</span><select id="txtFont"></select></label>
@@ -481,10 +470,9 @@
               <div class="srow"><span>Position</span><div class="row" style="gap:6px;flex-wrap:nowrap"><span class="hint">X</span><input type="number" id="txtPX" min="-100" max="100" step="1" style="width:66px"><span class="hint">Y</span><input type="number" id="txtPY" min="-100" max="100" step="1" style="width:66px"></div></div>
               <label class="srow"><span>Rotation</span><span class="row" style="gap:8px;flex:1;flex-wrap:nowrap"><input type="range" id="txtRot" min="-180" max="180" step="1"><input type="number" id="txtRotN" min="-180" max="180" step="1" style="width:66px"></span></label>
             </div>
-            <div class="field txt-time"><span class="row" style="justify-content:space-between"><span class="label">On screen</span><button class="link-btn" id="txtWhole" type="button">Whole video</button></span>
+            <div class="field txt-time"><span class="row" style="justify-content:space-between"><span class="label" data-tip="Play to the moment and press Now, type the seconds, or drag its ends on the timeline.">On screen</span><button class="link-btn" id="txtWhole" type="button">Whole video</button></span>
               <div class="grid2"><label class="field"><span class="hint">From (s)</span><span class="row txt-tr"><input type="number" id="txtStart" min="0" step="0.05"><button class="btn small ghost" id="txtStartNow" type="button" title="Start where the playhead is">Now</button></span></label>
-                <label class="field"><span class="hint">Until (s)</span><span class="row txt-tr"><input type="number" id="txtEnd" min="0.2" step="0.05"><button class="btn small ghost" id="txtEndNow" type="button" title="End where the playhead is">Now</button></span></label></div>
-              <span class="hint">Play to the moment and press Now, type the seconds, or drag its ends on the timeline.</span></div>
+                <label class="field"><span class="hint">Until (s)</span><span class="row txt-tr"><input type="number" id="txtEnd" min="0.2" step="0.05"><button class="btn small ghost" id="txtEndNow" type="button" title="End where the playhead is">Now</button></span></label></div></div>
             <div class="row"><button class="btn small ghost" id="txtDup">Duplicate</button><button class="btn small ghost" id="txtDel">Delete text</button></div>
           </div>
         </div>
@@ -505,7 +493,7 @@
         <div class="seg" id="secLen"><button data-v="10">10s</button><button data-v="15">15s</button><button data-v="20">20s</button><button data-v="30">30s</button></div>
         <label class="row hint" style="gap:6px">or <input type="number" id="secLenIn" min="2" max="60" step="0.5" style="width:74px;padding:5px 8px" aria-label="Soundbite length in seconds"> s</label>
         <div class="bites-wrap"><button class="btn small" id="bitesBtn" type="button" hidden aria-haspopup="dialog">Best parts</button>
-          <div class="bites-pop" id="bitesPop" hidden><div class="bites-head"><div class="bites-hrow"><b>Best parts for TikTok &amp; Reels</b><button class="btn small tt-match" type="button">Match the TikTok sound</button></div><span class="hint">Choose one to put it in your video.</span></div><div class="bites-row" id="bitesPopRow"></div></div></div>
+          <div class="bites-pop" id="bitesPop" hidden><div class="bites-head"><div class="bites-hrow"><b data-tip="Choose one to put it in your video.">Best parts for TikTok &amp; Reels</b><button class="btn small tt-match" type="button">Match the TikTok sound</button></div></div><div class="bites-row" id="bitesPopRow"></div></div></div>
         <span class="hint" id="stageHint" style="margin-left:auto"></span>
       </div>
       <div class="viewport"><canvas id="stage" width="720" height="1280"></canvas></div>
@@ -527,7 +515,7 @@
 
   <!-- TIMELINE -->
   <section class="timeline">
-    <div class="tl-fold"><span class="label">Your clip</span><span class="hint">Drag the highlighted window to choose the part of the song the video uses.</span><button class="btn small ghost" id="tlToggle" aria-expanded="false">Show timeline</button></div>
+    <div class="tl-fold"><span class="label" data-tip="Drag the highlighted window to choose the part of the song the video uses.">Your clip</span><span class="tl-sp"></span><button class="btn small ghost" id="bpmToggle" type="button" aria-expanded="false" data-tip="The tempo is found from the song by itself. Open this to tap it or fix the beat."><span id="bpmVal">120</span> BPM</button><button class="btn small ghost" id="tlToggle" aria-expanded="false">Show timeline</button></div>
     <div class="tlbar">
       <div class="grp"><span class="label">BPM</span><input type="number" id="bpm" min="40" max="240" step="0.1"></div>
       <button class="btn small" id="tapTempo">Tap tempo</button>
@@ -537,9 +525,8 @@
     </div>
     <div class="ov"><span class="label">Song</span><canvas id="overview"></canvas></div>
     <div class="ov" id="secRow" style="padding-top:0"><span></span><div class="row hint" style="gap:10px">
-      <label class="row" style="gap:6px">Soundbite starts at <input type="number" id="secStartIn" min="0" step="0.1" style="width:84px;padding:4px 8px"> s</label>
-      <label class="row" style="gap:6px">ends at <input type="number" id="secEndIn" min="0" step="0.1" style="width:84px;padding:4px 8px"> s</label>
-      <span>Drag the highlighted window, its edges, or type exact times.</span></div></div>
+      <label class="row" style="gap:6px" data-tip="Drag the highlighted window, its edges, or type exact times.">Soundbite starts at <input type="number" id="secStartIn" min="0" step="0.1" style="width:84px;padding:4px 8px"> s</label>
+      <label class="row" style="gap:6px">ends at <input type="number" id="secEndIn" min="0" step="0.1" style="width:84px;padding:4px 8px"> s</label></div></div>
     <div class="tltools">
       <div class="tlt-l">
         <div class="tmenu-wrap">
@@ -595,6 +582,7 @@
 </div>
 <div class="toast" id="toast" hidden></div>
 
+<script src="js/tips.js"></script>
 <script src="js/auth.js"></script>
 <!-- Pick an artist song: the Stellar Music catalog, a side page on the start screen (js/artists.js) -->
 <div class="ar-back" id="artistsBack" hidden></div>

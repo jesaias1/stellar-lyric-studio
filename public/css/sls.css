@@ -116,7 +116,11 @@ body[data-step="lyrics"] .transport{gap:12px;padding:12px 16px}
 @media (min-width:761px){
   body:not([data-tl="open"]) .timeline > .tlbar,body:not([data-tl="open"]) .timeline > .tltools,body:not([data-tl="open"]) .timeline > .tlwrap{display:none}
   body:not([data-tl="open"]) .timeline{padding-bottom:8px}
+  /* the BPM row is folded behind the "120 BPM" button, which only shows with the timeline */
+  body:not([data-bpm="open"]) .timeline > .tlbar,body:not([data-tl="open"]) #bpmToggle{display:none}
 }
+.tl-sp{flex:1}
+body[data-bpm="open"] #bpmToggle{background:var(--bg-3,rgba(255,255,255,.08))}
 
 /* ---------- lyric review ---------- */
 .lystep{flex-direction:column;min-height:0;min-width:0;background:var(--panel)}
