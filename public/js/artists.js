@@ -5,6 +5,9 @@
 (function(){
   "use strict";
   const pane = $("#artistsPane"), back = $("#artistsBack"), body = $("#arBody"), title = $("#arTitle"), prev = $("#arBack");
+  // a picture that won't load: dropped (the letter behind it shows) or hidden. One listener instead of onerror="...",
+  // which the site's script policy (vercel.json) doesn't allow
+  addEventListener("error", e => { const im = e.target; if(!(im instanceof HTMLImageElement) || !im.dataset.gone) return; if(im.dataset.gone === "hide") im.style.visibility = "hidden"; else im.remove(); }, true);
   const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const HUES = [222, 266, 330, 18, 160, 196];
   const hue = n => HUES[[...String(n)].reduce((a, c) => a + c.charCodeAt(0), 0) % HUES.length];
@@ -16,7 +19,7 @@
   let audio = null, playingId = "", openId = "", opener = null, token = 0, isOpen = false;
 
   const photo = (a, cls) => a.picture
-    ? `<span class="ar-ph ${cls || ""}" style="--h:${hue(a.name)}"><b>${esc((a.name || "?").trim().charAt(0).toUpperCase())}</b><img src="${esc(a.picture)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()"></span>`
+    ? `<span class="ar-ph ${cls || ""}" style="--h:${hue(a.name)}"><b>${esc((a.name || "?").trim().charAt(0).toUpperCase())}</b><img src="${esc(a.picture)}" alt="" loading="lazy" referrerpolicy="no-referrer" data-gone="remove"></span>`
     : `<span class="ar-ph ${cls || ""}" style="--h:${hue(a.name)}"><b>${esc((a.name || "?").trim().charAt(0).toUpperCase())}</b></span>`;
   const fail = (msg, retry) => `<div class="ar-state"><p>${esc(msg)}</p><button class="btn small primary" data-ar="retry" type="button">Try again</button></div>`;
   const skeleton = n => `<div class="ar-state ar-wait" role="status">Loading…</div>` + `<div class="ar-skel" aria-hidden="true">${"<i></i>".repeat(n)}</div>`;
@@ -92,7 +95,7 @@
     const t = q.trim().toLowerCase();
     const rows = (listing || []).filter(s => !t || (s.title + " " + s.album).toLowerCase().includes(t));
     ul.innerHTML = rows.map(s => `<li class="ar-row" data-id="${esc(s.id)}" tabindex="-1">
-        <img class="ar-cover" src="${esc(s.cover)}" alt="" width="48" height="48" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.style.visibility='hidden'">
+        <img class="ar-cover" src="${esc(s.cover)}" alt="" width="48" height="48" loading="lazy" decoding="async" referrerpolicy="no-referrer" data-gone="hide">
         <span class="ar-info"><b>${esc(s.title)}</b><span>${esc([openId === "search" ? s.artist : "", s.album, s.year].filter(Boolean).join(" · "))}</span><em class="ar-err" hidden></em></span>
         <button class="icon-btn ar-play${s.id === playingId ? " on" : ""}" type="button" data-ar="play" aria-label="Play preview of ${esc(s.title)}">${s.id === playingId ? PAUSE : PLAY}</button>
         <button class="btn small" type="button" data-ar="use">Use</button></li>`).join("");
@@ -201,7 +204,7 @@
   // the start screen's artist square shows a few of the artists' faces once someone is logged in
   (async () => { try { await SLSAuth.ready; const box = $("#artistFaces"); if(!box) return;
     const list = artists || ((await SLSBackend.api("/api/catalog")).artists || []); if(!artists) artists = list;
-    box.innerHTML = list.filter(a => a.picture && !a.group).slice(0, 4).map(a => `<img src="${esc(a.picture)}" alt="" loading="lazy" onerror="this.remove()">`).join(""); } catch {} })();
+    box.innerHTML = list.filter(a => a.picture && !a.group).slice(0, 4).map(a => `<img src="${esc(a.picture)}" alt="" loading="lazy" data-gone="remove">`).join(""); } catch {} })();
 
   const api = { open, close, playing: "" };
   window.SLSArtists = api;

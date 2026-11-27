@@ -25,6 +25,7 @@
  */
 import worker from "../src/worker.js";
 import { authConfigured, userFrom } from "../src/auth.js";
+import { ownBlob } from "../src/publish.js";
 
 // trimmed: a value pasted or piped in often carries a stray newline
 const NAMES = ["SLS_PASSCODE", "CF_ACCOUNT_ID", "CF_API_TOKEN", "PIXABAY_KEY", "PEXELS_KEY", "SERPAPI_KEY", "HF_KEY_ID", "HF_KEY_SECRET", "MEDIA_SECRET",
@@ -79,7 +80,7 @@ async function blobToken(request) {
         let pass = ""; try { pass = JSON.parse(clientPayload || "{}").pass; } catch {}
         const who = await whoIs(pass);
         if (!who) throw new Error("Your login has run out. Log in again.");
-        if (!pathname.startsWith(folder(who)) || pathname.includes("..")) throw new Error("Wrong upload path.");
+        if (!pathname.startsWith(folder(who)) || /\.\.|%|\\/.test(pathname)) throw new Error("Wrong upload path.");
         // tokenPayload "": the login token sent along must not travel on inside the upload token
         return { allowedContentTypes: ["video/mp4", "video/quicktime", "video/webm", "video/x-matroska"], maximumSizeInBytes: 300 * 1024 * 1024, addRandomSuffix: true, tokenPayload: "" };
       },
@@ -93,8 +94,8 @@ async function blobDone(request) {
   const who = await whoIs(auth.startsWith("Bearer ") ? auth.slice(7) : "");
   if (!who) return json({ error: "unauthorized", message: "Your login has run out. Log in again." }, 401);
   let body; try { body = await request.json(); } catch { body = {}; }
-  const url = String(body.url || ""), m = url.match(/^https:\/\/[a-z0-9-]+\.public\.blob\.vercel-storage\.com\/(sls-posts\/[^?#]*)$/i);
-  if (!m || !m[1].startsWith(folder(who))) return json({ ok: false });
+  const url = String(body.url || "");
+  if (!ownBlob(url, who.id)) return json({ ok: false });   // only your own upload (no "/../" into another folder)
   try { const { del } = await import("@vercel/blob"); await del(url); return json({ ok: true }); }
   catch (err) { return json({ ok: false, message: err && err.message }); }
 }

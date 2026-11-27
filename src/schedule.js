@@ -17,7 +17,7 @@
  * Needs SUPABASE_SECRET_KEY (the project's secret key): the server reads every person's due posts and their
  * sealed account logins, which row-level security otherwise keeps to their owner.
  */
-import { openAccount, postWith, statusWith, statsWith, seal } from "./publish.js";
+import { openAccount, postWith, statusWith, statsWith, seal, ownBlob } from "./publish.js";
 import { sendMail, copenhagen } from "./mail.js";
 
 const NAMES = { youtube: "YouTube", instagram: "Instagram", tiktok: "TikTok" };
@@ -42,7 +42,10 @@ export async function cronRoute(request, env, url, path, method, { json }) {
     for (const row of results) { if (timeLeft() < 5000) break; await statsOne(env, db, row, report); }
     if (timeLeft() > 3000) report.digest = await digest(env, db);
   } catch (err) { report.errors.push(String(err && err.message || err)); console.error("cron failed:", err); }
-  return json({ ok: true, ...report });
+  // anyone can call this address, so it only says how many: the error texts go to the server log
+  const { errors, ...counts } = report;
+  if (errors.length) console.error("cron errors:", errors);
+  return json({ ok: true, ...counts, errors: errors.length });
 }
 
 /* ---------- Supabase with the secret key ---------- */
@@ -82,7 +85,7 @@ async function keepAccount(env, db, row, a) {
 }
 // several accounts scheduled at once share one stored video: it's deleted when the last of them is through
 async function dropVideo(env, db, row) {
-  if (!row.video_url || !env.deleteBlob) return;
+  if (!row.video_url || !env.deleteBlob || !ownBlob(row.video_url, row.user_id)) return;   // never someone else's file
   const others = await db.get(`posts?select=id&video_url=eq.${encodeURIComponent(row.video_url)}&id=neq.${row.id}&status=in.(scheduled,posting,working)&limit=1`).catch(() => [{}]);
   if (others.length) return;
   try { await env.deleteBlob(row.video_url); } catch (e) { console.error("deleting the stored video failed:", e.message); }
@@ -93,7 +96,7 @@ async function postOne(env, url, db, row, report) {
   if (!claimed.length) return;                                   // another run took it
   try {
     const src = String(row.video_url || "");
-    if (!/^https:\/\/[a-z0-9-]+\.public\.blob\.vercel-storage\.com\/sls-posts\//i.test(src) || !src.includes(`/sls-posts/${row.user_id}/`))
+    if (!ownBlob(src, row.user_id))
       throw Object.assign(new Error("The video for this post is missing. Post it again from the project."), { final: true });
     const a0 = await accountFor(env, db, row);
     let bytes = new ArrayBuffer(1);

@@ -46,7 +46,7 @@
         },
         {
           "key": "Content-Security-Policy",
-          "value": "frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'"
+          "value": "frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'; script-src 'self' 'sha256-qby2hg6SZ06joaGM/evBnYBNCsZOlNfgqt8hxWy9j04=' https://esm.sh"
         },
         {
           "key": "Permissions-Policy",

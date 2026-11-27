@@ -271,7 +271,7 @@ async function saveTemplate(request, env, id) {
     return json({ error: "bad_request", message: "That isn't a Lyric Studio template." }, 400);
   }
   const base = { id, name: String(doc.name || "Untitled").slice(0, 120), savedAt: Number(doc.savedAt) || Date.now() };
-  const clean = v2 ? { ...base, v: 2, parts: doc.parts || {}, data: doc.data, preview: typeof doc.preview === "string" && doc.preview.length < 200000 ? doc.preview : "" } : { ...base, project: doc.project };
+  const clean = v2 ? { ...base, v: 2, parts: doc.parts || {}, data: doc.data, preview: typeof doc.preview === "string" && doc.preview.length < 200000 && /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+=*$/.test(doc.preview) ? doc.preview : "" } : { ...base, project: doc.project };
   await env.TEMPLATES.put("tpl:" + id, JSON.stringify(clean));
   return json({ ok: true, template: clean });
 }

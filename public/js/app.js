@@ -33,7 +33,7 @@ window.SLSApp = (() => {
     if(step === "export"){ go("design"); $("#exportBtn").click(); return; }
     SLSLyricsUI.commit(); SLSLyricsUI.clearHear();
     if(step === "song"){ pause(); showHome("drop"); $("#homeBack").hidden = !started; paintSteps(); slsEmit("step", step); return; }
-    started = true; home.hidden = true; lastStep = step;
+    started = true; home.hidden = true; lastStep = step; ensureDemo();
     if(S.tap){ pause(); endTap(false); }
     pause();
     body.dataset.step = step; S.review = step === "lyrics";

@@ -303,7 +303,7 @@ window.SLSPhotos = (() => {
     await loadBoards();
     if(!boards.some(b => b.id === selected)) selected = boards[0] ? boards[0].id : null;
     $("#mbList").innerHTML = boards.length ? boards.map(b => `<div class="mb-card${b.id === selected ? " on" : ""}" data-id="${b.id}">
-        <button class="mb-pick" type="button" aria-pressed="${b.id === selected}"><span class="mb-mosaic">${b.items.slice(0, 4).map(it => `<img alt="" src="${it.thumb}">`).join("") || "<i></i>"}</span>
+        <button class="mb-pick" type="button" aria-pressed="${b.id === selected}"><span class="mb-mosaic">${b.items.slice(0, 4).map(it => `<img alt="" src="${esc(it.thumb)}">`).join("") || "<i></i>"}</span>
         <span class="mb-name">${esc(b.name)}</span><span class="hint">${b.items.length} image${b.items.length === 1 ? "" : "s"}</span></button>
         <button class="btn small ghost mb-edit" type="button" data-edit="${b.id}">Edit</button></div>`).join("")
       : `<div class="hint">No moodboards yet.</div>`;
@@ -361,7 +361,7 @@ window.SLSPhotos = (() => {
     if(B.fresh) setTimeout(() => $("#mbName").focus(), 30);
   }
   function paintEditor(){
-    $("#mbGrid").innerHTML = B.items.map(it => `<div class="ph-tile mb-tile" data-k="${esc(it.k)}"><img alt="" src="${it.thumb}" draggable="false"><button class="ph-x" type="button" data-rm="${esc(it.k)}" aria-label="Remove">✕</button></div>`).join("");
+    $("#mbGrid").innerHTML = B.items.map(it => `<div class="ph-tile mb-tile" data-k="${esc(it.k)}"><img alt="" src="${esc(it.thumb)}" draggable="false"><button class="ph-x" type="button" data-rm="${esc(it.k)}" aria-label="Remove">✕</button></div>`).join("");
     $("#mbTitle").textContent = B.items.length ? `Moodboard · ${B.items.length} image${B.items.length === 1 ? "" : "s"}` : "Moodboard";
     $("#mbOrderHint").hidden = true;
   }

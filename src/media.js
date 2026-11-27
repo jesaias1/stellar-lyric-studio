@@ -46,7 +46,7 @@ export async function mediaRoute(request, env, url, path, method, { hasAI, runMo
 
 /* ---------- signed links for the relay ---------- */
 async function sign(env, u) {
-  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode("media:" + (env.MEDIA_SECRET || env.SLS_PASSCODE || "")), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode("media:" + (env.MEDIA_SECRET || env.TOKEN_KEY || env.LOGIN_SECRET || env.SLS_PASSCODE || "")), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   const mac = new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(u)));
   return [...mac.slice(0, 16)].map(b => b.toString(16).padStart(2, "0")).join("");
 }

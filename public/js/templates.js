@@ -120,7 +120,7 @@ window.SLSTemplates = (() => {
     if(!templates.length){ el.innerHTML = `<div class="empty" style="grid-column:1/-1">No templates yet. Make a video look the way you like, then "Save current as template" to reuse it on the next song.</div>`; return; }
     el.innerHTML = templates.map(t => { const parts = t.parts ? partNames(t.parts) : ["Whole project"], song = t.data && t.data.lyrics && t.data.lyrics.song ? t.data.lyrics.song.name : t.project && t.project.song ? t.project.song.name : "";
       return `<div class="tp-card" data-id="${esc(t.id)}">
-        <button class="tp-thumb" data-act="apply" title="Apply to this song">${t.preview ? `<img alt="" src="${t.preview}">` : `<span>${esc((t.name || "?").slice(0, 1))}</span>`}</button>
+        <button class="tp-thumb" data-act="apply" title="Apply to this song">${t.preview ? `<img alt="" src="${esc(t.preview)}">` : `<span>${esc((t.name || "?").slice(0, 1))}</span>`}</button>
         <div class="tp-info"><b>${esc(t.name || "Untitled")}</b><span class="tp-chips">${parts.map(p => `<i>${esc(p)}</i>`).join("")}</span><span class="hint">${song ? esc(song) + " · " : ""}${new Date(t.savedAt || Date.now()).toLocaleDateString()}</span></div>
         <div class="tp-acts"><button class="btn small primary" data-act="apply">Apply</button><button class="btn small ghost tp-more" data-act="menu" aria-label="More actions">⋯</button></div>
         ${menuFor === t.id ? `<div class="tp-menu"><button data-act="update">Update with what's on screen now</button><button data-act="rename">Rename</button><button data-act="dup">Duplicate</button><button data-act="file">Save as file</button><button data-act="del" class="danger">${confirmDel === t.id ? "Click again to delete" : "Delete"}</button></div>` : ""}

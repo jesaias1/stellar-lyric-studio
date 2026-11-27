@@ -450,6 +450,15 @@ export async function statsWith(env, p, a, ref) {
 }
 export { openAccount, Fail };
 
+/* A video in Vercel Blob that this person uploaded: https://<store>.public.blob.vercel-storage.com/sls-posts/<their id>/...
+   Read after the URL is cleaned up (so "/../" or %2e%2e can't step into someone else's folder), with no ?query or #. */
+export function ownBlob(u, uid) {
+  let x; try { x = new URL(String(u || "")); } catch { return false; }
+  if (x.protocol !== "https:" || !/^[a-z0-9-]+\.public\.blob\.vercel-storage\.com$/i.test(x.hostname) || x.search || x.hash || x.username || x.password) return false;
+  if (/%2e|%2f|%5c|\\/i.test(String(u))) return false;
+  return x.pathname.startsWith("/sls-posts/" + (uid ? uid + "/" : ""));
+}
+
 /* ---------- 2. posting ---------- */
 async function upload(env, request, url, p, json, user) {
   try {
@@ -461,7 +470,7 @@ async function upload(env, request, url, p, json, user) {
     if (type === "application/json") {
       // Vercel: the video is already in Vercel Blob; fetch it from there
       const b = await body(request); src = String(b.src || "");
-      if (!/^https:\/\/[a-z0-9-]+\.public\.blob\.vercel-storage\.com\//i.test(src)) throw new Fail("That video link isn't one the studio made.", "bad_request", 400);
+      if (!ownBlob(src, user && user.id)) throw new Fail("That video link isn't one the studio made.", "bad_request", 400);
       type = /^video\/(mp4|quicktime|webm|x-matroska)$/.test(b.type) ? b.type : "video/mp4";
       if (p === "instagram") bytes = new ArrayBuffer(1);   // Instagram fetches the link itself
       else {

@@ -81,7 +81,7 @@ function ctx(){ if(!actx){ actx = new (window.AudioContext || window.webkitAudio
 function bounds(){ return S.review && S.audio ? {a:0, b:S.audio.duration} : S.P.section; }
 function songTime(){ return S.playing ? startT + (actx.currentTime - startAt) : S.t; }
 function play(opts={}){
-  if(!S.audio) return;
+  if(!S.audio) return; ensureDemo();
   const c = ctx(); c.resume();
   stopSource();
   src = c.createBufferSource(); src.buffer = playBuffer();
@@ -201,6 +201,20 @@ function addDemoVoice(buf, words){
   });
   let pk = 0; for(let i = 0; i < L.length; i++) pk = Math.max(pk, Math.abs(L[i]), Math.abs(R[i]));
   if(pk > 0.95){ const g = 0.92/pk; for(let i = 0; i < L.length; i++){ L[i] *= g; R[i] *= g; } }
+}
+
+/* Making the demo song (loop and singer) takes about half a second, so it isn't done on every page load: the
+   editor starts with a silent song of the same length, filled in the first time anyone opens the editor or presses
+   play without a song of their own (the sample song). */
+let demoPending = null;
+function silentDemo(){ const sr = 44100; return ctx().createBuffer(2, Math.ceil(14*4*(60/96)*sr), sr); }   // makeDemoSong's length
+function ensureDemo(){
+  if(!demoPending) return;
+  if(S.audio !== demoPending.buf){ demoPending = null; return; }   // a real song came in: never needed
+  const { buf, words } = demoPending; demoPending = null;
+  const full = makeDemoSong(); addDemoVoice(full, words);
+  buf.copyToChannel(full.getChannelData(0), 0); buf.copyToChannel(full.getChannelData(1), 1);
+  if(S.audio === buf){ S.peaks = computePeaks(buf); tlDirty = true; }
 }
 
 function computePeaks(buf, count=1400){
@@ -996,7 +1010,12 @@ function drawStyleCard(c, W, H, pr, t, bgA){
   if(!s){ c.strokeStyle = "#38d6ff"; c.lineWidth = 2; const m = Math.min(W,H)*0.07; c.beginPath(); c.moveTo(W/2-m,H/2-m); c.lineTo(W/2+m,H/2+m); c.moveTo(W/2+m,H/2-m); c.lineTo(W/2-m,H/2+m); c.stroke(); return; }
   if(!s.rev) return; c.save(); pr.draw(c, W, H, s, t, st, styleOpts(st, pr)); c.restore();
 }
+/* 128 little previews: only drawn while the template grid can be seen (the start page and the other tabs skip
+   it), and drawn as soon as it shows up (the observer in boot()) */
+let thumbsStale = false;
 function renderPresetThumbs(){
+  const box = $("#presets"); if(box && !box.getClientRects().length){ thumbsStale = true; return; }
+  thumbsStale = false;
   $$("#presets canvas").forEach(cv => { const pr = styleDef(cv.dataset.id), c = cv.getContext("2d"), s = demoState(pr, 99);
     const t = s ? s.words[s.words.length-1].t + 0.6 : 0; c.setTransform(1,0,0,1,0,0); c.clearRect(0,0,cv.width,cv.height); drawStyleCard(c, cv.width, cv.height, pr, t, false); });
 }
@@ -1445,7 +1464,7 @@ function syncUI(){ setTimeout(syncTextEditor, 0);
   updateMeta(); updateTapPad(); syncWordCard(); syncSegCard(); tlDirty = true; slsEmit("change");
 }
 let draftTimer;
-function saveDraft(){ clearTimeout(draftTimer); draftTimer = setTimeout(() => store.set("sls-draft", {songName:S.songName, P:S.P}), 400); queueHistory(); }
+function saveDraft(){ busyAt = performance.now(); clearTimeout(draftTimer); draftTimer = setTimeout(() => store.set("sls-draft", {songName:S.songName, P:S.P}), 400); queueHistory(); }
 
 /* undo / redo: every change settles into a snapshot of the project (lyrics, timing, cuts, style, hook, soundbite) */
 const HIST = {undo:[], redo:[], last:null, timer:null, max:120};
@@ -1894,7 +1913,7 @@ function addThumb(c, url){ c.thumb = url; c.thumbImg = new Image(); c.thumbImg.o
 const SPK_OFF = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="m16 9 5 6M21 9l-5 6"/></svg>', SPK_ON = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>';
 function renderClips(){
   $("#clipGrid").innerHTML = S.clips.map(c => `<button class="clipt${c.on?"":" off"}" data-id="${c.id}" aria-pressed="${c.on}" draggable="true" title="${c.on?"In":"Out of"} the shuffle. Drag onto a clip on the timeline to put it there.">
-    <img alt="" src="${c.thumb||""}"><span class="cap"><span>${esc(c.name)}</span><span class="kind">${c.kind==="gen"?"Built-in":c.src&&c.src.kind==="ai"?"AI":c.src&&c.src.kind==="stock"?"Stock":c.src&&c.src.kind==="tiktok"?"TikTok":c.src&&c.src.kind==="photo"&&c.src.source==="Pinterest"?"Pinterest":c.src&&c.src.kind==="board"?"Moodboard":c.kind==="img"?"Photo":"Video"}</span></span>
+    <img alt="" src="${esc(c.thumb||"")}"><span class="cap"><span>${esc(c.name)}</span><span class="kind">${c.kind==="gen"?"Built-in":c.src&&c.src.kind==="ai"?"AI":c.src&&c.src.kind==="stock"?"Stock":c.src&&c.src.kind==="tiktok"?"TikTok":c.src&&c.src.kind==="photo"&&c.src.source==="Pinterest"?"Pinterest":c.src&&c.src.kind==="board"?"Moodboard":c.kind==="img"?"Photo":"Video"}</span></span>
     ${c.kind!=="gen"?`<span class="x" data-rm="${c.id}" role="button" aria-label="Remove ${esc(c.name)}">×</span>`:""}${c.kind==="video" && (c.src&&c.src.kind==="tiktok" || c.sound) ? `<span class="snd${c.sound?" on":""}" data-snd="${c.id}" role="button" aria-pressed="${!!c.sound}" aria-label="${c.sound?"Mute":"Unmute"} ${esc(c.name)}" title="${c.sound?"Sound on: tap to mute":"Muted: tap to hear it"}">${c.sound?SPK_ON:SPK_OFF}</span>` : ""}</button>`).join("");
 }
 $("#clipGrid").onclick = e => {
@@ -2383,6 +2402,18 @@ $("#exSave").onclick = async () => {
 
 /* ============ main loop ============ */
 let lastTC = "";
+/* Paused, the picture only changes when someone does something, so it isn't redrawn 60 times a second:
+   every frame for 1.5 s after any click, key, drag or scroll, then 4 times a second (videos finishing a seek,
+   photos and fonts arriving), and not at all behind the start page. Playing and exporting draw every frame. */
+var busyAt = 0, stillAt = 0, stillKey = "";   // var: saveDraft() (earlier in this file) marks changes too
+["pointerdown", "pointermove", "pointerup", "wheel", "keydown", "input", "change", "drop", "resize"].forEach(ev => addEventListener(ev, () => { busyAt = performance.now(); }, { capture: true, passive: true }));
+const homeShown = () => { const h = document.getElementById("home"); return !!h && !h.hidden; };
+function stillDue(){
+  const now = performance.now(), key = S.t + "|" + stage.width + "x" + stage.height + "|" + tlDirty;
+  const due = key !== stillKey || (homeShown() ? now - stillAt > 2000 : now - busyAt < 1500 || now - stillAt > 250);
+  if(due){ stillAt = now; stillKey = key; }
+  return due;
+}
 function loop(){
   try { loopBody(); } catch(err){ if(!loop.warned){ loop.warned = true; console.error(err); } }
   requestAnimationFrame(loop);
@@ -2401,7 +2432,8 @@ function loopBody(){
     }
     if(S.exporting){ $("#exBar").style.width = (clamp((t - sec.a)/(sec.b - sec.a),0,1)*100).toFixed(1) + "%"; $("#exStatus").textContent = `Recording ${fmt(t - sec.a)} of ${fmt(sec.b - sec.a)}`; }
     renderFrame(t);
-  } else renderFrame(S.t);
+  } else if(stillDue()) renderFrame(S.t);
+  else if(homeShown()) return;
   drawTimeline(); drawOverview(); drawStylePreview(performance.now());
   const tc = `<b>${fmt(songTime() - sec.a)}</b> / ${fmt(sec.b - sec.a)}`; if(tc !== lastTC){ $("#tc").innerHTML = tc; lastTC = tc; }
 }
@@ -2414,20 +2446,23 @@ function boot(){
   $("#presets").addEventListener("pointerleave", () => hoverStyle = null);
   S.clips = GEN.map((g,i) => ({id:"g"+i, name:g.name, kind:"gen", gen:g, on:i === 0}));   // Royal blue on its own to start
   addThumbsForGen();
-  S.audio = makeDemoSong(); S.peaks = computePeaks(S.audio); S.songName = "Demo track";
+  S.audio = silentDemo(); S.peaks = computePeaks(S.audio); S.songName = "Demo track";
   const p = defaultProject();
   p.lyrics = "neon on the water\nwe don't have to go home\nsay it like you mean it\nunder all the city glow";
   p.song = {name:"Demo track", duration:S.audio.duration};
   S.P = p; S.P.words = parseLyrics(p.lyrics); autoSpace(S.P.words);
-  addDemoVoice(S.audio, S.P.words); S.peaks = computePeaks(S.audio);
+  demoPending = { buf: S.audio, words: S.P.words.map(w => ({ ...w })) };   // the loop and singer: see ensureDemo()
   applyProject(S.P);
   setTimeout(() => { HIST.last = JSON.stringify(S.P); syncUndoUI(); }, 0);
   if(window.matchMedia("(max-width:700px) and (pointer:coarse)").matches){ S.zoom = 2.5; $("#zoom").value = 2.5; }
   document.body.dataset.mtab = "lyrics";
   renderPresetGrid(); renderClips(); sizeTimeline(); initTemplates();
   document.fonts.ready.then(() => { renderPresetThumbs(); tlDirty = true; });
-  Promise.all(Object.keys(FONTLIB).map(k => document.fonts.load(fnt(k, 40)).catch(()=>{}))).then(() => { renderPresetThumbs(); tlDirty = true; });
+  // every template font (30 or so): fetched once the page is up and quiet, so they don't slow down the first load
+  (window.requestIdleCallback ? f => requestIdleCallback(f, { timeout: 2500 }) : f => setTimeout(f, 1200))(() =>
+    Promise.all(Object.keys(FONTLIB).map(k => document.fonts.load(fnt(k, 40)).catch(()=>{}))).then(() => { renderPresetThumbs(); tlDirty = true; }));
   renderPresetThumbs();
+  if(window.IntersectionObserver) new IntersectionObserver(es => { if(thumbsStale && es.some(e => e.isIntersecting)) renderPresetThumbs(); }).observe($("#presets"));
   new ResizeObserver(() => sizeTimeline()).observe(tlScroll);
   new ResizeObserver(fitStage).observe($(".viewport"));
   requestAnimationFrame(loop);
