@@ -64,7 +64,7 @@ function sources(env, from) {
 function noSourceMessage(env, from) {
   if (from === "pinterest") return "Pinterest search isn't switched on yet. It needs a SerpApi key (SERPAPI_KEY) in the site's settings.";
   if (from === "mine") return "Connecting Pinterest isn't switched on yet. It needs a Pinterest app (PINTEREST_APP_ID and PINTEREST_APP_SECRET) in the site's settings.";
-  if (!env.PEXELS_KEY && !env.PIXABAY_KEY) return "Free photo search isn't switched on yet. It needs a free Pixabay or Pexels key in the site's settings.";
+  if (!env.PEXELS_KEY && !env.PIXABAY_KEY) return "Free photo search isn't switched on yet. It needs a free Pixabay key in the site's settings.";
   return "No photo source is switched on.";
 }
 

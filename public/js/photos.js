@@ -109,7 +109,7 @@ window.SLSPhotos = (() => {
           : `<button class="btn small" type="button" data-pin="on">Connect Pinterest</button>`;
       }
       if((from === "pinterest" || from === "both") && h.photos && !p.pinterest) notes.push("Pinterest search isn't switched on yet. It needs a SerpApi key (SERPAPI_KEY) in the site's settings.");
-      else if((from === "free" || from === "both") && h.photos && !free) notes.push("Free photo search isn't switched on yet. It needs a free Pixabay or Pexels key in the site's settings.");
+      else if((from === "free" || from === "both") && h.photos && !free) notes.push("Free photo search isn't switched on yet. It needs a free Pixabay key in the site's settings.");
       if((from === "pinterest" || from === "both") && p.pinterest && pinLeft != null && pinLeft < 50) notes.push(`${pinLeft} Pinterest searches left this month.`);
       $("#phSrcNote").textContent = notes.join(" ");
     });

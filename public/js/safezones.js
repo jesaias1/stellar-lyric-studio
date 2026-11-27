@@ -54,7 +54,8 @@ window.SLSSafe = (() => {
   // the open song, for the caption: "Artist - Title" (the studio's project names)
   function songBits(){
     let n = String(S.songName || "").replace(/\.[a-z0-9]{2,4}$/i, "").replace(/\s*\((preview|lyrics?)\)\s*$/i, "").trim();
-    if(!n || n === "Demo track") return { artist: "artist", title: "your song" };
+    if(n === "Demo track" && window.SLS_DEMO) return { artist: SLS_DEMO.artist, title: SLS_DEMO.title };   // the sample song
+    if(!n) return { artist: "artist", title: "your song" };
     const m = n.match(/^(.+?)\s+[-–]\s+(.+)$/); return m ? { artist: m[1].trim(), title: m[2].trim() } : { artist: "artist", title: n };
   }
   const fit = (c, t, maxW) => { if(c.measureText(t).width <= maxW) return t; while(t.length > 1 && c.measureText(t + "…").width > maxW) t = t.slice(0, -1); return t + "…"; };

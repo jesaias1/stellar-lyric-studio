@@ -932,3 +932,8 @@ body.cal-open .toast{z-index:1600}
 [data-tip]:not(button){cursor:help;text-decoration:underline dotted;text-decoration-color:color-mix(in srgb,currentColor 35%,transparent);text-underline-offset:3px}
 .tipbub{position:fixed;z-index:4000;max-width:280px;padding:8px 11px;border-radius:9px;background:#14142a;color:#fff;font:400 12.5px/1.45 var(--ui,inherit);text-transform:none;letter-spacing:normal;box-shadow:0 10px 28px rgba(0,0,0,.4);pointer-events:none}
 .tipbub[hidden]{display:none}
+/* touch screens: a small round "i" after each title that has a tip (js/tips.js) */
+.tips-touch [data-tip]:not(button){cursor:auto;text-decoration:none}
+.tipi{position:relative;display:inline-grid;place-items:center;width:17px;height:17px;margin:0 0 0 6px;padding:0;border:1.5px solid currentColor;border-radius:50%;background:none;color:inherit;opacity:.5;vertical-align:-3px;flex:none;cursor:pointer;text-transform:none;letter-spacing:0}
+.tipi::before{content:"i";font:italic 700 11px/1 Georgia,"Times New Roman",serif}
+.tipi::after{content:"";position:absolute;inset:-11px}   /* a finger-sized target */

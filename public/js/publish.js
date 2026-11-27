@@ -468,9 +468,10 @@ window.SLSPublish = (() => {
   $("#pubUndoBtn").onclick = () => { if(capBefore != null) $("#pubCaption").value = capBefore; capBefore = null; $("#pubUndo").hidden = true; };
   $("#pubCaption").addEventListener("input", e => { if(e.isTrusted) $("#pubUndo").hidden = true; });
 
-  /* uploads the file to Vercel Blob with Vercel's own browser library; the server only hands out the upload token */
+  /* uploads the file to Vercel Blob with Vercel's own browser library (public/vendor, Apache-2.0, served from this site so the
+     script policy in vercel.json needs no outside script host); the server only hands out the upload token */
   async function toBlob(file, onProgress){
-    const lib = await import(window.SLS_BLOB_CLIENT || "https://esm.sh/@vercel/blob@2/client");
+    const lib = await import(window.SLS_BLOB_CLIENT || "/vendor/vercel-blob-client-2.9.0.mjs");
     const ext = (video && video.f && video.f.ext) || "mp4", name = (S.songName || "lyric-video").replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-").slice(0, 60) || "lyric-video";
     const who = window.SLSAuth && SLSAuth.user(), dir = who && who.id ? who.id + "/" : "";
     const r = await lib.upload(`sls-posts/${dir}${name}.${ext}`, file, { access: "public", handleUploadUrl: "/api/publish/blob", contentType: file.type || "video/mp4",

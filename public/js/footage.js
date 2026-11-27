@@ -1,6 +1,6 @@
 "use strict";
 /* Footage without files on your computer: photos picked for the song (js/photos.js fills that tab), free stock
-   video search (Pixabay, Pexels), TikTok videos from a link (src/tiktok-video.js; they play muted until you tap the
+   video search (Pixabay), TikTok videos from a link (src/tiktok-video.js; they play muted until you tap the
    speaker on the clip) and AI-generated background clips written from the lyrics (Higgsfield). All of them add
    clips to the same pool as imported files.
    The backend side is src/media.js. Loaded after app.js. */

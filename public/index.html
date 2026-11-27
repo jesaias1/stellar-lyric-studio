@@ -3,7 +3,7 @@
 <!-- the editor can switch between light and dark (js/app.js); the blue start screen looks the same in both -->
 <head>
 <meta charset="utf-8">
-<meta name="sls-build" content="202611271100">
+<meta name="sls-build" content="202611271538">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Stellar Lyric Studio</title>
 <meta name="description" content="Turn a song into a lyric video for social media. Upload the track and the lyrics write and time themselves.">
@@ -35,6 +35,7 @@
 <!-- TikTok's own typeface (open source), and two more caption fonts; separate so one failing can't take the others down -->
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=TikTok+Sans:wght@400..900&display=swap">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Courier+Prime&family=Yesteryear&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rye&family=Metal+Mania&family=UnifrakturMaguntia&family=Orbitron:wght@800&family=Righteous&family=Shrikhand&family=Abril+Fatface&family=Special+Elite&family=Rubik+Glitch&family=Cormorant+Garamond:ital,wght@0,600;1,500&family=Bowlby+One&family=Black+Ops+One&display=swap">
 <link rel="stylesheet" href="css/studio.css">
 <link rel="stylesheet" href="css/sls.css">
 <link rel="stylesheet" href="css/brand.css">
@@ -101,7 +102,7 @@
     </div>
     <div class="home-opts" id="homeOpts">
       <label class="lang"><span>Song language</span><select id="langSel" aria-label="Song language"></select></label>
-      <span class="home-links"><button class="link-btn" id="demoBtn" title="Opens the editor with a short made-up song, to see how it works">Just looking? Try the editor with a sample song</button></span>
+      <span class="home-links"><button class="link-btn" id="demoBtn" title="Opens the editor with 30 seconds of Faker by aleksiah, to see how it works">Just looking? Try the editor with a sample song</button></span>
     </div>
 
     <!-- state 2: working on it -->
@@ -179,7 +180,7 @@
       <button data-go="export"><i>04</i><span>export</span></button>
     </nav>
     <div class="song">
-      <span class="name" id="songName">Demo track</span>
+      <span class="name" id="songName">Faker · aleksiah (sample)</span>
       <span class="meta" id="songMeta"></span>
       <label class="btn small ghost file" title="Load a different audio file (mp3, wav, m4a)">Change song<input id="songFile" type="file" accept="audio/*"></label>
       <div class="seg" id="vocalMode" title="Vocals"><button data-v="on" aria-pressed="true">Vocals on</button><button data-v="reduced">Reduced</button><button data-v="inst">Instrumental</button></div>
@@ -394,7 +395,7 @@
           </div>
           <canvas id="stylePrev" width="300" height="200" aria-label="Animated preview of the selected template"></canvas>
         </div>
-        <div class="chips" id="styleCats"><button data-v="all">All</button><button data-v="fav">Favourites</button><button data-v="trend">Trending</button><button data-v="minimal">Minimal</button><button data-v="bold">Bold</button><button data-v="layered">Layered</button><button data-v="glow">Glow</button><button data-v="cinematic">Cinematic</button><button data-v="playful">Playful</button><button data-v="editorial">Editorial</button></div>
+        <div class="chips" id="styleCats"><button data-v="all">All</button><button data-v="fav">Favourites</button><button data-v="trend">Trending</button><button data-v="genre">Genres</button><button data-v="minimal">Minimal</button><button data-v="bold">Bold</button><button data-v="layered">Layered</button><button data-v="glow">Glow</button><button data-v="cinematic">Cinematic</button><button data-v="playful">Playful</button><button data-v="editorial">Editorial</button></div>
         <div class="style-tip" id="styleSuggest" hidden></div>
           <div class="presets" id="presets"></div>
         <div class="tpl-pane" id="tplPane">
@@ -595,11 +596,13 @@
   <div class="ar-body" id="arBody"></div>
 </aside>
 <script src="js/backend.js"></script>
+<script src="js/demo-song.js"></script>
 <script src="js/studio.js"></script>
 <script src="js/panels.js"></script>
 <script src="js/styles-extra.js"></script>
 <script src="js/styles-more.js"></script>
 <script src="js/styles-trend.js"></script>
+<script src="js/styles-genre.js"></script>
 <script src="js/transcribe.js"></script>
 <script src="js/soundbites.js"></script>
 <script src="js/soundmatch.js"></script>

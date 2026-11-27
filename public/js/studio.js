@@ -147,74 +147,23 @@ function syncPlayIcon(){
   const mp = document.getElementById("msheetPlay"); if(mp){ mp.firstElementChild.innerHTML = icon; mp.setAttribute("aria-label", S.playing ? "Pause" : "Play"); }
 }
 
-/* demo song: an original 96 BPM loop synthesised in the browser */
-function makeDemoSong(){
-  const sr = 44100, bpm = 96, beat = 60/bpm, bars = 14, dur = bars*4*beat;
-  const n = Math.ceil(dur*sr), L = new Float32Array(n), R = new Float32Array(n);
-  const add = (i, l, r) => { if(i>=0 && i<n){ L[i]+=l; R[i]+=r; } };
-  const r = rng(3);
-  const kick = t0 => { const s0=Math.floor(t0*sr), len=Math.floor(.4*sr); let ph=0; for(let k=0;k<len;k++){ const x=k/sr; const f=46+80*Math.exp(-x*28); ph+=2*Math.PI*f/sr; const v=Math.sin(ph)*Math.exp(-x*7)*.9; add(s0+k,v,v);} };
-  const snare = t0 => { const s0=Math.floor(t0*sr), len=Math.floor(.28*sr); for(let k=0;k<len;k++){ const x=k/sr; const v=(r()*2-1)*Math.exp(-x*16)*.32+Math.sin(2*Math.PI*190*x)*Math.exp(-x*30)*.2; add(s0+k,v*.95,v);} };
-  const hat = (t0,p) => { const s0=Math.floor(t0*sr), len=Math.floor(.06*sr); let prev=0; for(let k=0;k<len;k++){ const x=k/sr; const nz=r()*2-1; const v=(nz-prev)*Math.exp(-x*70)*.07; prev=nz; add(s0+k,v*(1-p),v*(1+p)); } };
-  const chords = [[220,261.63,329.63],[174.61,220,261.63],[261.63,329.63,392],[196,246.94,293.66]]; // Am F C G
-  for(let b=0;b<bars;b++){
-    const t0 = b*4*beat, ch = chords[b%4], s0 = Math.floor(t0*sr), len = Math.floor(4*beat*sr);
-    for(let k=0;k<len;k++){
-      const x=k/sr, env=Math.min(1,x/.08)*Math.min(1,(4*beat-x)/.15);
-      const inBeat = (x % beat)/beat, duck = .45+.55*Math.min(1,inBeat*3);
-      let v=0; for(const f of ch){ v+=Math.sin(2*Math.PI*f*x)+.25*Math.sin(2*Math.PI*f*2.003*x)+.5*Math.sin(2*Math.PI*f*1.004*x); }
-      const bass = Math.tanh(Math.sin(2*Math.PI*ch[0]/2*x)*1.6)*.16*(.4+.6*Math.exp(-((x%(beat/2))*6)));
-      add(s0+k, (v*.028)*env*duck + bass*env*duck, (v*.03)*env*duck + bass*env*duck);
-    }
-    for(let q=0;q<4;q++){
-      const tb = t0+q*beat;
-      if(q===0||q===2) kick(tb); if(q===2) kick(tb+beat*.5);
-      if(q===1||q===3) snare(tb);
-      hat(tb,-.3); hat(tb+beat/2,.3);
-    }
-  }
-  let pk=0; for(let i=0;i<n;i++) pk=Math.max(pk,Math.abs(L[i]),Math.abs(R[i]));
-  const g=.9/pk; for(let i=0;i<n;i++){ L[i]*=g; R[i]*=g; }
-  const buf = ctx().createBuffer(2, n, sr); buf.copyToChannel(L,0); buf.copyToChannel(R,1);
-  return buf;
-}
-
-/* the demo's singer: each lyric word is sung on the beat of the demo loop as a vowel ("ah", "oo", "ee"...), so the
-   lyrics on screen line up with a voice you can hear. Built from harmonics shaped by the vowel's formants. */
-function addDemoVoice(buf, words){
-  const sr = buf.sampleRate, L = buf.getChannelData(0), R = buf.getChannelData(1), bar = 4*60/96;
-  const CH = [[440,523.25,659.25],[349.23,440,523.25],[523.25,659.25,392],[392,493.88,587.33]];   // the loop's chords, up an octave
-  const VOW = { a:[[730,1],[1090,.5],[2440,.25]], o:[[570,1],[840,.6],[2410,.2]], u:[[300,1],[870,.4],[2240,.15]], e:[[530,1],[1840,.45],[2480,.3]], i:[[270,1],[2290,.4],[3010,.3]] };
-  const peak = (f, [fc, g]) => g / (1 + ((f - fc) / (fc * 0.12)) ** 2);
-  words.forEach((w, wi) => {
-    const syl = (String(w.w).toLowerCase().match(/[aeiouy]+/g) || ["a"]), per = Math.max(0.1, w.d) / syl.length;
-    syl.forEach((v, k) => {
-      const t0 = w.t + k*per, ch = CH[Math.floor(t0/bar) % 4], f0 = ch[(wi + k) % 3], vow = VOW[v.replace(/y/, "i")[0]] || VOW.a;
-      const harm = []; for(let h = 1; h*f0 < 4200; h++){ const f = h*f0; harm.push([f, (1/h) * vow.reduce((a, fm) => a + peak(f, fm), 0)]); }
-      const s0 = Math.floor(t0*sr), len = Math.floor(Math.max(0.08, per*0.92)*sr);
-      for(let i = 0; i < len && s0+i < L.length; i++){
-        const x = i/sr, env = Math.min(1, x/0.03) * Math.min(1, (len/sr - x)/0.07), vib = 1 + 0.004*Math.sin(2*Math.PI*5.5*x)*Math.min(1, x/0.25);
-        let y = 0; for(const [f, g] of harm) y += g * Math.sin(2*Math.PI*f*vib*x);
-        y *= 0.2 * env; L[s0+i] += y; R[s0+i] += y;
-      }
-    });
-  });
-  let pk = 0; for(let i = 0; i < L.length; i++) pk = Math.max(pk, Math.abs(L[i]), Math.abs(R[i]));
-  if(pk > 0.95){ const g = 0.92/pk; for(let i = 0; i < L.length; i++){ L[i] *= g; R[i] *= g; } }
-}
-
-/* Making the demo song (loop and singer) takes about half a second, so it isn't done on every page load: the
-   editor starts with a silent song of the same length, filled in the first time anyone opens the editor or presses
-   play without a song of their own (the sample song). */
+/* The sample song, "Faker" by aleksiah (js/demo-song.js): the editor starts with a silent buffer of the same length so
+   the page loads fast, and the real audio (about 1 MB) is fetched the first time anyone opens the editor or presses
+   play without a song of their own. It is copied into that same buffer, so nothing that holds S.audio has to change. */
 let demoPending = null;
-function silentDemo(){ const sr = 44100; return ctx().createBuffer(2, Math.ceil(14*4*(60/96)*sr), sr); }   // makeDemoSong's length
+function silentDemo(){ const c = ctx(); return c.createBuffer(2, Math.ceil(SLS_DEMO.duration*c.sampleRate), c.sampleRate); }
 function ensureDemo(){
   if(!demoPending) return;
   if(S.audio !== demoPending.buf){ demoPending = null; return; }   // a real song came in: never needed
-  const { buf, words } = demoPending; demoPending = null;
-  const full = makeDemoSong(); addDemoVoice(full, words);
-  buf.copyToChannel(full.getChannelData(0), 0); buf.copyToChannel(full.getChannelData(1), 1);
-  if(S.audio === buf){ S.peaks = computePeaks(buf); tlDirty = true; }
+  const { buf } = demoPending; demoPending = null;
+  fetch(SLS_DEMO.url).then(r => { if(!r.ok) throw new Error("HTTP " + r.status); return r.arrayBuffer(); })
+    .then(ab => ctx().decodeAudioData(ab))
+    .then(full => {
+      if(S.audio !== buf) return;
+      for(let ch = 0; ch < 2; ch++){ const d = full.getChannelData(Math.min(ch, full.numberOfChannels - 1)); buf.copyToChannel(d.length > buf.length ? d.subarray(0, buf.length) : d, ch); }
+      S.peaks = computePeaks(buf); tlDirty = true; restartAudio();
+    })
+    .catch(() => { if(S.audio === buf) demoPending = { buf }; });   // offline or a hiccup: tried again on the next play
 }
 
 function computePeaks(buf, count=1400){
@@ -1423,7 +1372,7 @@ $("#tapPad").addEventListener("pointerdown", e => { if(S.tap && !e.target.closes
 function updateMeta(){
   const P = S.P, curLen = P.section.b - P.section.a;
   const setIn = (id, v) => { const el = $(id); if(el && document.activeElement !== el) el.value = (Math.round(v*10)/10).toString(); };
-  setIn("#secLenIn", curLen); setIn("#secStartIn", P.section.a); setIn("#secEndIn", P.section.b); $$("#secLen button").forEach(b => b.setAttribute("aria-pressed", String(Math.abs(+b.dataset.v - curLen) < 0.05))); $("#songName").textContent = S.songName;
+  setIn("#secLenIn", curLen); setIn("#secStartIn", P.section.a); setIn("#secEndIn", P.section.b); $$("#secLen button").forEach(b => b.setAttribute("aria-pressed", String(Math.abs(+b.dataset.v - curLen) < 0.05))); $("#songName").textContent = S.songName === "Demo track" ? SLS_DEMO.label : S.songName;
   $("#songMeta").textContent = S.audio ? `${fmt(S.audio.duration)} · section ${fmt(P.section.a)} to ${fmt(P.section.b)} (${(P.section.b-P.section.a).toFixed(1)}s)` : "";
 }
 function syncCutUI(){ const m = S.P.cuts.mode;
@@ -2446,12 +2395,12 @@ function boot(){
   $("#presets").addEventListener("pointerleave", () => hoverStyle = null);
   S.clips = GEN.map((g,i) => ({id:"g"+i, name:g.name, kind:"gen", gen:g, on:i === 0}));   // Royal blue on its own to start
   addThumbsForGen();
-  S.audio = silentDemo(); S.peaks = computePeaks(S.audio); S.songName = "Demo track";
+  S.audio = silentDemo(); S.peaks = computePeaks(S.audio); S.songName = "Demo track";   // "Demo track": the sample song, see js/demo-song.js
   const p = defaultProject();
-  p.lyrics = "neon on the water\nwe don't have to go home\nsay it like you mean it\nunder all the city glow";
-  p.song = {name:"Demo track", duration:S.audio.duration};
-  S.P = p; S.P.words = parseLyrics(p.lyrics); autoSpace(S.P.words);
-  demoPending = { buf: S.audio, words: S.P.words.map(w => ({ ...w })) };   // the loop and singer: see ensureDemo()
+  p.lyrics = SLS_DEMO.lyrics; p.words = SLS_DEMO.words.map(w => ({ ...w }));
+  p.song = {name:"Demo track", duration:S.audio.duration}; p.section = { ...SLS_DEMO.section }; p.bpm = SLS_DEMO.bpm; p.offset = SLS_DEMO.offset;
+  S.P = p;
+  demoPending = { buf: S.audio };   // the real audio: see ensureDemo()
   applyProject(S.P);
   setTimeout(() => { HIST.last = JSON.stringify(S.P); syncUndoUI(); }, 0);
   if(window.matchMedia("(max-width:700px) and (pointer:coarse)").matches){ S.zoom = 2.5; $("#zoom").value = 2.5; }
